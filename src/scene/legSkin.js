@@ -13,6 +13,10 @@
 // Coordenadas del archivo: Y arriba, cabeza hacia +Z, lados en ±X.
 import * as THREE from 'three';
 
+/** Patas como máximo (formas de 8 patas: 4 por lado). El shader reserva hueco para todas. */
+export const MAX_LEGS = 8;
+const MAX_SIDE = MAX_LEGS / 2;
+
 /**
  * Calcula el esqueleto de patas de `geo` y le añade el atributo `legInfo` (pata, peso de cadera, peso de rodilla).
  * opt.hip: distancia del pie a la cadera, en fracción de la altura del modelo (un número o [delanteras, resto]).
@@ -109,38 +113,26 @@ export function skinLegs(geo, opt = {}) {
         feet.push(g); have.push({ x, z });
       }
     }
-    // más de seis contactos: adornos o el abdomen. Se empareja izquierda con derecha y se quedan las tres parejas más separadas del cuerpo.
+    // contactos de más (pinchos, garras, la punta del abdomen): fuera los del centro y, si a un lado le
+    // sobran (hay formas de 8 patas: hasta 4 por lado), los que menos tocan el suelo (los pies son lo más bajo)
     if (feet.length > 6) {
-      const ctr = f => { let x = 0, z = 0; for (const i of f) { x += pos[3 * i]; z += pos[3 * i + 2]; } return { x: x / f.length, z: z / f.length }; };
-      const list = feet.map(f => ({ f, p: ctr(f) })).filter(o => Math.abs(o.p.x) >= 0.12);
-      const used = new Set(), pairs = [];
-      for (;;) {
-        let bi = -1, bj = -1, best = Infinity;
-        for (let i = 0; i < list.length; i++) if (!used.has(i)) for (let j = i + 1; j < list.length; j++) if (!used.has(j) && Math.sign(list[j].p.x) !== Math.sign(list[i].p.x)) {
-          const dx = Math.abs(Math.abs(list[j].p.x) - Math.abs(list[i].p.x)), dz = list[j].p.z - list[i].p.z, s = dx * dx + dz * dz;
-          if (s < best) { best = s; bi = i; bj = j; }
-        }
-        if (bi < 0 || best > 0.08) break;
-        used.add(bi); used.add(bj);
-        pairs.push({ bi, bj, x: (Math.abs(list[bi].p.x) + Math.abs(list[bj].p.x)) / 2 });
-      }
-      if (pairs.length >= 3) {
-        pairs.sort((a, b) => b.x - a.x);
-        feet.length = 0;
-        for (const p of pairs) { if (feet.length >= 6) break; feet.push(list[p.bi].f, list[p.bj].f); }
-      }
+      const info = feet.map(f => { let x = 0, low = Infinity; for (const i of f) { x += pos[3 * i]; low = Math.min(low, pos[3 * i + 1]); } return { f, x: x / f.length, low }; })
+        .filter(o => Math.abs(o.x) >= 0.12);
+      const keep = [];
+      for (const s of [-1, 1]) keep.push(...info.filter(o => Math.sign(o.x) === s).sort((p, q) => p.low - q.low).slice(0, MAX_SIDE));
+      feet.length = 0; for (const o of keep) feet.push(o.f);
     }
     return feet;
   };
   // cada modelo apoya distinto (pezuñas, garras, pinzas en el suelo…): se prueban bandas hasta dar con
-  // seis pies, tres a cada lado; opt.foot es la primera que se prueba
+  // 3 o 4 pies a cada lado (6 patas, u 8 en las formas arácnidas); opt.foot es la primera que se prueba
   let feet = null;
   for (const frac of [opt.foot ?? 0.03, 0.03, 0.05, 0.07, 0.09, 0.12, 0.15]) {
     const f = detect(frac);
-    const left = f.filter(v => { let x = 0; for (const i of v) x += pos[3 * i]; return x < 0; }).length;
-    if (f.length === 6 && left === 3) { feet = f; break; }
+    const left = f.filter(v => { let x = 0; for (const i of v) x += pos[3 * i]; return x < 0; }).length, right = f.length - left;
+    if (left >= 3 && right >= 3 && left <= MAX_SIDE && right <= MAX_SIDE) { feet = f; break; }
   }
-  if (!feet) { console.warn('[antigenesis] patas: no se encontraron seis pies'); return null; }
+  if (!feet) { console.warn('[antigenesis] patas: no se encontraron los pies'); return null; }
 
   // filas y lados: por la posición del pie (delante = +Z)
   const legs = feet.map(f => {
@@ -218,10 +210,10 @@ export function skinLegs(geo, opt = {}) {
 
 const SHADER_HEAD = /* glsl */`
 attribute vec3 legInfo;
-uniform vec3 uLegHip[6];
-uniform vec3 uLegKnee[6];
-uniform vec3 uLegHipR[6];
-uniform vec3 uLegKneeR[6];
+uniform vec3 uLegHip[8];
+uniform vec3 uLegKnee[8];
+uniform vec3 uLegHipR[8];
+uniform vec3 uLegKneeR[8];
 mat3 legEuler(vec3 a) { // mismo orden que THREE.Euler 'XYZ'
   float cx = cos(a.x), sx = sin(a.x), cy = cos(a.y), sy = sin(a.y), cz = cos(a.z), sz = sin(a.z);
   return mat3(
@@ -236,13 +228,15 @@ mat3 legEuler(vec3 a) { // mismo orden que THREE.Euler 'XYZ'
  * legs: [{ hip, knee, pv, knee: … }]; pv.rotation y kneePv.rotation son los ángulos que pone la animación.
  * Devuelve una función que copia los ángulos a los uniformes (llamar antes de dibujar).
  */
+const pad = a => { while (a.length < MAX_LEGS) a.push(new THREE.Vector3()); return a; };
 export function skinMaterial(mesh, legs) {
   const material = mesh.material.clone();
   const U = {
-    uLegHip: { value: legs.map(l => l.hipAt.clone()) },
-    uLegKnee: { value: legs.map(l => l.kneeAt.clone()) },
-    uLegHipR: { value: legs.map(() => new THREE.Vector3()) },
-    uLegKneeR: { value: legs.map(() => new THREE.Vector3()) }
+    // (los arrays del shader miden siempre MAX_LEGS: los huecos sin pata se quedan a cero)
+    uLegHip: { value: pad(legs.map(l => l.hipAt.clone())) },
+    uLegKnee: { value: pad(legs.map(l => l.kneeAt.clone())) },
+    uLegHipR: { value: pad([]) },
+    uLegKneeR: { value: pad([]) }
   };
   material.onBeforeCompile = shader => {
     Object.assign(shader.uniforms, U);
