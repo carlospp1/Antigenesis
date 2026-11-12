@@ -57,12 +57,18 @@ export function placeActor(a, dt) {
   // arriba: la normal del terreno, suavizada (los cambios de pared a suelo no son de golpe)
   const k = Math.min(1, dt * 10);
   if (!a.up) a.up = Nn.clone(); else a.up.lerp(Nn, k).normalize();
-  // delante: el paso de 6 píxeles en la dirección en que mira, llevado al terreno
-  const len = Math.hypot(a.dx, a.dy) || 1, e = 6;
-  ground(a.x + a.dx / len * e, a.y + a.dy / len * e, Q, Qn, a.tun);
-  F.subVectors(Q, P);
-  const far = F.length() > e * scaleAt(P) * 4; // el paso cruza un borde: no sirve
-  if (far || F.lengthSq() < 1e-12) F.copy(a.fwd || Z.set(1, 0, 0));
+  // delante: si camina, hacia donde se mueve en el mundo (a.wdir, lo pone quien la mueve); si no, el paso de
+  // 6 píxeles en la dirección en que mira, llevado al terreno
+  if (a.wdir) F.copy(a.wdir);
+  else {
+    const len = Math.hypot(a.dx, a.dy) || 1, e = 6;
+    ground(a.x + a.dx / len * e, a.y + a.dy / len * e, Q, Qn, a.tun);
+    F.subVectors(Q, P);
+    // el paso cruza un borde (otra superficie): no sirve. En suelo llano visto de canto 6 píxeles pueden ser
+    // mucho camino hacia el fondo, así que solo cuenta si además cambia la normal
+    const far = F.length() > e * scaleAt(P) * 4 && Qn.dot(Nn) < 0.9;
+    if (far || F.lengthSq() < 1e-12) F.copy(a.fwd || Z.set(1, 0, 0));
+  }
   F.addScaledVector(a.up, -F.dot(a.up));
   if (F.lengthSq() < 1e-10) F.copy(a.fwd || Z.set(1, 0, 0)).addScaledVector(a.up, -a.up.dot(a.fwd || Z));
   F.normalize();

@@ -1,17 +1,19 @@
 // Todas las hormigas recolectan de día y salen a pelear de noche. Cualquiera puede morir.
 import * as THREE from 'three';
 import { ctx, rnd } from './context.js';
-import { FOOD, CAP, SIZE, PX, PANTRY, GUARD, SURF_BAND } from './layout.js';
+import { FOOD, CAP, SIZE, PX, PXW, PANTRY, GUARD, SURF_BAND } from './layout.js';
 import { GEO, MAT, clayAnt } from './geometry.js';
 import { setJaw } from './creature.js';
 import { ANT_LOOKS } from './antRig.js';
-import { createActor, placeActor, lookAt2D } from './actor.js';
+import { createActor, placeActor, lookAt2D, ground } from './actor.js';
 import { randomIn, clampToWalkable, DOWN, UP } from './colliders.js';
 import { NAV } from './layout.js';
 import { queen, mouth, head, slotPos, mouthWorld, queenEats } from './brood.js';
 import { puff, feedFly } from './particles.js';
 import { pantryTop, pantryDrop, pantryPop } from './pantry.js';
 import { emit } from '../core/events.js';
+
+const _p = new THREE.Vector3(), _q = new THREE.Vector3(), _n = new THREE.Vector3();
 
 export const agents = [];
 export const by = { ants: [] };
@@ -174,6 +176,7 @@ function updateAgent(a, dt) {
   }
   if (a.hx != null) { a.x = a.hx; a.hx = null; }
   if (a.wait > 0) {
+    a.wdir = null;
     a.wait -= dt; a.phase += dt * 3; a.step(false, 0, dt);
     if (a.faceQ) { const h = head(); lookAt2D(a, h.x - a.x, h.y - a.y); }
     else if (a.faceP) lookAt2D(a, PANTRY.x - a.x, PANTRY.y - a.y);
@@ -187,20 +190,30 @@ function updateAgent(a, dt) {
   a.tun = !!t.tunnel;
   if (a.tun) a.at = 'tun';
   if (!t.ok) { clampToWalkable(t); t.ok = true; a.best = Infinity; a.stuck = 0; } // un destino fuera de la zona nunca se alcanzaría
-  const dx = t.x - a.x, dy = t.y - a.y, dist = Math.hypot(dx, dy);
+  // Se mueve a velocidad constante EN EL MUNDO 3D: la superficie se ve casi de canto y unos pocos píxeles de la
+  // imagen hacia arriba son mucho camino hacia el fondo. Las patas siguen la distancia recorrida de verdad.
+  ground(a.x, a.y, _p, _n, a.tun); ground(t.x, t.y, _q, _n, a.tun);
+  const dist = _p.distanceTo(_q);
   // red de seguridad: si lleva 1,5 s sin acercarse (atascada contra una colisión), llega de golpe
-  if (dist < a.best - 1) { a.best = dist; a.stuck = 0; } else if ((a.stuck += dt) > 1.5) { a.x = t.x; a.y = t.y; a.stuck = 0; }
-  const sp = D.speed * PX * (a.job === 'fight' ? 1.7 : 1) * (a.shiny ? D.shinySpeed : 1) * (a.tun ? 0.75 : 1) * dt;
+  if (dist < a.best - 0.002) { a.best = dist; a.stuck = 0; } else if ((a.stuck += dt) > 1.5) { a.x = t.x; a.y = t.y; a.stuck = 0; }
+  const sp = D.speed * PX * PXW * (a.job === 'fight' ? 1.7 : 1) * (a.shiny ? D.shinySpeed : 1) * (a.tun ? 0.75 : 1) * dt;
+  let moved = sp;
+  if (dist > 1e-6) (a.wdir ||= new THREE.Vector3()).subVectors(_q, _p).normalize(); // hacia dónde va, en el mundo
   if (dist <= sp) {
+    moved = dist;
     a.x = t.x; a.y = t.y; clampToWalkable(a); a.path.shift();
     if (t.set) a.at = t.set;
     if (t.fn) t.fn();
-    if (t.wait) { a.wait = t.wait; a.faceQ = !!t.faceQ; a.faceP = !!t.faceP; }
+    if (t.wait) { a.wait = t.wait; a.faceQ = !!t.faceQ; a.faceP = !!t.faceP; a.wdir = null; }
   } else {
-    a.x += dx / dist * sp; a.y += dy / dist * sp; lookAt2D(a, dx, dy);
+    const f = sp / dist;
+    lookAt2D(a, t.x - a.x, t.y - a.y);
+    a.x += (t.x - a.x) * f; a.y += (t.y - a.y) * f;
     clampToWalkable(a);
   }
-  a.phase += sp * (a.tun ? 0.3 : 0.22); a.step(true, 0, dt, a.tun ? 'climb' : undefined);
+  // un ciclo de patas cada medio cuerpo recorrido (trepando, pasos algo más cortos)
+  const stride = a.size * PXW * (a.tun ? 0.4 : 0.5);
+  a.phase += moved / stride * Math.PI * 2; a.step(true, 0, dt, a.tun ? 'climb' : undefined);
   placeActor(a, dt);
 }
 
