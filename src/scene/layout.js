@@ -19,10 +19,12 @@ export const PXW = 0.0013;
  * Así las rocas, las hierbas altas y las fresas no se pisan.
  */
 export const ZONES = {
-  // césped y camino de arriba (sin el agujero)
-  surface: { h: [0.17, 0.25], xz: [[-0.86, 0.66], [-0.86, -0.1], [-0.3, -0.25], [0.3, -0.3], [0.86, -0.1], [0.86, 0.66], [-0.02, 0.66], [-0.02, 0.1], [-0.2, 0.1], [-0.2, 0.66]] },
+  // Las dos dejan un margen de algo más de un cuerpo de hormiga hasta el borde del diorama (el césped acaba
+  // en x ≈ ±0,85 y z ≈ 0,64; la cueva, en sus paredes): es la «pared» invisible que no las deja asomarse.
+  // césped y camino de arriba (sin el agujero, que también tiene su margen)
+  surface: { h: [0.17, 0.25], xz: [[-0.72, 0.5], [-0.72, -0.12], [-0.3, -0.36], [0.3, -0.4], [0.72, -0.12], [0.72, 0.5], [0.04, 0.5], [0.04, 0.1], [-0.26, 0.1], [-0.26, 0.5]] },
   // suelo de la cueva
-  chamber: { h: [-0.46, -0.37], xz: [[-0.78, -0.5], [0.78, -0.5], [0.78, 0.55], [-0.78, 0.55]] }
+  chamber: { h: [-0.46, -0.37], xz: [[-0.68, -0.42], [0.68, -0.42], [0.68, 0.45], [-0.68, 0.45]] }
 };
 
 /**
@@ -37,7 +39,7 @@ export const ROOT_FLOOR = [-0.1, -0.428, 0.36];
  * El agujero parte la superficie en dos hasta el borde de delante: de un lado al otro se pasa por detrás
  * de él. Estos son los puntos de paso a su izquierda y a su derecha (mundo).
  */
-export const HOLE_SIDES = { L: [-0.26, 0.211, 0.045], R: [0.04, 0.211, 0.045] };
+export const HOLE_SIDES = { L: [-0.33, 0.211, 0.03], R: [0.11, 0.211, 0.03] };
 
 /** Puntos de paso entre zonas (en la imagen). Se calculan al cargar a partir de la raíz. */
 export const NAV = {};
@@ -48,7 +50,7 @@ export const FOOD = [
   { at: [0.6, 0.21, 0.36], type: 'berry', r: 0.045 }
 ];
 /** Franja de la superficie por la que pasean entre la comida y el agujero (z del mundo). */
-export const SURF_BAND = { z: [0.3, 0.6] };
+export const SURF_BAND = { z: [0.22, 0.46] };
 
 /** La reina y sus montones de cría, al fondo de la cueva (la parte de abajo de la pantalla la tapan los paneles). */
 export const QUEEN = { at: [0.14, -0.43, -0.2], yaw: -0.35, size: 215 };
@@ -59,9 +61,10 @@ export const LARVA_PILE = { at: [0.56, -0.43, -0.12], dx: 0.06, dz: 0.055 };
 export const REFUGE = { a: [-0.3, -0.43, -0.05], b: [0.45, -0.43, 0.12] };
 
 /** Combate en la superficie: guardia a la derecha del agujero, enemigos llegando desde el borde derecho. */
-export const GUARD = { at: [0.04, 0.21, 0.5], dx: 0.075, dz: 0.06, cols: 5 };
-export const FOE_LINE = { at: [0.34, 0.21, 0.5], dx: 0.085, dz: 0.07, cols: 4, spawn: [0.86, 0.21, 0.48] };
-export const BOSS_POS = { at: [0.64, 0.21, 0.45] };
+// (filas hacia el fondo desde una z que deja margen con el borde de delante)
+export const GUARD = { at: [0.1, 0.21, 0.44], dx: 0.07, dz: 0.06, cols: 5 };
+export const FOE_LINE = { at: [0.38, 0.21, 0.3], dx: 0.08, dz: 0.065, cols: 4, spawn: [0.72, 0.21, 0.3] };
+export const BOSS_POS = { at: [0.6, 0.21, 0.28] };
 
 /** Tamaño de una unidad de modelo, en «píxeles» (× PXW = unidades del mundo). Las hormigas miden ≈1 unidad. */
 export const SIZE = { ants: 100, termite: 96, spider: 112, beetle: 108, egg: 190, larva: 140 };

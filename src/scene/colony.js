@@ -129,7 +129,7 @@ function fightTask(a) {
   else p.push(...across(a.x, gx));
   p.push({
     x: GUARD.x + col * GUARD.dx + (row % 2) * GUARD.dx * 0.4 + rnd(-3, 3),
-    y: GUARD.y + (row - 1.5) * GUARD.dy + rnd(-2, 2), // filas de la guardia, a la derecha del agujero
+    y: GUARD.y - row * GUARD.dy + rnd(-2, 2), // filas de la guardia, a la derecha del agujero, de delante hacia el fondo
     wait: 999, set: 'out', guard: true
   });
   a.path = p; a.after = null;
@@ -189,7 +189,7 @@ function updateAgent(a, dt) {
   const t = a.path[0];
   a.tun = !!t.tunnel;
   if (a.tun) a.at = 'tun';
-  if (!t.ok) { clampToWalkable(t); t.ok = true; a.best = Infinity; a.stuck = 0; } // un destino fuera de la zona nunca se alcanzaría
+  if (!t.ok) { clampToWalkable(t, !!t.tunnel); t.ok = true; a.best = Infinity; a.stuck = 0; } // un destino fuera de la zona nunca se alcanzaría
   // Se mueve a velocidad constante EN EL MUNDO 3D: la superficie se ve casi de canto y unos pocos píxeles de la
   // imagen hacia arriba son mucho camino hacia el fondo. Las patas siguen la distancia recorrida de verdad.
   ground(a.x, a.y, _p, _n, a.tun); ground(t.x, t.y, _q, _n, a.tun);
@@ -201,7 +201,7 @@ function updateAgent(a, dt) {
   if (dist > 1e-6) (a.wdir ||= new THREE.Vector3()).subVectors(_q, _p).normalize(); // hacia dónde va, en el mundo
   if (dist <= sp) {
     moved = dist;
-    a.x = t.x; a.y = t.y; clampToWalkable(a); a.path.shift();
+    a.x = t.x; a.y = t.y; clampToWalkable(a, a.tun); a.path.shift();
     if (t.set) a.at = t.set;
     if (t.fn) t.fn();
     if (t.wait) { a.wait = t.wait; a.faceQ = !!t.faceQ; a.faceP = !!t.faceP; a.wdir = null; }
@@ -209,7 +209,7 @@ function updateAgent(a, dt) {
     const f = sp / dist;
     lookAt2D(a, t.x - a.x, t.y - a.y);
     a.x += (t.x - a.x) * f; a.y += (t.y - a.y) * f;
-    clampToWalkable(a);
+    clampToWalkable(a, a.tun);
   }
   // un ciclo de patas cada medio cuerpo recorrido (trepando, pasos algo más cortos)
   const stride = a.size * PXW * (a.tun ? 0.4 : 0.5);

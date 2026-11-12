@@ -272,6 +272,12 @@ async function boot() {
 
 boot();
 
+// caché del dispositivo para modelos, mapa e imágenes (public/sw.js): las visitas siguientes no los vuelven a descargar.
+// Solo en la versión publicada: en desarrollo, Vite sirve los archivos cambiando y la caché estorbaría.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(e => console.warn('[antigenesis] sin caché del dispositivo', e)));
+}
+
 // ayuda para depurar desde la consola: __ax.G, __ax.speed = 8
 window.__ax = {
   get G() { return G; }, set speed(v) { ui.speed = v; }, Game, Scene, bot,

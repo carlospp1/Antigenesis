@@ -9,6 +9,18 @@ import { ZONES, NAV, FOOD, QUEEN, EGG_PILE, LARVA_PILE, PANTRY, GUARD, FOE_LINE,
 import { ctx } from './context.js';
 import { world, W, toImage } from './world.js';
 
+/** Punto más cercano del borde de un polígono, un poco hacia dentro. */
+function closestOnPoly(x, y, poly) {
+  let best = null, bd = Infinity;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [ax, ay] = poly[j], [bx, by] = poly[i], dx = bx - ax, dy = by - ay;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1)));
+    const px = ax + dx * t, py = ay + dy * t, d = (px - x) ** 2 + (py - y) ** 2;
+    if (d < bd) { bd = d; best = [px, py]; }
+  }
+  return best;
+}
+
 export function inPoly(x, y, poly) {
   let inside = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -65,6 +77,9 @@ export function flatPoint(x, y, out, nOut) {
   const t = (ZONE_Y[k] - _o.y) / _r.y;
   if (!(t > 0)) return null;
   out.copy(_o).addScaledVector(_r, t);
+  // detrás de una hierba alta o en el borde, el punto del plano puede quedar fuera: al más cercano de la zona
+  const xz = ZONES[k].xz;
+  if (!inPoly(out.x, out.z, xz)) { const c = closestOnPoly(out.x, out.z, xz); out.x = c[0]; out.z = c[1]; }
   if (nOut) nOut.set(0, 1, 0);
   return k;
 }
@@ -156,8 +171,10 @@ export function tunnelPoint(x, y, out, nOut) {
   return true;
 }
 
-export function zoneAt(x, y) {
-  if (tunnel.pts2.length) { const h = onTunnel(x, y); if (h && h.d <= tunnel.band) return 'tunnel'; }
+/** Zona en (x, y). La franja de la raíz solo cuenta para quien va por ella (`tun`): si no, junto al agujero
+ * valdría cualquier punto de la hierba, también los del borde. */
+export function zoneAt(x, y, tun = true) {
+  if (tun && tunnel.pts2.length) { const h = onTunnel(x, y); if (h && h.d <= tunnel.band) return 'tunnel'; }
   for (const k in masks) if (inMask(k, x, y)) return k;
   return null;
 }
@@ -183,8 +200,8 @@ export function randomIn(zone, rect) {
 }
 
 /** Si (x, y) cae fuera de toda zona caminable, lo devuelve a la celda caminable más cercana. */
-export function clampToWalkable(p) {
-  if (zoneAt(p.x, p.y)) return p;
+export function clampToWalkable(p, tun = false) {
+  if (zoneAt(p.x, p.y, tun)) return p;
   const c0 = Math.round(p.x / GS), r0 = Math.round(p.y / GS), { gw, gh } = world;
   for (let d = 1; d < 120; d++) {
     let best = null, bd = Infinity;
@@ -210,6 +227,7 @@ export const UP = [];
 let debugGroup = null;
 export function toggleDebug(force) {
   const on = force != null ? force : !(debugGroup && debugGroup.visible);
+  if (!world.ok) return false; // el mapa aún no ha cargado
   if (!debugGroup) {
     debugGroup = new THREE.Group();
     const colors = { surface: '#7dff7a', chamber: '#ff7ad9' };
