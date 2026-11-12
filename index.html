@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#241208">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<title>ANTIGENESIS</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐜</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+</head><body>
+<div id="app">
+  <div id="stage"></div>
+  <div id="labels"></div>
+  <div id="floats"></div>
+  <div id="vignette"></div>
+  <div id="fx"></div>
+
+  <header id="top">
+    <div class="brand panel"><i data-icon="ant" class="brand-ant"></i><b>ANTIGENESIS</b><span class="sep"></span><span id="lv">Lv. 1</span></div>
+    <div class="pills">
+      <div class="pill panel" title="Jalea: se gasta en el Árbol"><i data-icon="leaf"></i><b id="vJelly">0</b><em id="vRate">+0/s</em></div>
+      <div class="pill panel" title="Biomasa: la sueltan los enemigos; se gasta en los rombos del Árbol"><i data-icon="seed"></i><b id="vBio">0</b></div>
+      <div class="pill panel res-adn" id="pAdn" title="ADN: se gasta en el Linaje" hidden><i data-icon="dna"></i><b id="vAdn">0</b></div>
+      <div class="pill panel ants" title="Hormigas: recolectan y pelean"><i data-icon="ant"></i><b id="vAnts">0</b></div>
+      <button class="pill panel found" id="bFound" hidden title="Funda una colonia nueva: empiezas de cero, pero te llevas este ADN"><i data-icon="dna"></i><b id="vFound">+0</b><span id="vFoundTxt">ADN · Fundar</span></button>
+      <div class="pill panel clock" id="clock" title="Ciclo de día y noche"><span id="clockIc"></span><b id="vDay">Día 1</b><div class="meter"><i id="vDayBar"></i></div><em id="vDayLeft"></em></div>
+    </div>
+    <div class="icons">
+      <button class="sq panel" id="bBook" title="Guía y créditos" aria-label="Guía y créditos"><i data-icon="book"></i><span class="badge" id="bookBadge">1</span></button>
+      <button class="sq panel" id="bGear" title="Ajustes" aria-label="Ajustes"><i data-icon="gear"></i></button>
+      <button class="sq panel" id="bTrophy" title="Objetivos" aria-label="Objetivos"><i data-icon="trophy"></i></button>
+    </div>
+  </header>
+
+  <div id="quest" class="panel" hidden><i data-icon="leaf" class="qi"></i><div><b>Objetivo</b><p id="questText"></p><div class="meter green" id="questBarWrap"><i id="questBar"></i></div></div></div>
+  <div id="alarm" hidden></div>
+
+  <nav id="side">
+    <button class="tab panel on" data-tab="colony"><i data-icon="ant"></i><span>Colonia</span></button>
+    <button class="tab panel" data-tab="tree" id="tabTree"><i data-icon="arrows"></i><span>Árbol</span></button>
+    <button class="tab panel" data-tab="lineage" id="tabEvo"><i data-icon="lock" class="lockic"></i><i data-icon="dna" class="dnaic"></i><span>Linaje</span></button>
+    <button class="tab panel" data-tab="evolve" id="tabEvolve"><i data-icon="evo"></i><span>Evolución</span></button>
+  </nav>
+
+  <section id="dock"></section>
+  <div id="toasts"></div>
+
+  <div id="treeView" hidden>
+    <div class="tv-top"><div id="tvTabs"><button data-tree="skills">Árbol de la colonia</button><button data-tree="perm">Linaje</button><button data-tree="evo">Evolución</button></div><div id="tvMoney"></div></div>
+    <div id="tvCanvas"><div id="tvWorld"></div></div>
+    <div id="tvTip" class="panel"></div>
+    <div class="tv-foot"><button id="tvReset" class="link">Reiniciar árbol <small>(devuelve todo)</small></button><button id="tvAuto" class="link auto" aria-pressed="false">Autocompra <small>no</small></button><span id="tvNote"></span><span id="tvBlood"></span>
+      <button id="tvFound" class="btn-green" hidden>Fundar nueva colonia</button><button id="tvClose" class="link">Continuar <kbd>Esc</kbd></button></div>
+  </div>
+
+  <div id="deathView" hidden><div class="box panel">
+    <i data-icon="skull" class="skull"></i><h2>La reina ha caído</h2>
+    <p id="deathText"></p>
+    <div class="adn-gain"><i data-icon="dna"></i><b id="deathAdn">+0</b><span>ADN</span></div>
+    <p class="small">El ADN es permanente. Gástalo en el Linaje para que la próxima colonia aguante más noches.</p>
+    <button id="deathGo" class="btn-green big">Ir al Linaje</button>
+  </div></div>
+
+  <div id="winView" hidden><div class="box panel">
+    <i data-icon="crown" class="skull"></i><h2>¡Las hormigas conquistan el mundo!</h2>
+    <p id="winText"></p>
+    <button id="winGo" class="btn-green big">Seguir jugando</button>
+  </div></div>
+
+  <div id="sheet" hidden><div class="box panel"><button class="x" data-act="close" aria-label="Cerrar"><i data-icon="close"></i></button><div id="sheetBody"></div></div></div>
+
+  <div id="intro"><div class="box panel"><h1>ANTIGENESIS</h1><p class="tag">Una colonia. Una evolución. Un nuevo mundo.</p>
+    <p>De día las hormigas suben a la hierba, recogen comida y se la dan a la reina en la boca. Cada bocado la acerca a un huevo nuevo.</p>
+    <p>Empiezas sin hormigas: toca a la reina para que ponga huevos y a la cría para que crezca. Al caer la noche salen todas a pelear. Si caen todas, los enemigos entran al nido y matan a la reina.</p>
+    <p>Cada 4 noches llega una especie más fuerte: hormigas rivales, bachacos, termitas, cucarachas, arañas, escarabajos… y al final, los humanos. Si vences a los humanos, las hormigas conquistan el mundo.</p>
+    <p>Cuando muere una reina ganas ADN: con él mejoras el Linaje y fundas una colonia más fuerte.</p>
+    <p>Toca a la reina, los huevos y las larvas para ayudar. Arrastra para mover la vista y usa la rueda <span class="touch-only">o pellizca</span> para acercarte.</p>
+    <p class="touch-only small-tip">En el móvil se juega mejor en horizontal.</p>
+    <p id="loadStatus">Cargando…</p>
+    <button id="start" class="btn-green big">Empezar</button></div></div>
+</div>
+
+<template id="guideTpl">
+  <h2>Guía</h2>
+  <ul class="guide">
+    <li><b>Jalea</b> (hoja): la traen las hormigas a la reina. Se gasta en el <b>Árbol</b>.</li>
+    <li><b>Biomasa</b> (semilla): la sueltan los enemigos. Se gasta en los nodos en rombo del Árbol.</li>
+    <li><b>ADN</b>: lo ganas al morir la reina o al fundar una colonia (en cuanto superas la noche 3; siempre al menos 1). Se gasta en el <b>Linaje</b>, que es permanente. Además, cada ADN ganado da +3% a todo.</li>
+    <li>Empiezas sin hormigas, pero la reina pone enseguida su primer huevo: si la colonia se queda vacía, el siguiente huevo cuesta como mucho lo que tengas. Después pone un huevo cada vez que come lo suficiente: tócala para ayudarla. Huevo → larva → hormiga. Cada huevo cuesta comida. Las hormigas se turnan: una le da su carga a la reina (huevos) y la siguiente la guarda en la despensa del nido (jalea para el Árbol). Cada hormiga nueva encarece el siguiente huevo. Tocar a la reina es gratis.</li>
+    <li>De noche todas salen a pelear. Si no queda ninguna, los enemigos bajan por el túnel y matan a la reina.</li>
+    <li>En los árboles solo puedes comprar lo que está conectado a algo que ya tienes. Reiniciar el Árbol devuelve todo lo gastado.</li>
+    <li>Atajos: <b>T</b> abre el Árbol, <b>L</b> el Linaje, <b>C</b> las colisiones, <b>espacio</b> pausa.</li>
+  </ul>
+  <h2>Créditos</h2>
+  <p>Modelos 3D de <a href="https://poly.pizza" target="_blank" rel="noopener">Poly Pizza</a>:</p>
+  <ul class="credits">
+    <li>Hormigas, reinas y bachacos: esqueletos articulados hechos en código para este juego.</li>
+    <li>Termita: «Ant» de Poly by Google (recoloreado), <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC-BY 3.0</a>, <a href="https://poly.pizza/m/62pbJxCL--t" target="_blank" rel="noopener">poly.pizza/m/62pbJxCL--t</a></li>
+    <li>Cucaracha: «Cockroach» de Poly by Google, CC-BY 3.0, <a href="https://poly.pizza/m/eSCFQN_47V4" target="_blank" rel="noopener">poly.pizza/m/eSCFQN_47V4</a></li>
+    <li>Araña: «Spider» de Quaternius, <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener">CC0</a>, <a href="https://poly.pizza/m/yRYJiAJyiM" target="_blank" rel="noopener">poly.pizza/m/yRYJiAJyiM</a></li>
+    <li>Escarabajo: «Beetle» de Poly by Google, CC-BY 3.0, <a href="https://poly.pizza/m/4yufxgZ1QQ2" target="_blank" rel="noopener">poly.pizza/m/4yufxgZ1QQ2</a></li>
+    <li>Mantis: «Praying Mantis» de Lorenzo Cinalli, CC-BY 3.0, <a href="https://poly.pizza/m/bm9Q0hKjcVC" target="_blank" rel="noopener">poly.pizza/m/bm9Q0hKjcVC</a></li>
+    <li>Zapatilla humana: «Sneakers» de Poly by Google, CC-BY 3.0, <a href="https://poly.pizza/m/2cAXk_gG3Eh" target="_blank" rel="noopener">poly.pizza/m/2cAXk_gG3Eh</a></li>
+  </ul>
+  <p>Motor 3D: <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a>. Música y sonidos generados en el navegador.</p>
+</template>
+
+<script type="module" src="/src/main.js"></script>
+</body></html>

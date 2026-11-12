@@ -1,0 +1,185 @@
+// Interfaz en DOM al estilo de la referencia: barra superior con recursos, objetivo, alarma,
+// pestañas laterales, tarjetas inferiores, etiquetas ancladas a la escena, hojas modales y avisos.
+import * as Game from '../game/index.js';
+import * as Audio from '../audio/audio.js';
+import { fmt, fmtTime } from '../core/format.js';
+import { toScreen, anchors, broodBars } from '../scene/index.js';
+import { icon } from './icons.js';
+
+const $ = id => document.getElementById(id);
+export const ui = { sheet: null, holding: false, paused: false, speed: 1, tab: 'colony', debug: false };
+let lastDock = '', lastSheet = '';
+const cache = {};
+const setText = (id, v) => { if (cache[id] !== v) { cache[id] = v; $(id).textContent = v; } };
+const setHTML = (el, v, key) => { if (cache[key] !== v) { cache[key] = v; el.innerHTML = v; } };
+
+export const evoUnlocked = G => G.level - 1 >= Game.BAL.foundAfter || G.gen > 1 || G.adnTotal > 0;
+
+/* ---------- barra superior, objetivo y alarma ---------- */
+function renderTop(G, D) {
+  const night = G.phase === 'night', dusk = !night && G.t <= 10;
+  setText('lv', 'Lv. ' + G.level);
+  setText('vJelly', fmt(Math.floor(G.jelly)));
+  setText('vRate', '+' + fmt(G.rate, G.rate < 10 ? 1 : 0) + '/s');
+  setText('vBio', fmt(G.bio));
+  setText('vAnts', fmt(G.ants));
+  setText('vDay', (night ? 'Noche ' : 'Día ') + G.level);
+  setText('vDayLeft', G.phase === 'dead' ? (G.leaving ? 'la princesa se prepara' : 'la reina ha caído') : (night ? 'amanece en ' : 'anochece en ') + fmtTime(G.t));
+  $('vDayBar').style.width = 100 * G.t / (night ? D.night.time : Game.DAY) + '%';
+  $('clock').className = 'pill panel clock ' + (night ? 'night' : dusk ? 'dusk' : '');
+  setHTML($('clockIc'), icon(night ? 'moon' : 'sun'), 'clockIc');
+
+  const o = Game.OBJ[G.obj];
+  $('quest').hidden = !o;
+  if (o) {
+    setText('questText', o[0]);
+    $('questBarWrap').hidden = !o[3];
+    if (o[3]) $('questBar').style.width = Math.min(100, 100 * Math.max(0, o[3](G))) + '%';
+  }
+
+  const f = G.phase === 'dead' ? null : G.foes, al = $('alarm');
+  al.hidden = !(dusk || f);
+  document.body.classList.toggle('danger', !!(dusk || f));
+  if (dusk) setHTML(al, `<b>¡Alarma! Cae la noche</b><span>Se acercan ${D.night.text}. Llegan en ${fmtTime(G.t)}.</span>`, 'alarm');
+  else if (f) {
+    const tot = D.night.totalHp, left = f.count > 0 ? (f.count - 1) * D.night.hpEach + f.cur + f.boss : f.boss;
+    setHTML(al, `<b>${G.ants > 0 ? '¡Nos atacan!' : '¡No queda nadie en la entrada!'}</b><div class="meter"><i style="width:${Math.max(0, 100 * left / tot)}%"></i></div><span>${D.night.boss && D.night.boss.final ? 'Los humanos' : f.count + ' ' + (f.count === 1 ? D.night.era.one : D.night.era.many) + (f.boss > 0 ? ' y ' + D.night.boss.name : '')}. Bajas: ${f.lost}</span>`, 'alarm');
+  }
+  Audio.setTension(!!f);
+
+  setText('vAdn', Game.debug.free ? '∞' : fmt(G.adn));
+  const lg = Game.legacy(G);
+  $('bFound').hidden = !lg.ready;
+  if (lg.ready && !ui.foundArmed) { setText('vFound', '+' + lg.gain); setText('vFoundTxt', 'ADN · Fundar'); }
+  $('pAdn').hidden = !(G.adnTotal > 0 || Game.debug.free);
+
+  // pestañas: Linaje bloqueado hasta tener ADN; punto verde si hay algo que comprar
+  const evo = $('tabEvo'), unlocked = evoUnlocked(G);
+  evo.classList.toggle('locked', !unlocked);
+  $('tabEvolve').classList.toggle('locked', !unlocked);
+  $('tabEvolve').classList.toggle('hot', unlocked && Game.canEvolve(G));
+  evo.title = unlocked ? '' : 'Se desbloquea cuando muera tu primera reina o al superar la noche ' + Game.BAL.foundAfter;
+  $('tabTree').classList.toggle('hot', Game.anyBuyable(G, 'skills'));
+  evo.classList.toggle('hot', unlocked && (Game.anyBuyable(G, 'perm') || Game.legacy(G).ready));
+}
+
+/* ---------- tarjetas (información; las mejoras están en el Árbol) ---------- */
+function infoCard(art, title, lines, row = '', note = '') {
+  return `<div class="card panel"><div class="art">${icon(art)}</div><div><h4>${title}</h4>${lines}</div>${row ? `<div class="row">${row}</div>` : ''}${note}</div>`;
+}
+
+function dockColony(G, D) {
+  const fc = Game.forecast(G, D), fill = Math.min(1, G.lay / D.eggCost), nx = D.next, st = Game.STAGES[G.stage];
+  const nBuy = Object.keys(Game.SKILLS).filter(id => Game.canBuy(G, 'skills', id)).length;
+  const cards = [
+    infoCard('crown', st.name, `<span class="fx">Huevo: ${fmt(Math.min(G.lay, D.eggCost), 0)} / ${fmt(D.eggCost, 0)} de comida</span><div class="meter"><i style="width:${fill * 100}%"></i></div>
+      `),
+    infoCard('egg', 'Cría', `<span class="fx">Huevo ${fmt(Game.BAL.eggTime / D.brood, 1)} s · larva ${fmt(Game.BAL.larvaTime / D.brood, 1)} s</span>`),
+    infoCard('shield', G.phase === 'night' ? 'Noche ' + G.level : 'Esta noche', `<span class="fx">${D.night.text}</span><span class="fx"><small>Tus hormigas: daño ${fmt(D.dmg, 1)} · vida ${fmt(D.hp, 0)}</small></span>`, '',
+      `<p class="note ${fc.win ? 'good' : 'warn'}">${!G.ants ? '¡Sin hormigas! Si llega la noche así, matarán a la reina.' : fc.win ? 'Previsión: ganáis, con unas ' + fc.losses + ' bajas.' : 'Previsión: no aguantan. Cría más o mejora en el Árbol.'}</p>`),
+    infoCard('arrows', 'Árbol', `<span class="fx">${nBuy ? nBuy + (nBuy === 1 ? ' mejora disponible' : ' mejoras disponibles') : 'Sigue recolectando jalea'}</span>`, `<button class="btn-green${nBuy ? '' : ' no'}" data-act="openTree" data-id="skills">Abrir</button>`)
+  ];
+  const l = Game.legacy(G);
+  if (l.ready) cards.push(infoCard('dna', 'Fundar colonia', `<span class="fx">Ganas +${l.gain} ADN y eliges mejoras de Linaje antes de empezar</span>`, `<button class="btn-green" data-act="prestige">${icon('dna')}Fundar</button>`));
+  return cards.join('');
+}
+
+function renderDock(G, D) {
+  const h = dockColony(G, D);
+  if (h !== lastDock) { lastDock = h; const dk = $('dock'), sc = dk.scrollLeft; dk.innerHTML = h; dk.scrollLeft = sc; }
+}
+
+export function setTab(tab) {
+  ui.tab = tab;
+  for (const b of document.querySelectorAll('#side .tab')) b.classList.toggle('on', b.dataset.tab === tab);
+}
+
+/* ---------- etiquetas sobre la escena ---------- */
+let labels = null;
+function buildLabels() {
+  const mk = () => { const d = document.createElement('div'); d.className = 'wlabel panel'; $('labels').appendChild(d); return d; };
+  labels = { pantry: mk(), eggs: mk(), queen: mk(), larvae: mk() };
+}
+
+function renderLabels(G, D) {
+  if (!labels) buildLabels();
+  const n = arr => arr.reduce((s, e) => s + e.n, 0), best = arr => arr.reduce((m, e) => Math.max(m, e.p), 0);
+  const fill = Math.min(1, G.lay / D.eggCost);
+  setHTML(labels.pantry, `Despensa<small>${icon('leaf')}${fmt(Math.floor(G.jelly))} jalea</small>`, 'lPantry');
+  setHTML(labels.eggs, `Huevos<small>${icon('egg')}${n(G.eggs)} / 12</small>${G.eggs.length ? `<div class="meter"><i style="width:${100 * best(G.eggs)}%"></i></div>` : ''}`, 'lEggs');
+  setHTML(labels.queen, `${Game.STAGES[G.stage].name}<small>${icon('egg')}próximo huevo ${Math.floor(fill * 100)}%</small><div class="meter"><i style="width:${fill * 100}%"></i></div>`, 'lQueen');
+  setHTML(labels.larvae, `Larvas<small>${icon('larva')}${n(G.larvae)} / 12</small>${G.larvae.length ? `<div class="meter green"><i style="width:${100 * best(G.larvae)}%"></i></div>` : ''}`, 'lLarvae');
+}
+
+/** Se llama cada fotograma: recoloca las etiquetas si la cámara se mueve. */
+/** Barritas de huevos y larvas: HTML con el estilo de la interfaz, recolocadas cada fotograma. */
+const bars = [];
+export function placeLabels() {
+  const list = broodBars(), box = $('labels');
+  while (bars.length < list.length) { const d = document.createElement('div'); d.className = 'bbar'; d.innerHTML = '<i></i>'; box.appendChild(d); bars.push(d); }
+  bars.forEach((d, i) => {
+    const b = list[i];
+    if (!b) { d.hidden = true; return; }
+    const p = toScreen(b);
+    d.hidden = false;
+    d.className = 'bbar ' + b.st + (b.ready ? ' ready' : '');
+    d.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -50%)`;
+    d.style.zIndex = Math.round(b.z);
+    d.firstChild.style.width = (b.p * 100).toFixed(1) + '%';
+  });
+}
+
+/* ---------- hojas modales ---------- */
+function renderSheet(G) {
+  if (ui.holding) return;
+  let h = '';
+  if (ui.sheet === 'guide') h = $('guideTpl').innerHTML;
+  else if (ui.sheet === 'goals') {
+    h = '<h2>Objetivos</h2><ul class="olist">' + Game.OBJ.map((o, i) => {
+      const st = i < G.obj ? 'done' : i === G.obj ? 'cur' : '';
+      return `<li class="${st}">${icon(i < G.obj ? 'check' : 'trophy')}<span>${o[0]}</span>${o[2] ? `<em>${icon('leaf')}${fmt(o[2])}</em>` : ''}</li>`;
+    }).join('') + '</ul>';
+  } else if (ui.sheet === 'settings') {
+    h = `<h2>Ajustes</h2><div class="settings">
+      <div class="line"><span>Sonido</span><button class="btn-plain${Audio.vol.mute ? '' : ' on'}" data-act="mute">${icon(Audio.vol.mute ? 'mute' : 'sound')} ${Audio.vol.mute ? 'Apagado' : 'Encendido'}</button></div>
+      <div class="line"><span>Juego</span><button class="btn-plain${ui.paused ? ' on' : ''}" data-act="pause">${ui.paused ? 'Reanudar' : 'Pausar'}</button></div>
+      <div class="line"><span>Hormigas</span>${(() => { let code = false; try { code = localStorage.getItem('antigenesis.antModel') === 'code'; } catch (e) { /* nada */ } return `<button class="btn-plain${code ? '' : ' on'}" data-act="antModel" data-id="glb">Modelo ilustrado</button><button class="btn-plain${code ? ' on' : ''}" data-act="antModel" data-id="code">Hechas en código</button><small style="color:var(--dim)">se aplica al recargar</small>`; })()}</div>
+      <div class="line"><span>Velocidad (pruebas)</span>${[1, 2, 4, 6, 10, 20].map(v => `<button class="btn-plain${ui.speed === v ? ' on' : ''}" data-act="speed" data-id="${v}">×${v}</button>`).join('')}</div>
+      <div class="line"><span>Bot (prueba)</span><button class="btn-plain" data-act="bot">Abrir panel del bot</button><small style="color:var(--dim)">tecla B · juega solo y registra cada acción</small></div>
+      <div class="line"><span>Colisiones</span><button class="btn-plain${ui.debug ? ' on' : ''}" data-act="debug">${ui.debug ? 'Visibles' : 'Ocultas'}</button><small style="color:var(--dim)">tecla C</small></div>
+      <div class="line"><span>Debug</span><button class="btn-plain${Game.debug.free ? ' on' : ''}" data-act="free">${Game.debug.free ? 'Evolución libre' : 'Apagado'}</button><small style="color:var(--dim)">ADN infinito · __ax.free</small></div>
+      <div class="line"><span>Partida</span><button class="btn-plain" data-act="reset" id="bReset">Reiniciar</button></div></div>`;
+  }
+  if (h !== lastSheet) { lastSheet = h; $('sheetBody').innerHTML = h; }
+}
+
+export function openSheet(G, s) {
+  ui.sheet = s;
+  $('sheet').hidden = !s;
+  lastSheet = '';
+  if (s) renderSheet(G);
+}
+
+export function render(G, D) {
+  renderTop(G, D);
+  if (ui.sheet) renderSheet(G);
+  if (!ui.holding) renderDock(G, D);
+}
+
+export function toast(text, tone) {
+  const t = document.createElement('div');
+  t.className = 'toast panel ' + (tone || ''); t.textContent = text;
+  const box = $('toasts');
+  box.appendChild(t);
+  setTimeout(() => t.remove(), 6500);
+  while (box.children.length > 3) box.firstChild.remove();
+}
+
+/** Número que sube desde un punto de la imagen. */
+export function float(text, pos, cls) {
+  const p = toScreen(pos), f = document.createElement('div');
+  f.className = 'float ' + (cls || ''); f.textContent = text;
+  f.style.left = p.x + (Math.random() - 0.5) * 44 + 'px'; f.style.top = p.y + (Math.random() - 0.5) * 22 + 'px';
+  $('floats').appendChild(f);
+  setTimeout(() => f.remove(), 1800);
+}

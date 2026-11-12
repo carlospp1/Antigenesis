@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ANTIGENESIS, demo</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;700&display=swap" rel="stylesheet">
+<style>:root{--sky-a:#bfe3ee;--sky-b:#f3ecd2;--panel:rgba(43,27,19,.93);--panel-2:rgba(255,236,205,.07);--line:rgba(255,226,180,.16);--ink:#f6ead6;--dim:#cdb99c;--honey:#f0b84c;--leaf:#a6d46a;--coral:#f09a7c;--teal:#7fd1bd;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--sky-a:#1d2a45;--sky-b:#5a4a5e;--panel:rgba(28,18,13,.95);color-scheme:dark}}
+:root[data-theme="dark"]{--sky-a:#1d2a45;--sky-b:#5a4a5e;--panel:rgba(28,18,13,.95);color-scheme:dark}
+*,*::before,*::after{box-sizing:inherit}
+html,body{height:100%;margin:0}
+body{background:#241812;color:var(--ink);font:15px/1.4 "Bricolage Grotesque",ui-rounded,"Trebuchet MS",system-ui,sans-serif;overflow:hidden;font-variant-numeric:tabular-nums}
+#ui{height:100%;display:flex;flex-direction:column}
+#top{display:flex;gap:6px 14px;align-items:center;flex-wrap:wrap;padding:8px 12px;background:var(--panel)}
+#res{display:flex;gap:6px 16px;flex-wrap:wrap;flex:1}
+.res{display:flex;align-items:baseline;gap:6px}.res i{width:10px;height:10px;border-radius:50%;background:var(--honey);align-self:center}
+.res b{font-size:17px}.res span{color:var(--dim);font-size:12px}
+.res.org i{background:#8fcf58}.res.soil i{background:#a8794f}.res.fungus i{background:var(--teal)}.res.resin i{background:#f0a23c}.res.bio i{background:#b9f08a}.res.samples i{background:#d7a8e8}.res.pop i{background:#c8503c}
+.res.full span{color:var(--coral)}
+#tools{display:flex;gap:6px}
+button{font:inherit;color:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel-2);border-radius:8px;padding:5px 10px}
+button:hover{border-color:var(--honey)}button:focus-visible{outline:2px solid var(--honey);outline-offset:2px}
+#mid{position:relative;flex:1;min-height:120px}
+#stage{position:absolute;inset:0;touch-action:none;cursor:grab}#stage canvas{width:100%;height:100%;display:block}
+#floats,#hud{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+#goal{position:absolute;left:12px;top:10px;max-width:min(430px,70%);background:var(--panel);border-left:3px solid var(--honey);border-radius:8px;padding:7px 11px}
+#goal b{color:var(--honey);margin-right:6px}
+#wave{position:absolute;right:12px;top:10px;background:var(--panel);border-left:3px solid var(--coral);border-radius:8px;padding:7px 11px;display:flex;gap:10px;align-items:center}
+#wave .hp{width:150px;height:8px;border-radius:4px;background:rgba(0,0,0,.4);overflow:hidden}#wave .hp i{display:block;height:100%;background:var(--coral)}
+#wave span{color:var(--dim);font-size:13px}
+#toasts{position:absolute;left:12px;bottom:10px;display:flex;flex-direction:column;gap:6px;max-width:min(460px,90%)}
+.toast{background:var(--panel);border-radius:8px;padding:7px 11px;border-left:3px solid var(--dim)}.toast.good{border-color:var(--leaf)}.toast.warn{border-color:var(--coral)}
+.float{position:absolute;transform:translate(-50%,-50%);font-weight:700;font-size:16px;color:#fff6dc;text-shadow:0 1px 3px rgba(40,20,8,.9);animation:rise .9s ease-out forwards;white-space:nowrap}
+.float.crit{color:var(--honey);font-size:20px}.float.good{color:var(--leaf)}.float.hit{color:var(--coral)}.float.dim{color:var(--dim)}
+@keyframes rise{to{transform:translate(-50%,-190%);opacity:0}}
+.label{position:absolute;transform:translate(-50%,4px);font-size:12px;color:#f6ead6;background:rgba(30,18,12,.62);padding:1px 7px;border-radius:9px;white-space:nowrap}
+#tabs{display:flex;gap:4px;padding:6px 12px 0;background:var(--panel)}
+#tabs button{border-radius:8px 8px 0 0;border-bottom:none;padding:6px 14px;color:var(--dim)}#tabs button.on{color:var(--ink);background:rgba(240,184,76,.16);border-color:var(--honey)}
+#tabs .fold{margin-left:auto;border:none;background:none}
+#panel{background:var(--panel);height:min(30vh,250px);overflow:auto;padding:12px;display:flex;gap:12px 26px;flex-wrap:wrap;align-content:flex-start;border-top:1px solid var(--line)}
+#panel[hidden],[hidden]{display:none!important}
+section{flex:1 1 250px;min-width:0}section.wide{flex:3 1 520px}
+h3{margin:0 0 6px;font-size:15px;color:var(--honey);font-weight:700}h4{margin:0 0 3px;font-size:15px}h4 small{color:var(--dim);font-weight:400;font-size:12px}
+p{margin:0 0 6px;color:var(--dim);font-size:13px}p b{color:var(--ink)}p.big{font-size:19px;color:var(--ink);font-weight:700}p.warn{color:var(--coral)}p.good{color:var(--leaf)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:8px}
+.card{background:var(--panel-2);border-radius:10px;padding:9px 10px;display:flex;flex-direction:column;margin-bottom:6px}.grid .card{margin:0}.card p{flex:1}
+.buy{display:flex;justify-content:space-between;gap:8px;width:100%;text-align:left;background:rgba(166,212,106,.16);border-color:rgba(166,212,106,.5)}
+.buy span{color:var(--dim);font-size:12px;text-align:right}.buy.no{background:none;border-color:var(--line);color:var(--dim)}.buy.no span{color:var(--coral)}
+.row{display:flex;align-items:center;gap:8px;padding:3px 0}.row span{flex:1}.row em{font-style:normal;color:var(--dim);min-width:52px;text-align:right}.row b{min-width:38px;text-align:center}.row i{font-style:normal;color:var(--dim);font-size:12px;min-width:96px;text-align:center}
+.mini{width:28px;padding:2px 0}.plain{margin-top:6px}
+.seg{display:flex;gap:6px;align-items:center;margin-bottom:8px;color:var(--dim);font-size:13px}.seg button.on{border-color:var(--honey);color:var(--honey)}
+#intro{position:absolute;inset:0;display:grid;place-items:center;background:rgba(30,18,12,.55);z-index:5}
+#intro div{background:var(--panel);border-radius:14px;padding:26px 30px;max-width:440px;margin:16px}
+#intro h1{margin:0;font-size:40px;letter-spacing:.06em;color:var(--honey)}#intro p{font-size:15px;margin:8px 0}
+#start{margin-top:10px;padding:9px 22px;background:var(--honey);color:#2b1b13;border:none;font-weight:700}
+@media (max-width:640px){.res span{display:none}#panel{height:42vh}#wave .hp{width:80px}}
+@media (prefers-reduced-motion:reduce){.float{animation-duration:.01s}}
+
+.meter{height:9px;border-radius:5px;background:rgba(0,0,0,.35);overflow:hidden;margin:0 0 8px}.meter i{display:block;height:100%;background:var(--honey);transition:width .3s}.meter.grow i{background:var(--leaf)}
+#panel{border-top:none}
+
+.res.sol i{background:#7d2a1f}.clock{display:flex;align-items:center;gap:8px;margin-left:auto}.clock .meter{width:90px;margin:0}.clock span{color:var(--dim);font-size:12px}
+.clock.night b{color:#9db0ff}.clock.night .meter i{background:#9db0ff}.clock.dusk b{color:var(--coral)}.clock.dusk .meter i{background:var(--coral)}
+#alarm{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:rgba(120,24,16,.94);border:2px solid #ff8a6a;border-radius:10px;padding:8px 16px;display:flex;gap:12px;align-items:center;animation:blink .6s steps(2) infinite;max-width:92%}
+#alarm b{font-size:18px;color:#fff1e6;white-space:nowrap}#alarm span{color:#ffd9cc;font-size:13px}#alarm .hp{width:140px;height:9px;border-radius:5px;background:rgba(0,0,0,.45);overflow:hidden;flex:none}#alarm .hp i{display:block;height:100%;background:#ffb199}
+@keyframes blink{50%{border-color:#7a1a10;box-shadow:0 0 0 4px rgba(255,90,60,.35)}}
+body.danger #mid::after{content:"";position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 90px 20px rgba(220,40,20,.5);animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+#goal{max-width:min(380px,40%)}
+#tools button.hot{border-color:var(--leaf);color:var(--leaf)}
+#sheet{position:absolute;inset:0;background:rgba(20,12,8,.7);display:grid;place-items:center;z-index:6}
+#sheet .box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px;max-width:920px;width:calc(100% - 24px);max-height:calc(100% - 24px);overflow:auto}
+#sheet h2{margin:0 0 6px;color:var(--honey)}
+.tree{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:12px 0}.branch{display:flex;flex-direction:column;gap:0}.branch h4{text-align:center;color:var(--honey);margin-bottom:8px}
+.node{display:flex;flex-direction:column;gap:2px;text-align:left;padding:8px 10px;margin-bottom:18px;position:relative}.node:not(:last-child)::after{content:"";position:absolute;left:50%;bottom:-19px;width:2px;height:18px;background:var(--line)}
+.node span{font-size:12px;color:var(--dim)}.node em{font-style:normal;font-size:12px;color:var(--coral)}
+.node.owned{border-color:var(--leaf);background:rgba(166,212,106,.16)}.node.owned em{color:var(--leaf)}.node.owned::after{background:var(--leaf)}.node.locked{opacity:.5}.node.can{border-color:var(--honey)}.node.can em{color:var(--honey)}
+@media (max-width:640px){.tree{grid-template-columns:1fr}.clock span{display:none}}
+@media (prefers-reduced-motion:reduce){#alarm,body.danger #mid::after{animation:none}}
+body.danger #goal{display:none}
+</style></head><body>
+<div id="ui">
+  <div id="top"><div id="res"></div><div id="tools"><button id="bTree">Árbol</button><button id="bLegacy" hidden>Legado</button><button id="bPause">Pausa</button><button id="bSpeed" title="Velocidad de simulación, para pruebas">×1</button><button id="bMute">Sonido sí</button><button id="bReset">Reiniciar</button></div></div>
+  <div id="mid"><div id="stage"></div><div id="floats"></div>
+    <div id="hud"><div id="goal" hidden></div><div id="alarm" hidden></div><div id="toasts"></div></div>
+    <div id="intro"><div><h1>ANTIGENESIS</h1><p>Una colonia. Una evolución. Un nuevo mundo.</p>
+      <p>De día las obreras salen por el hueco a la hierba, recogen comida y se la dan a la reina en la boca. Cada bocado la acerca a un huevo nuevo.</p>
+      <p>De noche sonará la alarma: los enemigos salen de la hierba y matan hormigas. Decide cuántas de las que nacen serán soldados.</p>
+      <p>Haz clic en la reina, los huevos y las larvas para ayudar. Arrastra para mover la vista y usa la rueda para acercarte.</p><button id="start">Empezar</button></div></div>
+  </div>
+  <div id="panel"></div>
+  <div id="sheet" hidden><div class="box"><div id="sheetBody"></div><button class="plain" data-act="close">Cerrar</button></div></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>/* ANTIGENESIS v3 — lógica: día y noche, obreras y soldados, bajas, árbol y legado */
+(function (root) {
+  'use strict';
+  const AX = (root.AX = root.AX || {});
+  const L = {}; AX.on = (t, f) => ((L[t] = L[t] || []).push(f)); AX.emit = (t, d) => { (L[t] || []).forEach(f => f(d || {})); };
+  const UNITS = ['', ' K', ' M', ' B', ' T'];
+  function fmt(x, d) {
+    if (x < 1000) return x.toFixed(d != null ? d : (x < 10 && x % 1 > 0.05 ? 1 : 0)).replace('.', ',');
+    const e = Math.min(4, Math.floor(Math.log10(x) / 3)), v = x / Math.pow(1000, e);
+    return v.toFixed(v < 10 ? 2 : v < 100 ? 1 : 0).replace('.', ',') + UNITS[e];
+  }
+  const fmtTime = s => s < 60 ? Math.ceil(s) + ' s' : s < 3600 ? Math.floor(s / 60) + ' min' : Math.floor(s / 3600) + ' h ' + Math.floor(s % 3600 / 60) + ' min';
+  AX.fmt = fmt; AX.fmtTime = fmtTime;
+
+  const STAGES = [{ name: 'Reina joven', at: 0 }, { name: 'Reina fértil', at: 400 }, { name: 'Gran madre', at: 8000 }, { name: 'Matriarca', at: 150000 }, { name: 'Reina primordial', at: 2500000 }];
+  const UPG = [
+    { id: 'crop', name: 'Buche grande', what: '+25% de comida por viaje', base: 15, g: 1.6 },
+    { id: 'legs', name: 'Patas ágiles', what: '+8% de velocidad', base: 30, g: 1.7, max: 15 },
+    { id: 'meta', name: 'Metabolismo real', what: 'cada huevo cuesta un 8% menos', base: 50, g: 1.8, max: 20 },
+    { id: 'warm', name: 'Calor del nido', what: '+25% de velocidad de cría', base: 40, g: 1.6, max: 20 },
+    { id: 'click', name: 'Caricia', what: '+30% de efecto de tus clics', base: 25, g: 1.8, max: 10 },
+    { id: 'jaws', name: 'Mandíbulas', what: '+25% de daño de los soldados', base: 40, g: 1.6 },
+    { id: 'shell', name: 'Caparazón', what: '+25% de vida de los soldados', base: 40, g: 1.6 }
+  ];
+  const TREE = [
+    { name: 'Recolección', nodes: [
+      { id: 'g1', name: 'Rastro de feromonas', fx: '+50% de comida por viaje', cost: 2 },
+      { id: 'g2', name: 'Doble carga', fx: 'El doble de comida por viaje', cost: 6 },
+      { id: 'g3', name: 'Rutas nocturnas', fx: 'Las obreras siguen recolectando de noche', cost: 14 },
+      { id: 'g4', name: 'Cosecha masiva', fx: 'Otra vez el doble de comida', cost: 32 }] },
+    { name: 'Cría', nodes: [
+      { id: 'c1', name: 'Nodrizas', fx: '+50% de velocidad de huevos y larvas', cost: 2 },
+      { id: 'c2', name: 'Puesta doble', fx: 'Uno de cada cuatro huevos trae gemelas', cost: 6 },
+      { id: 'c3', name: 'Reina eficiente', fx: 'Los huevos se encarecen más despacio', cost: 14 },
+      { id: 'c4', name: 'Reina prolífica', fx: 'Los huevos se encarecen aún más despacio', cost: 32 }] },
+    { name: 'Guerra', nodes: [
+      { id: 'w1', name: 'Mandíbulas afiladas', fx: '+50% de daño de los soldados', cost: 2 },
+      { id: 'w2', name: 'Quitina gruesa', fx: '+50% de vida de los soldados', cost: 6 },
+      { id: 'w3', name: 'Mandíbula reforzada', fx: 'Mutación: el doble de daño y mandíbulas visibles', cost: 14 },
+      { id: 'w4', name: 'Furia de la colonia', fx: 'Si caen los soldados, las obreras pelean a media fuerza', cost: 32 }] }
+  ];
+  const NODE = {}; TREE.forEach(b => b.nodes.forEach((n, i) => { n.prev = i ? b.nodes[i - 1].id : null; NODE[n.id] = n; }));
+  const OBJ = [
+    ['Espera a que una obrera vuelva y alimente a la reina', G => G.eaten > 0, 5],
+    ['Haz clic en la reina para ayudarla a poner un huevo', G => G.stats.laid >= 1, 10],
+    ['Cría una hormiga nueva: los clics aceleran huevos y larvas', G => G.stats.born >= 1, 15],
+    ['Sobrevive a la primera noche con algún soldado en pie', G => G.level > 1, 40],
+    ['Aprende una habilidad en el Árbol', G => Object.keys(G.skills).length >= 1, 60],
+    ['Llega a 15 hormigas', G => G.workers + G.soldiers >= 15, 150],
+    ['Haz crecer a la reina hasta Reina fértil', G => G.stage >= 1, 200],
+    ['Derrota a la araña de la quinta noche', G => G.level > 5, 1500],
+    ['Haz crecer a la reina hasta Gran madre', G => G.stage >= 2, 3000],
+    ['Funda una nueva colonia desde Legado', G => G.gen > 1, 0],
+    ['Derrota al escarabajo de la décima noche', G => G.level > 10, 50000]
+  ];
+  const DAY = 75, NIGHT = 45, DUSK = 10;
+  let uid = 1;
+  function newGame(keep) {
+    const G = { v: 3, last: Date.now(), jelly: 0, eaten: 0, workers: 2, soldiers: 1, lay: 0, stage: 0, eggs: [], larvae: [], upg: {}, skills: {}, pct: 30,
+      phase: 'day', t: 110, level: 1, warned: false, foes: null, guard: 0, hurt: 0, bio: 0, rate: 0, obj: 0, adn: 0, gen: 1, mute: false,
+      stats: { clicks: 0, laid: 0, born: 0, dead: 0, time: 0 } };
+    if (keep) { G.adn = keep.adn; G.gen = keep.gen; G.mute = keep.mute; G.obj = keep.obj; }
+    return G;
+  }
+  function calc(G) {
+    const u = k => G.upg[k] || 0, s = k => !!G.skills[k], D = {}, P = 1 + 0.15 * G.adn;
+    D.legacy = P;
+    D.carry = 4 * (1 + 0.25 * u('crop')) * Math.pow(1.5, G.stage) * (s('g1') ? 1.5 : 1) * (s('g2') ? 2 : 1) * (s('g4') ? 2 : 1) * P;
+    D.speed = 2.6 * (1 + 0.08 * u('legs'));
+    D.pop = G.workers + G.soldiers;
+    let brood = 0; for (const e of G.eggs) brood += e.n; for (const e of G.larvae) brood += e.n;
+    D.eggCost = 15 * Math.pow(s('c4') ? 1.07 : s('c3') ? 1.085 : 1.10, D.pop + brood) * Math.pow(0.92, u('meta'));
+    D.brood = (1 + 0.25 * u('warm')) * (s('c1') ? 1.5 : 1);
+    D.twin = s('c2') ? 0.25 : 0;
+    D.click = 1 + 0.3 * u('click');
+    D.dmg = (1 + 0.25 * u('jaws')) * (s('w1') ? 1.5 : 1) * (s('w3') ? 2 : 1) * P;
+    D.hp = 10 * (1 + 0.25 * u('shell')) * (s('w2') ? 1.5 : 1) * P;
+    D.nightWork = s('g3'); D.fury = s('w4');
+    D.next = STAGES[G.stage + 1] || null;
+    D.night = nightDef(G.level);
+    return D;
+  }
+  function nightDef(n) {
+    const d = { n, count: n + Math.floor(n / 3), hpEach: 16 * Math.pow(1.35, n - 1), dpsEach: 0.8 * Math.pow(1.3, n - 1), boss: null };
+    if (n % 5 === 0) d.boss = { type: n % 10 === 0 ? 'beetle' : 'spider', name: n % 10 === 0 ? 'un escarabajo acorazado' : 'una araña cazadora', hp: d.hpEach * (n % 10 === 0 ? 14 : 8), dps: d.dpsEach * 4 };
+    d.totalHp = d.count * d.hpEach + (d.boss ? d.boss.hp : 0); d.totalDps = d.count * d.dpsEach + (d.boss ? d.boss.dps : 0);
+    d.text = d.count + (d.count === 1 ? ' termita' : ' termitas') + (d.boss ? ' y ' + d.boss.name : '');
+    return d;
+  }
+  // predicción honesta del combate de esta noche con el ejército actual
+  function forecast(G, D) {
+    const d = D.night, dps = G.soldiers * D.dmg, pool = G.soldiers * D.hp;
+    if (dps <= 0) return { win: false, losses: G.soldiers };
+    const T = d.totalHp / dps, dmgTaken = d.totalDps * T * (d.count + 1) / (2 * d.count) * 1.1; // el daño enemigo baja según van cayendo
+    return { win: dmgTaken < pool && T < NIGHT - 6, losses: Math.min(G.soldiers, Math.floor(dmgTaken / D.hp)), time: T };
+  }
+  const slot = arr => { for (let s = 0; s < 12; s++) if (!arr.some(e => e.slot === s)) return s; return -1; };
+  function layEgg(G, D) {
+    const s = slot(G.eggs), n = Math.random() < D.twin ? 2 : 1; G.stats.laid++;
+    if (s < 0) { const e = G.eggs[Math.floor(Math.random() * G.eggs.length)]; e.n += n; AX.emit('lay', { e }); return; }
+    const e = { id: uid++, n, p: 0, slot: s }; G.eggs.push(e); AX.emit('lay', { e });
+  }
+  function digest(G) {
+    let n = 0, D = calc(G);
+    while (G.lay >= D.eggCost && n++ < 5) { G.lay -= D.eggCost; layEgg(G, D); D = calc(G); }
+    while (STAGES[G.stage + 1] && G.eaten >= STAGES[G.stage + 1].at) { G.stage++; AX.emit('stage', { stage: STAGES[G.stage] }); }
+  }
+  function feed(G, amount) { G.jelly += amount; G.eaten += amount; G.lay += amount; G.rate += amount / 20; digest(G); }
+  function click(G, kind, id) {
+    const D = calc(G); G.stats.clicks++;
+    if (kind === 'queen') { const f = 0.3 * D.carry * D.click; G.lay += f; const b = G.stats.laid; digest(G); return { laid: G.stats.laid > b, food: f }; }
+    const e = (kind === 'egg' ? G.eggs : G.larvae).find(x => x.id === id); if (e) e.p += 0.12 * D.click;
+    return { pct: Math.round(12 * D.click) };
+  }
+  function kill(G, caste) { if (G[caste] <= 0) return false; G[caste]--; G.stats.dead++; AX.emit('death', { caste }); return true; }
+  function born(G, n, slotIdx) {
+    for (let i = 0; i < n; i++) { const tot = G.workers + G.soldiers + 1, sol = G.soldiers / tot < G.pct / 100; if (sol) G.soldiers++; else G.workers++; AX.emit('born', { caste: sol ? 'soldiers' : 'workers', slot: slotIdx }); }
+    G.stats.born += n;
+  }
+  function tick(G, dt) {
+    const D = calc(G); G.stats.time += dt; G.rate = Math.max(0, G.rate - G.rate * dt / 20);
+    G.lay += 0.25 * dt; if (G.lay >= D.eggCost) digest(G); // la reina tira de sus reservas: la colonia nunca muere del todo
+    for (let i = G.eggs.length - 1; i >= 0; i--) {
+      const e = G.eggs[i]; e.p += dt / 14 * D.brood;
+      if (e.p >= 1) { const s = slot(G.larvae); if (s < 0) { e.p = 1; continue; } G.eggs.splice(i, 1); const from = e.slot; e.slot = s; e.p = 0; G.larvae.push(e); AX.emit('hatch', { e, from }); }
+    }
+    for (let i = G.larvae.length - 1; i >= 0; i--) { const e = G.larvae[i]; e.p += dt / 22 * D.brood; if (e.p >= 1) { G.larvae.splice(i, 1); born(G, e.n, e.slot); } }
+    G.t -= dt;
+    if (G.phase === 'day') {
+      if (!G.warned && G.t <= DUSK) { G.warned = true; AX.emit('dusk', { def: D.night }); }
+      if (G.t <= 0) { const d = D.night; G.phase = 'night'; G.t = NIGHT; G.foes = { count: d.count, cur: d.hpEach, boss: d.boss ? d.boss.hp : 0, arrive: 6, lost: 0 }; G.guard = D.hp; G.hurt = 10; AX.emit('night', { def: d }); }
+    } else {
+      const f = G.foes, d = D.night;
+      if (f.arrive > 0) f.arrive -= dt;
+      else {
+        const eDps = f.count * d.dpsEach + (f.boss > 0 ? d.boss.dps : 0);
+        let our = G.soldiers * D.dmg; if (G.soldiers === 0 && D.fury) our = G.workers * D.dmg * 0.5;
+        let dmg = our * dt;
+        while (dmg > 0 && (f.count > 0 || f.boss > 0)) {
+          if (f.count > 0) { const a = Math.min(dmg, f.cur); f.cur -= a; dmg -= a; if (f.cur <= 0.0001) { f.count--; f.cur = d.hpEach; G.bio++; AX.emit('foeDeath', {}); } }
+          else { const a = Math.min(dmg, f.boss); f.boss -= a; dmg -= a; if (f.boss <= 0.0001) { f.boss = 0; G.bio += 4; AX.emit('foeDeath', { boss: true }); } }
+        }
+        if (G.soldiers > 0) { G.guard -= eDps * dt; while (G.guard <= 0 && G.soldiers > 0) { kill(G, 'soldiers'); f.lost++; G.guard += D.hp; } }
+        else { G.hurt -= eDps * dt; while (G.hurt <= 0 && G.workers > 0) { kill(G, 'workers'); f.lost++; G.hurt += 10; } }
+        if (f.count <= 0 && f.boss <= 0) {
+          const prize = Math.max(25 * Math.pow(1.5, G.level - 1), G.rate * 25); G.jelly += prize;
+          AX.emit('nightWin', { level: G.level, prize, lost: f.lost }); G.level++; G.foes = null; G.phase = 'day'; G.t = DAY; G.warned = false;
+        }
+      }
+      if (G.phase === 'night' && G.t <= 0) { AX.emit('nightLost', { lost: G.foes.lost }); G.foes = null; G.phase = 'day'; G.t = DAY; G.warned = false; }
+    }
+    if (G.obj < OBJ.length && OBJ[G.obj][1](G)) { G.jelly += OBJ[G.obj][2]; AX.emit('goal', { text: OBJ[G.obj][0], prize: OBJ[G.obj][2] }); G.obj++; }
+    return D;
+  }
+  const cost = (G, d) => d.base * Math.pow(d.g, G.upg[d.id] || 0);
+  function buy(G, id) { const d = UPG.find(x => x.id === id), l = G.upg[id] || 0, c = cost(G, d); if ((d.max && l >= d.max) || G.jelly < c) return false; G.jelly -= c; G.upg[id] = l + 1; return true; }
+  function skillState(G, id) { const n = NODE[id]; return G.skills[id] ? 'owned' : n.prev && !G.skills[n.prev] ? 'locked' : 'open'; }
+  function learn(G, id) { const n = NODE[id]; if (skillState(G, id) !== 'open' || G.bio < n.cost) return false; G.bio -= n.cost; G.skills[id] = true; AX.emit('skill', { id }); return true; }
+  function hit(G, D) { const f = G.foes; if (!f || f.arrive > 0) return 0; const a = Math.max(1, D.dmg * 2); if (f.count > 0) f.cur -= Math.min(a, f.cur - 0.01); else f.boss = Math.max(0.01, f.boss - a); return a; }
+  function legacy(G) { const ready = G.level > 5; return { ready, gain: Math.floor((G.level - 1) * 0.8 + G.stage * 2), now: Math.round(G.adn * 15) }; }
+  function prestige(G) { const l = legacy(G); if (!l.ready) return null; return newGame({ adn: G.adn + l.gain, gen: G.gen + 1, mute: G.mute, obj: Math.max(G.obj, 9) }); }
+  function away(G, secs) {
+    secs = Math.min(secs, 8 * 3600); if (secs < 20 || G.rate <= 0) return null;
+    if (G.phase === 'night') { G.phase = 'day'; G.foes = null; G.warned = false; } G.t = DAY;
+    const food = G.rate * secs * 0.5; G.jelly += food; G.eaten += food;
+    let budget = food + G.lay, n = 0, D = calc(G);
+    while (budget >= D.eggCost && n < 300) { budget -= D.eggCost; born(G, 1, 0); n++; D = calc(G); }
+    G.lay = Math.min(budget, D.eggCost * 0.9); digest(G); return { secs, food, born: n };
+  }
+  const KEY = 'antigenesis.save.v3';
+  function save(G) { try { G.last = Date.now(); root.localStorage.setItem(KEY, JSON.stringify(G)); } catch (e) {} }
+  function load() { try { const o = JSON.parse(root.localStorage.getItem(KEY)); if (!o || o.v !== 3) return null; const G = Object.assign(newGame(), o); for (const e of G.eggs.concat(G.larvae)) uid = Math.max(uid, e.id + 1); return G; } catch (e) { return null; } }
+  function wipe() { try { root.localStorage.removeItem(KEY); } catch (e) {} }
+  AX.Game = { STAGES, UPG, TREE, NODE, OBJ, DAY, NIGHT, newGame, calc, nightDef, forecast, feed, click, tick, cost, buy, skillState, learn, hit, legacy, prestige, away, save, load, wipe };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* ANTIGENESIS v3 — escena 3D vista desde arriba (Three.js r128) */
+(function () {
+  'use strict';
+  const AX = window.AX, T = window.THREE, Game = AX.Game;
+  const Scene = (AX.Scene = {}), V3 = T.Vector3;
+  const MW = 32, MD = 18, QX = -7.2, QZ = 0.5;
+  const QC = { x: -8.7, z: 0.5, rx: 5.3, rz: 4.4 }, NC = { x: -0.5, z: -5.3, r: 2.7 };
+  const PT = { Qd: [-3.6, 0.6], J: [-0.5, 0.8], N: [-0.5, -3.3], Ent: [5.2, 1.5], Out: [7.3, 1.6] };
+  const FOOD = [{ x: 11.2, z: -5.2, type: 'leaf' }, { x: 13.6, z: 4, type: 'seed' }, { x: 9.8, z: 6.8, type: 'berry' }];
+  const edge = z => 5.3 + Math.sin(z * 0.8) * 0.45;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  function mulberry(a) { return function () { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  let renderer, scene, camera, host, hemi, sun, glowQ, glowE, pollen;
+  const cam = { tx: 0, tz: 0.4, zoom: 1, gx: 0, gz: 0.4, gzoom: 1, dist: 40, intro: 0 };
+  let G = null, D = null, time = 0, nightK = 0, fighting = false;
+
+/* ---------- utilidades de geometría low-poly ---------- */
+  function ico(r, s, p, col, detail) {
+    const g = new T.IcosahedronGeometry(r, detail == null ? 1 : detail);
+    if (s) g.scale(s[0], s[1], s[2]); g.translate(p[0], p[1], p[2]); return [g, col];
+  }
+  const X1 = new V3(1, 0, 0);
+  function seg(a, b, th, col) {
+    const A = new V3(a[0], a[1], a[2]), B = new V3(b[0], b[1], b[2]), d = B.clone().sub(A), len = d.length();
+    const g = new T.BoxGeometry(len, th, th);
+    g.applyMatrix4(new T.Matrix4().makeRotationFromQuaternion(new T.Quaternion().setFromUnitVectors(X1, d.normalize())));
+    const m = A.add(B).multiplyScalar(0.5); g.translate(m.x, m.y, m.z); return [g, col];
+  }
+  function merge(parts) {
+    let n = 0; const gs = [];
+    for (const [g0, c] of parts) { const g = g0.index ? g0.toNonIndexed() : g0; g.computeVertexNormals(); n += g.attributes.position.count; gs.push([g, new T.Color(c)]); }
+    const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), col = new Float32Array(n * 3); let o = 0;
+    for (const [g, c] of gs) {
+      const cnt = g.attributes.position.count;
+      pos.set(g.attributes.position.array, o * 3); nor.set(g.attributes.normal.array, o * 3);
+      for (let i = 0; i < cnt; i++) { col[(o + i) * 3] = c.r; col[(o + i) * 3 + 1] = c.g; col[(o + i) * 3 + 2] = c.b; }
+      o += cnt;
+    }
+    const out = new T.BufferGeometry();
+    out.setAttribute('position', new T.BufferAttribute(pos, 3)); out.setAttribute('normal', new T.BufferAttribute(nor, 3)); out.setAttribute('color', new T.BufferAttribute(col, 3));
+    return out;
+  }
+  function legParts(col, th, spreadX, reach, kneeY, hipY, baseX) {
+    const A = [], B = []; let i = 0;
+    for (const xi of [1, 0, -1]) for (const s of [1, -1]) {
+      const hip = [baseX + xi * 0.06, hipY, s * 0.05], knee = [baseX + xi * spreadX * 0.65, kneeY, s * reach * 0.72], foot = [baseX + xi * spreadX, 0, s * reach];
+      const set = ((xi + 1) + (s > 0 ? 0 : 1)) % 2 === 0 ? A : B;
+      set.push(seg(hip, knee, th, col), seg(knee, foot, th * 0.85, col)); i++;
+    }
+    return [merge(A), merge(B)];
+  }
+  function antGeo(o) {
+    const hs = o.headS || 1, as = o.abdS || 1, al = o.antL || 1;
+    const parts = [
+      ico(0.13, [1.45 * as, as, as], [-0.21 - 0.07 * (as - 1), 0.15 + 0.02 * (as - 1), 0], o.abd),
+      ico(0.085, [1.35, 0.95, 0.9], [0, 0.14, 0], o.body),
+      ico(0.09 * hs, null, [0.17 + 0.03 * (hs - 1), 0.16, 0], o.head),
+      seg([0.22, 0.2, 0.04], [0.22 + 0.14 * al, 0.2 + 0.1 * al, 0.1], 0.018, o.body),
+      seg([0.22, 0.2, -0.04], [0.22 + 0.14 * al, 0.2 + 0.1 * al, -0.1], 0.018, o.body),
+      ico(0.022, null, [0.215 + 0.05 * (hs - 1), 0.195, 0.065 * hs], '#1c0f0c', 0), ico(0.022, null, [0.215 + 0.05 * (hs - 1), 0.195, -0.065 * hs], '#1c0f0c', 0)
+    ];
+    if (o.mand) {
+      const m = o.mand, hx = 0.24 + 0.06 * (hs - 1);
+      parts.push(seg([hx, 0.13, 0.035], [hx + 0.1 * m, 0.1, 0.075], 0.03 * m, o.mandCol), seg([hx, 0.13, -0.035], [hx + 0.1 * m, 0.1, -0.075], 0.03 * m, o.mandCol));
+      parts.push(seg([hx + 0.1 * m, 0.1, 0.075], [hx + 0.16 * m, 0.1, 0.02], 0.022 * m, o.mandCol), seg([hx + 0.1 * m, 0.1, -0.075], [hx + 0.16 * m, 0.1, -0.02], 0.022 * m, o.mandCol));
+    }
+    if (o.plates) for (const px of [-0.3, -0.2, -0.1]) parts.push(ico(0.028, null, [px, 0.15 + 0.125 * as, 0.03], o.plates, 0), ico(0.028, null, [px, 0.15 + 0.125 * as, -0.03], o.plates, 0));
+    const legs = legParts(o.legs || o.body, 0.022, 0.2, 0.23, 0.17, 0.11, 0.03);
+    return { body: merge(parts), la: legs[0], lb: legs[1] };
+  }
+  function soldierGeo(muts) {
+    const exo = muts && muts.exo, jaw = muts && muts.jaw;
+    return antGeo({ body: exo ? '#2f303b' : '#5a1f1a', abd: exo ? '#23242d' : '#3d1512', head: jaw ? '#7d2a1f' : '#6e241c', headS: jaw ? 1.75 : 1.3,
+      mand: jaw ? 1.9 : 1, mandCol: jaw ? '#f1dfb7' : '#2a1210', plates: exo ? '#6ff0d0' : null, abdS: 1.05, legs: exo ? '#23242d' : '#4a1915' });
+  }
+  const GEO = {}, MAT = {}, SCALE = { worker: 1, nurse: 0.9, digger: 1.05, soldier: 1.3, scout: 0.88 };
+  function buildAssets() {
+    GEO.worker = antGeo({ body: '#7a3420', abd: '#5e2617', head: '#8a3b22' });
+    GEO.nurse = antGeo({ body: '#b5683a', abd: '#e9c088', head: '#c27845', abdS: 1.12 });
+    GEO.digger = antGeo({ body: '#4f3326', abd: '#3b251b', head: '#5b3b2b', headS: 1.3, mand: 0.9, mandCol: '#2a1a12' });
+    GEO.scout = antGeo({ body: '#c77a2e', abd: '#a55f20', head: '#d68a3a', abdS: 0.82, antL: 1.7 });
+    GEO.soldier = soldierGeo(null);
+    GEO.termite = antGeo({ body: '#ead8a4', abd: '#f1e4bb', head: '#c98a3c', headS: 1.3, abdS: 1.2, mand: 1.1, mandCol: '#5a3416', legs: '#d9c48c' });
+    // reina
+    const q = [];
+    const segs = [[-0.2, 0.17, 0.15, '#a85f2a'], [-0.36, 0.19, 0.2, '#d99a4e'], [-0.55, 0.2, 0.22, '#a85f2a'], [-0.74, 0.19, 0.2, '#d99a4e'], [-0.9, 0.17, 0.15, '#a85f2a'], [-1.02, 0.16, 0.1, '#c98643']];
+    for (const s of segs) q.push(ico(s[2], [1.05, 1, 1.05], [s[0], s[1] + 0.02, 0], s[3]));
+    q.push(ico(0.1, [1.4, 1, 1], [0, 0.15, 0], '#8c4a1f'), ico(0.1, null, [0.19, 0.17, 0], '#9a5424'),
+      seg([0.25, 0.22, 0.04], [0.4, 0.33, 0.1], 0.02, '#8c4a1f'), seg([0.25, 0.22, -0.04], [0.4, 0.33, -0.1], 0.02, '#8c4a1f'),
+      ico(0.024, null, [0.25, 0.21, 0.07], '#1c0f0c', 0), ico(0.024, null, [0.25, 0.21, -0.07], '#1c0f0c', 0),
+      seg([0.02, 0.24, 0.05], [-0.22, 0.3, 0.13], 0.03, '#f3dfae'), seg([0.02, 0.24, -0.05], [-0.22, 0.3, -0.13], 0.03, '#f3dfae'));
+    const ql = legParts('#7a3f1a', 0.026, 0.22, 0.26, 0.19, 0.11, 0.03);
+    GEO.queen = { body: merge(q), la: ql[0], lb: ql[1] };
+    // cría
+    GEO.egg = merge([ico(0.105, [1, 1.38, 1], [0, 0.145, 0], '#fff5dc')]);
+    GEO.larva = merge([ico(0.1, null, [0.17, 0.1, 0], '#e2b272'), ico(0.115, null, [0.04, 0.115, 0], '#f6e6bf'), ico(0.12, null, [-0.11, 0.12, 0], '#f1dcae'), ico(0.1, null, [-0.25, 0.1, 0], '#f6e6bf'),
+      ico(0.02, null, [0.24, 0.13, 0.05], '#3a2212', 0), ico(0.02, null, [0.24, 0.13, -0.05], '#3a2212', 0)]);
+    GEO.pupa = new T.IcosahedronGeometry(0.13, 1); GEO.pupa.scale(1.9, 1, 1); GEO.pupa.translate(0, 0.13, 0); GEO.pupa.computeVertexNormals();
+    GEO.bit = new T.IcosahedronGeometry(0.075, 0);
+    GEO.bar = new T.PlaneGeometry(1, 1); GEO.barFill = new T.PlaneGeometry(1, 1); GEO.barFill.translate(0.5, 0, 0);
+    // araña
+    const sp = [ico(0.42, [1.2, 1, 1.05], [-0.5, 0.52, 0], '#5b3a63'), ico(0.26, [1.1, 0.9, 1], [0.08, 0.44, 0], '#6d4a73'), ico(0.1, null, [-0.62, 0.86, 0], '#c9a5cf', 0), ico(0.08, null, [-0.3, 0.86, 0.12], '#c9a5cf', 0), ico(0.08, null, [-0.3, 0.86, -0.12], '#c9a5cf', 0)];
+    for (const ez of [0.07, -0.07, 0.17, -0.17]) sp.push(ico(0.035, null, [0.32, 0.5 + (Math.abs(ez) < 0.1 ? 0.03 : 0), ez], '#f6efe0', 0));
+    const sA = [], sB = []; let li = 0;
+    for (const xi of [1.25, 0.45, -0.35, -1.15]) for (const s of [1, -1]) {
+      const hip = [0.08 + xi * 0.08, 0.42, s * 0.16], knee = [0.08 + xi * 0.34, 0.98, s * 0.72], foot = [0.08 + xi * 0.55, 0, s * 1.22];
+      const set = (li + (s > 0 ? 0 : 1)) % 2 === 0 ? sA : sB; set.push(seg(hip, knee, 0.06, '#48304f'), seg(knee, foot, 0.045, '#48304f'));
+      if (s < 0) li++;
+    }
+    GEO.spider = { body: merge(sp), la: merge(sA), lb: merge(sB) };
+    // escarabajo
+    const bt = [ico(0.6, [1.25, 0.82, 1], [-0.2, 0.56, 0], '#2f6b6b'), ico(0.3, [1.6, 0.5, 0.25], [-0.2, 0.98, 0], '#3f8a86', 0), ico(0.36, [1.05, 0.85, 1.1], [0.56, 0.45, 0], '#285757'),
+      ico(0.2, null, [0.92, 0.38, 0], '#1c3b3b'), seg([0.98, 0.46, 0], [1.28, 0.86, 0], 0.09, '#1c3b3b'), seg([1.28, 0.86, 0], [1.2, 1.04, 0], 0.07, '#1c3b3b'),
+      ico(0.035, null, [1.02, 0.44, 0.13], '#f6efe0', 0), ico(0.035, null, [1.02, 0.44, -0.13], '#f6efe0', 0)];
+    const bl = legParts('#173131', 0.07, 0.62, 0.92, 0.5, 0.3, 0.05);
+    GEO.beetle = { body: merge(bt), la: bl[0], lb: bl[1] };
+
+    MAT.v = new T.MeshLambertMaterial({ vertexColors: true });
+    MAT.carry = { leaf: new T.MeshLambertMaterial({ color: '#7fc04a' }), seed: new T.MeshLambertMaterial({ color: '#e0c07a' }), berry: new T.MeshLambertMaterial({ color: '#d8484e' }),
+      soil: new T.MeshLambertMaterial({ color: '#6b4a32' }), egg: new T.MeshLambertMaterial({ color: '#fff5dc' }), resin: new T.MeshLambertMaterial({ color: '#f0a23c' }) };
+    MAT.barBg = new T.MeshBasicMaterial({ color: '#1e120c', transparent: true, opacity: 0.6, depthTest: false });
+    MAT.barFill = new T.MeshBasicMaterial({ color: '#f0b84c', depthTest: false });
+    MAT.barReady = new T.MeshBasicMaterial({ color: '#9cd66a', depthTest: false });
+    MAT.part = { gold: new T.MeshBasicMaterial({ color: '#ffd77a' }), dust: new T.MeshBasicMaterial({ color: '#a8835f' }), white: new T.MeshBasicMaterial({ color: '#fff7e6' }),
+      green: new T.MeshBasicMaterial({ color: '#b6e27a' }), teal: new T.MeshBasicMaterial({ color: '#7fe6cf' }), red: new T.MeshBasicMaterial({ color: '#ff9a7a' }) };
+  }
+
+  
+  /* ---------- suelo y paredes del nido ---------- */
+  function carve(ctx, k, inset) {
+    const X = x => (x + MW / 2) * k, Y = z => (z + MD / 2) * k;
+    ctx.beginPath(); ctx.ellipse(X(QC.x), Y(QC.z), (QC.rx - inset) * k, (QC.rz - inset) * k, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(X(NC.x), Y(NC.z), (NC.r - inset) * k, 0, 7); ctx.fill();
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = (1.5 - inset * 2) * k;
+    ctx.beginPath(); ctx.moveTo(X(-4.5), Y(0.6)); ctx.lineTo(X(PT.J[0]), Y(PT.J[1])); ctx.lineTo(X(PT.Ent[0]), Y(PT.Ent[1])); ctx.lineTo(X(7), Y(1.6));
+    ctx.moveTo(X(PT.J[0]), Y(PT.J[1])); ctx.lineTo(X(NC.x), Y(NC.z + 1)); ctx.stroke();
+  }
+  function nestPath(ctx, k, inset) {
+    const X = x => (x + MW / 2) * k, Y = z => (z + MD / 2) * k;
+    ctx.beginPath(); ctx.moveTo(0, 0); for (let z = -MD / 2; z <= MD / 2 + 0.01; z += 0.25) ctx.lineTo(X(edge(z) - inset), Y(z)); ctx.lineTo(0, MD * k); ctx.closePath();
+  }
+  function paintGround(cv) {
+    const ctx = cv.getContext('2d'), W = cv.width, H = cv.height, k = W / MW, r = mulberry(11), X = x => (x + MW / 2) * k, Y = z => (z + MD / 2) * k;
+    ctx.fillStyle = '#7fae48'; ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 900; i++) { ctx.fillStyle = `hsla(${84 + r() * 22},${40 + r() * 15}%,${36 + r() * 16}%,0.5)`; ctx.beginPath(); ctx.ellipse(X(4 + r() * 12), r() * H, k * (0.15 + r() * 0.5), k * (0.1 + r() * 0.3), r() * 3, 0, 7); ctx.fill(); }
+    ctx.strokeStyle = 'rgba(190,160,100,0.55)'; ctx.lineCap = 'round'; ctx.lineWidth = k * 0.7;
+    for (const f of FOOD) { ctx.beginPath(); ctx.moveTo(X(PT.Out[0]), Y(PT.Out[1])); ctx.quadraticCurveTo(X((PT.Out[0] + f.x) / 2 + 1), Y((PT.Out[1] + f.z) / 2), X(f.x), Y(f.z)); ctx.stroke(); }
+    ctx.fillStyle = 'rgba(176,146,92,0.75)'; ctx.beginPath(); ctx.ellipse(X(7.6), Y(1.6), k * 2.1, k * 1.9, 0, 0, 7); ctx.fill();
+    nestPath(ctx, k, 0); ctx.fillStyle = '#3b2518'; ctx.fill();
+    ctx.fillStyle = '#7a5538'; carve(ctx, k, -0.05); ctx.strokeStyle = '#7a5538'; 
+    for (const c of [[QC.x, QC.z, QC.rx], [NC.x, NC.z, NC.r]]) { const g = ctx.createRadialGradient(X(c[0]), Y(c[1]), 0, X(c[0]), Y(c[1]), c[2] * k); g.addColorStop(0, 'rgba(255,200,110,0.5)'); g.addColorStop(1, 'rgba(255,200,110,0)'); ctx.fillStyle = g; ctx.fillRect(X(c[0] - c[2]), Y(c[1] - c[2]), c[2] * 2 * k, c[2] * 2 * k); }
+    for (let i = 0; i < 500; i++) { ctx.fillStyle = r() < 0.5 ? 'rgba(255,230,190,0.08)' : 'rgba(30,15,8,0.12)'; ctx.beginPath(); ctx.arc(X(-16 + r() * 22), r() * H, k * (0.03 + r() * 0.06), 0, 7); ctx.fill(); }
+  }
+  function paintWall(cv, i, n) {
+    const ctx = cv.getContext('2d'), W = cv.width, H = cv.height, k = W / MW, r = mulberry(5 + i), t = i / (n - 1), inset = (n - 1 - i) * 0.09;
+    ctx.clearRect(0, 0, W, H); nestPath(ctx, k, inset);
+    const mix = (a, b) => Math.round(a + (b - a) * t); ctx.fillStyle = `rgb(${mix(74, 128)},${mix(46, 86)},${mix(30, 56)})`; ctx.fill();
+    if (i === n - 1) {
+      ctx.save(); nestPath(ctx, k, inset); ctx.clip();
+      for (let j = 0; j < 2600; j++) { ctx.fillStyle = r() < 0.5 ? 'rgba(255,232,196,0.10)' : 'rgba(28,14,8,0.16)'; ctx.beginPath(); ctx.arc(r() * W * 0.7, r() * H, k * (0.02 + r() * 0.06), 0, 7); ctx.fill(); }
+      const pc = ['#9c8774', '#b39d86', '#77614f'];
+      for (let j = 0; j < 46; j++) { const x = r() * W * 0.66, y = r() * H, rx = k * (0.12 + r() * 0.25); ctx.fillStyle = pc[j % 3]; ctx.beginPath(); ctx.ellipse(x, y, rx, rx * 0.7, r() * 3, 0, 7); ctx.fill(); }
+      ctx.restore();
+    }
+    ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = ctx.strokeStyle = '#000'; carve(ctx, k, inset * 0.9); ctx.globalCompositeOperation = 'source-over';
+  }
+  function buildWorld() {
+    const gc = document.createElement('canvas'); gc.width = 2048; gc.height = 1152; paintGround(gc);
+    const gp = new T.PlaneGeometry(MW, MD); gp.rotateX(-Math.PI / 2);
+    const ground = new T.Mesh(gp, new T.MeshLambertMaterial({ map: new T.CanvasTexture(gc) })); ground.receiveShadow = true; scene.add(ground);
+    const n = 5;
+    for (let i = 0; i < n; i++) {
+      const cv = document.createElement('canvas'); cv.width = i === n - 1 ? 2048 : 1024; cv.height = cv.width * MD / MW; paintWall(cv, i, n);
+      const m = new T.Mesh(gp, new T.MeshLambertMaterial({ map: new T.CanvasTexture(cv), alphaTest: 0.5 })); m.position.y = 0.16 * (i + 1); scene.add(m);
+    }
+    const base = new T.Mesh(new T.BoxGeometry(MW + 1, 0.8, MD + 1), new T.MeshLambertMaterial({ color: '#33231b' })); base.position.y = -0.42; scene.add(base);
+    const r = mulberry(21), c = new T.Color(), dm = new T.Object3D();
+    const blade = new T.ConeGeometry(0.07, 0.5, 4); blade.translate(0, 0.25, 0);
+    const tufts = new T.InstancedMesh(blade, new T.MeshLambertMaterial({ color: '#ffffff' }), 300); let k = 0;
+    while (k < 300) {
+      const z = (r() - 0.5) * (MD - 0.4), x = edge(z) + 0.5 + r() * (15.6 - edge(z));
+      if (x < 11.6 && z > -1.6 && z < 4.8) continue; let near = false; for (const f of FOOD) if (Math.hypot(x - f.x, z - f.z) < 1.6) near = true; if (near) continue;
+      dm.position.set(x, 0, z); dm.rotation.set((r() - 0.5) * 0.6, r() * 6, (r() - 0.5) * 0.6); dm.scale.set(1 + r(), 0.7 + r() * 1.2, 1 + r()); dm.updateMatrix(); tufts.setMatrixAt(k, dm.matrix);
+      c.setHSL(0.22 + r() * 0.06, 0.45 + r() * 0.15, 0.36 + r() * 0.14); tufts.setColorAt(k, c); k++;
+    }
+    scene.add(tufts);
+    const rockG = new T.IcosahedronGeometry(1, 0), rockM = new T.MeshLambertMaterial({ color: '#a39788' });
+    for (const p of [[14.6, -7.6, 0.8], [8, -7.4, 0.5], [15, 0.2, 0.6], [12.4, 7.8, 0.9], [7.2, 5.2, 0.35], [12.2, -1.2, 0.3]]) { const m = new T.Mesh(rockG, rockM); m.position.set(p[0], p[2] * 0.3, p[1]); m.scale.set(p[2] * 1.2, p[2] * 0.6, p[2]); m.rotation.y = r() * 6; m.castShadow = true; scene.add(m); }
+    const leafM = new T.MeshLambertMaterial({ color: '#6fae3f' });
+    for (const p of [[11.6, -5.6, 0.4, 1.5], [10.6, -4.7, -0.6, 1.1]]) { const lf = new T.Mesh(new T.IcosahedronGeometry(1, 1), leafM); lf.scale.set(p[3], 0.07, p[3] * 0.55); lf.position.set(p[0], 0.1, p[1]); lf.rotation.y = p[2]; lf.castShadow = true; scene.add(lf); }
+    const seedG = new T.IcosahedronGeometry(0.2, 0), seedM = new T.MeshLambertMaterial({ color: '#dcb96e' });
+    for (let i = 0; i < 11; i++) { const m = new T.Mesh(seedG, seedM), a = r() * 6, d = r() * 0.8; m.position.set(13.9 + Math.cos(a) * d, 0.12 + (d < 0.35 ? 0.2 : 0), 4.2 + Math.sin(a) * d); m.scale.set(1.4, 0.8, 0.9); m.rotation.y = r() * 6; m.castShadow = true; scene.add(m); }
+    const berry = new T.Mesh(new T.IcosahedronGeometry(0.75, 1), new T.MeshLambertMaterial({ color: '#cf3f48' })); berry.position.set(10.1, 0.6, 7.3); berry.castShadow = true; scene.add(berry);
+    for (const p of [[15, -3.5, '#fff3d6'], [8.6, -2.6, '#ffd166'], [15.2, 6.6, '#f7a8b8'], [6.6, -6.6, '#fff3d6']]) { const fl = new T.Mesh(new T.IcosahedronGeometry(0.22, 0), new T.MeshLambertMaterial({ color: p[2] })); fl.position.set(p[0], 0.7, p[1]); fl.scale.y = 0.5; fl.castShadow = true; const ce = new T.Mesh(new T.IcosahedronGeometry(0.1, 0), new T.MeshLambertMaterial({ color: '#e59a2e' })); ce.position.set(p[0], 0.8, p[1]); scene.add(fl, ce); }
+    const pg = new T.BufferGeometry(), pp = new Float32Array(50 * 3); for (let i = 0; i < 50; i++) { pp[i * 3] = 5 + r() * 11; pp[i * 3 + 1] = 0.8 + r() * 2; pp[i * 3 + 2] = (r() - 0.5) * MD; }
+    pg.setAttribute('position', new T.BufferAttribute(pp, 3)); pollen = new T.Points(pg, new T.PointsMaterial({ color: '#fff6cf', size: 0.12, transparent: true, opacity: 0.8 })); scene.add(pollen);
+  }
+
+  /* ---------- hormigas ---------- */
+  const agents = [], by = { workers: [], soldiers: [] }, CAP = { workers: 24, soldiers: 14 };
+  const tmpM = new T.Matrix4(), tmpQ = new T.Quaternion(), vx = new V3(), vy = new V3(0, 1, 0), vz = new V3();
+  function makeBody(geo, scale) { const g = new T.Group(), body = new T.Mesh(geo.body, MAT.v), la = new T.Mesh(geo.la, MAT.v), lb = new T.Mesh(geo.lb, MAT.v); body.castShadow = true; g.add(body, la, lb); g.scale.setScalar(scale); return { g, body, la, lb, phase: Math.random() * 6 }; }
+  function animLegs(o, moving, amp) { const s = Math.sin(o.phase), c = Math.cos(o.phase), k = moving ? 1 : 0.15, A = amp || 0.045; o.la.position.x = s * A * k; o.lb.position.x = -s * A * k; o.la.position.y = Math.max(0, c) * A * 0.4 * k; o.lb.position.y = Math.max(0, -c) * A * 0.4 * k; }
+  function face(o, dx, dz, dt) { const l = Math.hypot(dx, dz); if (l < 1e-5) return; vx.set(dx / l, 0, dz / l); vz.crossVectors(vx, vy); tmpM.makeBasis(vx, vy, vz); tmpQ.setFromRotationMatrix(tmpM); o.g.quaternion.slerp(tmpQ, Math.min(1, dt * 10)); }
+  const qScale = () => 2.8 + 0.4 * G.stage, headX = () => QX + 0.42 * qScale();
+  const pt = (n, j) => ({ x: PT[n][0] + rnd(-j, j), z: PT[n][1] + rnd(-j, j) });
+  function toGate(a) { return a.at === 'out' ? [] : [pt(a.at === 'nurs' ? 'N' : 'Qd', 0.25), pt('J', 0.3), pt('Ent', 0.25), pt('Out', 0.4)]; }
+  function toChamber(a) { return a.at === 'cham' ? [] : a.at === 'nurs' ? [pt('N', 0.25), pt('J', 0.3), pt('Qd', 0.25)] : [pt('Out', 0.4), pt('Ent', 0.25), pt('J', 0.3), pt('Qd', 0.25)]; }
+  function spawn(caste, at, x, z) {
+    const o = makeBody(caste === 'workers' ? GEO.worker : GEO.soldier, caste === 'workers' ? 1 : 1.3);
+    const carry = new T.Mesh(GEO.bit, MAT.carry.leaf); carry.visible = false; carry.position.set(0.32, 0.2, 0); carry.scale.setScalar(1.4); o.g.add(carry);
+    const a = Object.assign(o, { caste, carry, at, path: [], wait: rnd(0, 1), idx: by[caste].length, mode: null, after: null });
+    a.g.position.set(x, 0.02, z); a.g.rotation.y = rnd(0, 6); scene.add(a.g); agents.push(a); by[caste].push(a); return a;
+  }
+  function removeAgent(a, dead) { if (dead) puff(a.g.position.x, 0.3, a.g.position.z, 'red', 8, 1.1); scene.remove(a.g); agents.splice(agents.indexOf(a), 1); const l = by[a.caste]; l.splice(l.indexOf(a), 1); }
+  const setCarry = (a, type) => { a.carry.visible = !!type; if (type) a.carry.material = MAT.carry[type]; };
+  function feedTask(a) {
+    const ang = rnd(-1.1, 1.1), d = rnd(0.5, 1.5), b = toChamber(a);
+    b.push({ x: headX() + 0.2 + Math.cos(ang) * d, z: QZ + Math.sin(ang) * d, wait: 0.9, set: 'cham', faceQ: true, fn: () => {
+      setCarry(a, null); const amount = D.carry * G.workers / Math.max(1, by.workers.length), mx = headX() + 0.05;
+      for (let i = 0; i < 5; i++) drop(a.g.position.x, 0.4, a.g.position.z, mx, 0.5, QZ, i * 0.06);
+      queen.gulp = 1; AX.emit('feed', { amount, pos: new V3(mx, 0.8, QZ - 0.6) });
+    } });
+    a.path = b; a.after = null;
+  }
+  function nextTask(a) {
+    if (a.caste === 'workers') {
+      if (G.phase === 'night' && !D.nightWork) { const p = toChamber(a); p.push({ x: rnd(-5.6, -4), z: QZ + rnd(-3, 3), wait: rnd(1, 3), set: 'cham' }); a.path = p; return; }
+      const f = FOOD[Math.floor(Math.random() * FOOD.length)], p = toGate(a);
+      p.push({ x: f.x + rnd(-0.9, 0.9), z: f.z + rnd(-0.8, 0.8), wait: 0.8, set: 'out', fn: () => setCarry(a, f.type) }); a.path = p; a.after = () => feedTask(a);
+    } else {
+      const i = a.idx % 14, p = toGate(a);
+      p.push({ x: 7.6 + (i % 3) * 0.62 + rnd(-0.1, 0.1), z: 0.1 + Math.floor(i / 3) * 0.72 + rnd(-0.1, 0.1), wait: rnd(2, 5), set: 'out', guard: true }); a.path = p;
+    }
+  }
+  function updateAgent(a, dt) {
+    if (a.caste === 'soldiers' && fighting && a.at === 'out' && !a.path.length) { // en primera línea
+      a.phase += dt * 14; animLegs(a, true, 0.03); if (a.hx == null) { a.hx = a.g.position.x; a.hz = a.g.position.z; }
+      const l = Math.sin(a.phase * 0.42 + a.idx); a.g.position.set(a.hx + 0.25 + l * 0.22, 0.02, a.hz); face(a, 1, 0, dt); a.wait = 0.5; return;
+    }
+    if (a.hx != null) { a.g.position.x = a.hx; a.hx = null; }
+    if (a.wait > 0) { a.wait -= dt; a.phase += dt * 3; animLegs(a, false); if (a.faceQ) face(a, headX() - a.g.position.x, QZ - a.g.position.z, dt); if (a.wait <= 0) a.faceQ = false; return; }
+    if (!a.path.length) { if (a.after) a.after(); else nextTask(a); return; }
+    const t = a.path[0], p = a.g.position, dx = t.x - p.x, dz = t.z - p.z, dist = Math.hypot(dx, dz), sp = D.speed * (a.caste === 'soldiers' ? (fighting ? 1.5 : 0.7) : 1) * dt;
+    if (dist <= sp) { p.x = t.x; p.z = t.z; a.path.shift(); if (t.set) a.at = t.set; if (t.fn) t.fn(); if (t.wait) { a.wait = t.wait; a.faceQ = !!t.faceQ; } }
+    else { p.x += dx / dist * sp; p.z += dz / dist * sp; face(a, dx, dz, dt); }
+    a.phase += sp * 15 / a.g.scale.x; animLegs(a, true);
+  }
+  let syncT = 0, births = { workers: [], soldiers: [] };
+  function syncAgents(first) {
+    for (const k in by) {
+      const l = by[k], want = Math.min(CAP[k], G[k]);
+      while (l.length > want) removeAgent(l[l.length - 1]);
+      while (l.length < want) {
+        if (first) { const a = k === 'workers' ? spawn(k, l.length % 2 ? 'out' : 'cham', l.length % 2 ? rnd(8, 14) : rnd(-5.5, -4), l.length % 2 ? rnd(-6, 7) : QZ + rnd(-3, 3)) : spawn(k, 'out', rnd(7.5, 9), rnd(0, 3)); if (k === 'workers' && l.length === 1) { setCarry(a, 'leaf'); a.wait = 0; feedTask(a); } continue; }
+        const b = births[k].shift(); if (b) spawn(k, 'nurs', b.x, b.z); else spawn(k, 'nurs', NC.x + rnd(-1, 1), NC.z + rnd(-1, 1));
+      }
+      births[k].length = 0;
+    }
+  }
+
+  /* ---------- reina y cría ---------- */
+  const SLOTS = { egg: [], larva: [] }, brood = { egg: [], larva: [] }; let queen, queenBar;
+  function makeBar(w) { const g = new T.Group(), bg = new T.Mesh(GEO.bar, MAT.barBg), fill = new T.Mesh(GEO.barFill, MAT.barFill); bg.scale.set(w, 0.1, 1); fill.scale.set(w, 0.07, 1); fill.position.set(-w / 2, 0, 0.001); bg.renderOrder = 10; fill.renderOrder = 11; g.add(bg, fill); g.rotation.x = -Math.PI / 2; g.w = w; g.fill = fill; return g; }
+  function buildBrood() {
+    for (let i = 0; i < 12; i++) {
+      SLOTS.egg.push({ x: -11.4 + (i % 6) * 0.6, z: QZ + (i < 6 ? -2.5 : 2.5) + ((i % 6) % 2 ? 0.35 : 0) });
+      const ring = i < 8, a = i * (ring ? Math.PI / 4 : Math.PI / 2) + 0.3, rr = ring ? 1.6 : 0.6; SLOTS.larva.push({ x: NC.x + Math.cos(a) * rr, z: NC.z + Math.sin(a) * rr });
+    }
+    for (const st in SLOTS) for (let i = 0; i < 12; i++) {
+      const s = SLOTS[st][i], m = new T.Mesh(GEO[st], MAT.v); m.position.set(s.x, 0.02, s.z); m.visible = false; m.rotation.y = rnd(0, 6); m.castShadow = true;
+      const bar = makeBar(0.5); bar.position.set(s.x, 0.6, s.z + 0.42); bar.visible = false; scene.add(m, bar); brood[st].push({ m, bar, e: null, pop: 0, ph: Math.random() * 6, hover: 0 });
+    }
+    queen = makeBody(GEO.queen, 2.8); queen.g.position.set(QX, 0.02, QZ); queen.squash = 0; queen.gulp = 0; queen.hover = 0; queen.s = 2.8; scene.add(queen.g);
+    queenBar = makeBar(2.4); scene.add(queenBar);
+  }
+  const slotPos = (st, i) => { const s = SLOTS[st][i] || SLOTS[st][0]; return new V3(s.x, 0.3, s.z); };
+  Scene.entityPos = (kind, i) => kind === 'queen' ? new V3(QX - 0.35 * queen.s, 0.9, QZ) : kind === 'enemy' ? new V3(10, 0.6, 1.5) : slotPos(kind, i);
+  function updateBrood(dt) {
+    for (const st in brood) {
+      const pool = brood[st], src = st === 'egg' ? G.eggs : G.larvae; for (const it of pool) it.e = null;
+      for (const e of src) if (pool[e.slot]) pool[e.slot].e = e;
+      for (const it of pool) {
+        const e = it.e; it.m.visible = it.bar.visible = !!e; if (!e) continue;
+        it.pop = Math.max(0, it.pop - dt * 2.6); it.hover = Math.max(0, it.hover - dt * 5);
+        let s = 1.5 * (1 + Math.min(1, 0.15 * Math.log2(e.n))) * (1 + it.hover * 0.15) * (1 + Math.sin(it.pop * Math.PI) * 0.45);
+        if (st === 'egg') { it.m.scale.setScalar(s * (0.85 + 0.25 * e.p)); it.m.rotation.x = Math.sin(time * (1.3 + e.p * 6) + it.ph) * (0.03 + e.p * 0.1) + 1.2; }
+        else { s *= 0.7 + 0.55 * e.p; const w = Math.sin(time * 2.6 + it.ph); it.m.scale.set(s * (1 + w * 0.08), s, s * (1 - w * 0.08)); it.m.rotation.y += dt * w * 0.3; }
+        it.bar.fill.scale.x = Math.max(0.001, it.bar.w * Math.min(1, e.p));
+      }
+    }
+    queen.s += (qScale() - queen.s) * Math.min(1, dt * 1.5); queen.phase += dt * 2.2; animLegs(queen, false, 0.05);
+    queen.squash = Math.max(0, queen.squash - dt * 3); queen.gulp = Math.max(0, queen.gulp - dt * 2.5); queen.hover = Math.max(0, queen.hover - dt * 5);
+    const sq = Math.sin(queen.squash * Math.PI), gp = Math.sin(queen.gulp * Math.PI), fill = Math.min(1, G.lay / D.eggCost), s = queen.s;
+    queen.g.scale.set(s * (1 + sq * 0.07 + gp * 0.03 + queen.hover * 0.03), s, s * (1 - sq * 0.06 + gp * 0.04 + fill * 0.06 + Math.sin(time * 1.6) * 0.012));
+    queen.g.rotation.y = Math.sin(time * 0.7) * 0.03;
+    queenBar.position.set(QX - 0.35 * s, 1.2, QZ - 0.3 * s - 0.5); queenBar.fill.scale.x = Math.max(0.001, queenBar.w * fill);
+  }
+/* ---------- partículas ---------- */
+  const parts = [];
+  function buildParticles() {
+    const g = new T.IcosahedronGeometry(0.06, 0);
+    for (let i = 0; i < 90; i++) { const m = new T.Mesh(g, MAT.part.gold); m.visible = false; scene.add(m); parts.push({ m, life: 0, max: 1, v: new V3(), g: 0, s: 1 }); }
+  }
+  let pi = 0;
+  function puff(x, y, z, col, n, spread, up) {
+    for (let i = 0; i < n; i++) {
+      const p = parts[pi++ % parts.length]; p.m.material = MAT.part[col]; p.m.visible = true; p.m.position.set(x + rnd(-0.1, 0.1), y + rnd(-0.05, 0.1), z + rnd(-0.1, 0.1));
+      p.v.set(rnd(-1, 1) * spread, rnd(0.3, 1.2) * spread + (up || 0), rnd(-0.4, 0.6) * spread); p.max = p.life = rnd(0.5, 0.95); p.g = col === 'dust' ? 1.6 : 0.5; p.s = rnd(0.7, 1.4);
+    }
+  }
+  Scene.puff = puff;
+  function updateParticles(dt) {
+    for (const p of parts) {
+      if (p.life <= 0) continue; p.life -= dt;
+      if (p.life <= 0) { p.m.visible = false; continue; }
+      p.v.y -= p.g * dt; p.m.position.addScaledVector(p.v, dt); p.m.scale.setScalar(p.s * (p.life / p.max)); p.m.rotation.x += dt * 3;
+    }
+  }
+
+  
+  const drops = [];
+  function drop(x, y, z, tx, ty, tz, delay) { const p = parts[pi++ % parts.length]; p.life = 0; p.m.material = MAT.part.gold; drops.push({ p, a: new V3(x, y, z), b: new V3(tx, ty, tz), t: -delay }); }
+  function updateDrops(dt) { for (let i = drops.length - 1; i >= 0; i--) { const d = drops[i]; d.t += dt * 2.2; if (d.t < 0) continue; if (d.t >= 1) { d.p.m.visible = false; drops.splice(i, 1); continue; } d.p.m.visible = true; d.p.m.position.lerpVectors(d.a, d.b, d.t); d.p.m.position.y += Math.sin(d.t * Math.PI) * 0.6; d.p.m.scale.setScalar(1.7); } }
+
+  /* ---------- enemigos ---------- */
+  const foes = []; let boss = { spider: null, beetle: null }, leave = 0, shown = false, hitT = 0;
+  function buildEnemies() {
+    for (let i = 0; i < 12; i++) { const o = makeBody(GEO.termite, 1.35); o.g.visible = false; scene.add(o.g); o.bx = 9.6 + (i % 3) * 0.75 + rnd(0, 0.2); o.bz = 0 + Math.floor(i / 3) * 0.85 - (i % 3) * 0.12; o.alive = false; foes.push(o); }
+    for (const k of ['spider', 'beetle']) { const o = makeBody(GEO[k], 1.5); o.g.visible = false; o.bx = 12.2; o.bz = 1.5; o.alive = false; scene.add(o.g); boss[k] = o; }
+  }
+  const allFoes = () => foes.concat([boss.spider, boss.beetle]);
+  function hideFoes() { for (const o of allFoes()) { o.g.visible = false; o.alive = false; } shown = false; }
+  function updateEnemies(dt) {
+    const f = G.foes; fighting = !!f && f.arrive <= 0 && G.soldiers > 0;
+    if (leave > 0) { leave -= dt; for (const o of allFoes()) if (o.alive) { o.g.position.x += dt * 3.2; o.phase += dt * 22; animLegs(o, true, 0.05); face(o, 1, 0, dt); } if (leave <= 0) hideFoes(); return; }
+    if (!f) { if (shown) hideFoes(); return; }
+    const def = D.night;
+    if (!shown) { shown = true; foes.forEach((o, i) => { o.alive = i < f.count; o.g.visible = o.alive; }); if (def.boss) { const b = boss[def.boss.type]; b.alive = b.g.visible = f.boss > 0; } }
+    for (let i = 0; i < 12; i++) if (foes[i].alive && i >= f.count) { foes[i].alive = false; foes[i].g.visible = false; puff(foes[i].g.position.x, 0.3, foes[i].g.position.z, 'white', 8, 1.2); }
+    if (def.boss) { const b = boss[def.boss.type]; if (b.alive && f.boss <= 0) { b.alive = false; b.g.visible = false; puff(b.g.position.x, 0.6, b.g.position.z, 'white', 26, 2.2); } }
+    const pr = Math.max(0, 1 - f.arrive / 6), ease = pr * pr * (3 - 2 * pr), raid = f.arrive <= 0 && G.soldiers === 0 ? 2.6 : 0;
+    if (f.arrive <= 0) { hitT -= dt; if (hitT <= 0) { hitT = rnd(0.15, 0.4); puff(9 - raid + rnd(-0.3, 0.3), 0.3, rnd(0, 3), 'gold', 2, 0.9); AX.emit('sfx', { id: 'hit' }); } }
+    allFoes().forEach((o, i) => { if (!o.alive) return; const tx = o.bx - raid + (f.arrive <= 0 ? Math.sin(time * 5.2 + i * 1.7) * 0.16 : 0); o.g.position.set(17.5 + (tx - 17.5) * ease, 0.02, o.bz); o.phase += dt * 14; animLegs(o, true, i > 11 ? 0.09 : 0.04); face(o, -1, 0, dt); });
+  }
+  Scene.enemyHit = () => puff(10 + rnd(-0.6, 0.6), 0.5, 1.5 + rnd(-1, 1), 'red', 4, 1);
+
+  /* ---------- montaje ---------- */
+  Scene.init = function (el) {
+    host = el; renderer = new T.WebGLRenderer({ antialias: true, alpha: true }); renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap; renderer.setClearColor(0x000000, 0); el.appendChild(renderer.domElement);
+    scene = new T.Scene(); camera = new T.PerspectiveCamera(30, 1, 1, 200);
+    hemi = new T.HemisphereLight('#fff6dc', '#7a5636', 0.85); scene.add(hemi);
+    sun = new T.DirectionalLight('#fff0d0', 0.7); sun.position.set(8, 20, 6); sun.target.position.set(0, 0, 0); scene.add(sun, sun.target);
+    sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); const sc = sun.shadow.camera; sc.left = -18; sc.right = 18; sc.top = 11; sc.bottom = -11; sc.near = 2; sc.far = 50; sun.shadow.bias = -0.0015;
+    glowQ = new T.PointLight('#ffc566', 0.3, 16); glowQ.position.set(QC.x, 3.5, QC.z); glowE = new T.PointLight('#ff7a5a', 0, 12); glowE.position.set(8.5, 3, 1.5); scene.add(glowQ, glowE);
+    buildAssets(); buildWorld(); buildBrood(); buildParticles(); buildEnemies(); Scene.resize();
+    AX.on('lay', d => { const it = brood.egg[d.e.slot]; if (it) it.pop = 1; queen.squash = 1; const p = slotPos('egg', d.e.slot); puff(p.x, p.y, p.z, 'white', 5, 0.7); });
+    AX.on('hatch', d => { const it = brood.larva[d.e.slot]; if (it) it.pop = 1; const a = slotPos('egg', d.from), b = slotPos('larva', d.e.slot); puff(a.x, a.y, a.z, 'white', 4, 0.6); puff(b.x, b.y, b.z, 'gold', 4, 0.6); });
+    AX.on('born', d => { const p = slotPos('larva', d.slot); puff(p.x, 0.4, p.z, 'gold', 9, 1, 0.4); births[d.caste].push(p); syncT = 0; });
+    AX.on('death', d => { const l = by[d.caste]; if (l.length > Math.min(CAP[d.caste], G[d.caste])) { const out = l.filter(a => a.at === 'out'); removeAgent(out.length ? out[out.length - 1] : l[l.length - 1], true); } });
+    AX.on('stage', () => { for (let i = 0; i < 6; i++) puff(QX + rnd(-3, 1), 0.6, QZ + rnd(-1.5, 1.5), 'gold', 6, 1.6, 0.5); });
+    AX.on('nightLost', () => { leave = 4; });
+    AX.on('skill', d => { if (d.id === 'w3') Scene.refreshMutation(); });
+  };
+  Scene.refreshMutation = function () { if (!G) return; const g = soldierGeo({ jaw: !!G.skills.w3 }); GEO.soldier = g; for (const a of by.soldiers) { a.body.geometry = g.body; a.la.geometry = g.la; a.lb.geometry = g.lb; } };
+  Scene.reset = function () { while (agents.length) removeAgent(agents[0]); G = null; hideFoes(); leave = 0; };
+  Scene.resize = function () { const w = Math.max(50, host.clientWidth), h = Math.max(50, host.clientHeight); renderer.setSize(w, h, false); camera.aspect = w / h; const tanH = Math.tan(15 * Math.PI / 180); cam.dist = Math.max(16.6 / (2 * tanH), 33.5 / (2 * tanH * camera.aspect)); camera.updateProjectionMatrix(); };
+  const camDir = new V3(0, 1, 0.42).normalize();
+  function updateCamera(dt) {
+    cam.intro = Math.min(1, cam.intro + dt / 2.4); const e = 1 - Math.pow(1 - cam.intro, 3), k = Math.min(1, dt * 7);
+    cam.zoom += (cam.gzoom - cam.zoom) * k; const lim = Math.max(0, 1 - cam.zoom); cam.gx = Math.max(-16 * lim, Math.min(16 * lim, cam.gx)); cam.gz = Math.max(0.4 - 9 * lim, Math.min(0.4 + 9 * lim, cam.gz));
+    cam.tx += (cam.gx - cam.tx) * k; cam.tz += (cam.gz - cam.tz) * k; const d = cam.dist * cam.zoom * (1.4 - 0.4 * e);
+    camera.position.set(cam.tx, camDir.y * d, cam.tz + camDir.z * d); camera.lookAt(cam.tx, 0, cam.tz);
+  }
+  Scene.zoomBy = f => { cam.gzoom = Math.max(0.3, Math.min(1.1, cam.gzoom * f)); };
+  Scene.panBy = (dx, dy) => { const u = 2 * cam.dist * cam.zoom * Math.tan(15 * Math.PI / 180) / host.clientHeight; cam.gx -= dx * u; cam.gz -= dy * u; };
+  Scene.resetView = () => { cam.gx = 0; cam.gz = 0.4; cam.gzoom = 1; };
+  Scene.setTheme = function () {};
+  const pv = new V3(), cDay = new T.Color('#fff6dc'), cNight = new T.Color('#7f93d8'), sDay = new T.Color('#fff0d0'), sNight = new T.Color('#9db0ff');
+  Scene.toScreen = v => { pv.copy(v).project(camera); return { x: (pv.x * 0.5 + 0.5) * host.clientWidth, y: (-pv.y * 0.5 + 0.5) * host.clientHeight }; };
+  Scene.pick = function (px, py) {
+    if (!G) return null; let best = null, bd = 1;
+    const test = (v, rad, res) => { const s = Scene.toScreen(v), u = Math.abs(Scene.toScreen(v.clone().add(new V3(1, 0, 0))).x - s.x), d = Math.hypot(s.x - px, s.y - py) / (rad * u); if (d < bd) { bd = d; best = res; res.pos = v.clone(); } };
+    test(new V3(QX - 0.35 * queen.s, 0.3, QZ), 0.7 * queen.s, { kind: 'queen' });
+    for (const e of G.eggs) test(slotPos('egg', e.slot), 0.4, { kind: 'egg', id: e.id, slot: e.slot });
+    for (const e of G.larvae) test(slotPos('larva', e.slot), 0.45, { kind: 'larva', id: e.id, slot: e.slot });
+    if (shown && !leave) for (const o of allFoes()) if (o.alive) test(o.g.position.clone().setY(0.3), 0.7, { kind: 'enemy' });
+    return best;
+  };
+  Scene.hover = h => { if (!h) return; if (h.kind === 'queen') queen.hover = 1; else if (brood[h.kind] && brood[h.kind][h.slot]) brood[h.kind][h.slot].hover = 1; };
+  Scene.bump = h => { if (h.kind === 'queen') queen.squash = Math.max(queen.squash, 0.6); else if (brood[h.kind] && brood[h.kind][h.slot]) brood[h.kind][h.slot].pop = 0.55; };
+  Scene.update = function (game, derived, dt, realDt, skipDraw) {
+    const first = G !== game; G = game; D = derived; time += dt;
+    if (first) { queen.s = qScale(); syncAgents(true); Scene.refreshMutation(); syncT = 1; }
+    syncT -= dt; if (syncT <= 0) { syncT = 1; syncAgents(false); }
+    updateEnemies(dt); for (let i = 0; i < agents.length; i++) updateAgent(agents[i], dt);
+    updateBrood(dt); updateParticles(dt); updateDrops(dt);
+    if (skipDraw) return;
+    // luz de día y de noche
+    const target = G.phase === 'night' ? 1 : G.t < 10 ? 1 - G.t / 10 : 0; nightK += (target - nightK) * Math.min(1, realDt * 2);
+    hemi.intensity = 0.85 - 0.36 * nightK; hemi.color.copy(cDay).lerp(cNight, nightK); sun.intensity = 0.7 - 0.55 * nightK; sun.color.copy(sDay).lerp(sNight, nightK);
+    glowQ.intensity = 0.3 + 1.6 * nightK + queen.gulp * 0.4; glowE.intensity = G.foes ? 0.9 + Math.sin(time * 9) * 0.5 : 0;
+    pollen.material.color.set(nightK > 0.5 ? '#c8ff9a' : '#fff6cf');
+    const pa = pollen.geometry.attributes.position; for (let i = 0; i < pa.count; i++) pa.setY(i, 1.4 + Math.sin(time * 0.7 + i) * 0.6); pa.needsUpdate = true;
+    updateCamera(realDt); renderer.render(scene, camera);
+  };
+})();
+
+/* ANTIGENESIS — audio procedural (Web Audio, sin archivos) */
+(function () {
+  'use strict';
+  const AX = window.AX, A = (AX.Audio = {});
+  let ctx = null, master, bus = {}, started = false, tension = 0, tensionGain, noiseBuf, last = {};
+  const vol = { music: 0.5, sfx: 0.6, amb: 0.5, mute: false };
+
+  function env(g, t, a, peak, d) { g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + d); }
+  function tone(dest, type, f0, f1, a, d, peak, t0) {
+    const t = t0 || ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t); if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + a + d);
+    env(g, t, a, peak, d); o.connect(g); g.connect(dest); o.start(t); o.stop(t + a + d + 0.05);
+  }
+  function noise(dest, freq, q, a, d, peak, t0) {
+    const t = t0 || ctx.currentTime, s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    s.buffer = noiseBuf; s.loop = true; f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q; env(g, t, a, peak, d);
+    s.connect(f); f.connect(g); g.connect(dest); s.start(t, Math.random() * 1.5); s.stop(t + a + d + 0.05);
+  }
+
+  A.start = function () {
+    if (started) { if (ctx && ctx.state === 'suspended') ctx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    try { ctx = new AC(); } catch (e) { return; }
+    started = true;
+    master = ctx.createGain(); master.connect(ctx.destination);
+    for (const k of ['music', 'sfx', 'amb']) { bus[k] = ctx.createGain(); bus[k].connect(master); }
+    noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const d = noiseBuf.getChannelData(0); let b = 0; for (let i = 0; i < d.length; i++) { b = b * 0.97 + (Math.random() * 2 - 1) * 0.03; d[i] = b * 6; }
+    // eco suave para la música
+    const delay = ctx.createDelay(1), fb = ctx.createGain(), lp = ctx.createBiquadFilter();
+    delay.delayTime.value = 0.42; fb.gain.value = 0.34; lp.type = 'lowpass'; lp.frequency.value = 1500;
+    bus.musicIn = ctx.createGain(); bus.musicIn.connect(bus.music); bus.musicIn.connect(delay); delay.connect(lp); lp.connect(fb); fb.connect(delay); lp.connect(bus.music);
+    // viento
+    const wind = ctx.createBufferSource(), wf = ctx.createBiquadFilter(), wg = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain();
+    wind.buffer = noiseBuf; wind.loop = true; wf.type = 'lowpass'; wf.frequency.value = 520; wg.gain.value = 0.16;
+    lfo.frequency.value = 0.07; lg.gain.value = 0.07; lfo.connect(lg); lg.connect(wg.gain);
+    wind.connect(wf); wf.connect(wg); wg.connect(bus.amb); wind.start(); lfo.start();
+    // tensión de combate: un pulso grave muy contenido
+    tensionGain = ctx.createGain(); tensionGain.gain.value = 0; tensionGain.connect(bus.music);
+    const to = ctx.createOscillator(), tl = ctx.createOscillator(), tg = ctx.createGain(); to.type = 'triangle'; to.frequency.value = 55; tl.frequency.value = 1.6; tg.gain.value = 0.5;
+    const tm = ctx.createGain(); tm.gain.value = 0.5; tl.connect(tg); tg.connect(tm.gain); to.connect(tm); tm.connect(tensionGain); to.start(); tl.start();
+    A.apply(); schedule(); birds();
+  };
+  A.apply = function () {
+    if (!ctx) return; const t = ctx.currentTime;
+    master.gain.setTargetAtTime(vol.mute ? 0 : 0.9, t, 0.05);
+    bus.music.gain.setTargetAtTime(vol.music * 0.55, t, 0.05); bus.sfx.gain.setTargetAtTime(vol.sfx * 0.8, t, 0.05); bus.amb.gain.setTargetAtTime(vol.amb * 0.7, t, 0.05);
+  };
+  A.set = function (k, v) { vol[k] = v; A.apply(); };
+  A.vol = vol;
+  A.setTension = function (on) { if (!ctx || tension === on) return; tension = on; tensionGain.gain.setTargetAtTime(on ? 0.09 : 0, ctx.currentTime, 1.2); };
+
+  // música generativa: acordes lentos y notas sueltas en pentatónica
+  const CH = [[220, 261.6, 329.6, 392], [174.6, 220, 261.6, 329.6], [196, 246.9, 293.7, 392], [164.8, 207.7, 246.9, 329.6]].map(c => c);
+  const PENTA = [261.6, 293.7, 329.6, 392, 440, 523.3, 587.3, 659.3];
+  let bar = 0;
+  function schedule() {
+    if (!ctx) return;
+    const t = ctx.currentTime + 0.1, ch = CH[bar % 4], len = 9;
+    ch[2] = bar % 4 === 0 ? 329.6 : ch[2];
+    for (let i = 0; i < 3; i++) {
+      const o = ctx.createOscillator(), g = ctx.createGain(), f = ctx.createBiquadFilter();
+      o.type = i === 0 ? 'sine' : 'triangle'; o.frequency.value = ch[i] * (i === 0 ? 0.5 : 1); o.detune.value = (i - 1) * 6;
+      f.type = 'lowpass'; f.frequency.value = 700;
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.085, t + 3); g.gain.linearRampToValueAtTime(0.06, t + len - 2); g.gain.linearRampToValueAtTime(0.0001, t + len + 2);
+      o.connect(f); f.connect(g); g.connect(bus.music); o.start(t); o.stop(t + len + 2.2);
+    }
+    let tt = t + Math.random() * 1.5;
+    while (tt < t + len) {
+      if (Math.random() < 0.72) { const f = PENTA[Math.floor(Math.random() * PENTA.length)] * (Math.random() < 0.2 ? 2 : 1); tone(bus.musicIn, 'sine', f, f, 0.01, 1.6, 0.075, tt); tone(bus.musicIn, 'sine', f * 2, f * 2, 0.005, 0.5, 0.018, tt); }
+      tt += [0.75, 1.5, 1.5, 2.25, 3][Math.floor(Math.random() * 5)];
+    }
+    bar++; setTimeout(schedule, len * 1000);
+  }
+  function birds() {
+    if (!ctx) return;
+    if (!document.hidden) {
+      const t = ctx.currentTime + 0.05, n = 2 + Math.floor(Math.random() * 4), base = 2200 + Math.random() * 1600;
+      for (let i = 0; i < n; i++) tone(bus.amb, 'sine', base * (1 + Math.random() * 0.15), base * (0.8 + Math.random() * 0.5), 0.02, 0.09 + Math.random() * 0.06, 0.035, t + i * (0.11 + Math.random() * 0.05));
+    }
+    setTimeout(birds, 4000 + Math.random() * 9000);
+  }
+
+  const S = {
+    click() { tone(bus.sfx, 'sine', 520 + Math.random() * 60, 360, 0.004, 0.09, 0.2); },
+    crit() { tone(bus.sfx, 'triangle', 660, 990, 0.005, 0.2, 0.2); tone(bus.sfx, 'sine', 1320, 1320, 0.005, 0.3, 0.08); },
+    lay() { const t = ctx.currentTime; tone(bus.sfx, 'sine', 392, 392, 0.005, 0.16, 0.16, t); tone(bus.sfx, 'sine', 587, 587, 0.005, 0.22, 0.14, t + 0.07); },
+    hatch() { tone(bus.sfx, 'sine', 440, 700, 0.01, 0.16, 0.12); },
+    pupate() { tone(bus.sfx, 'triangle', 330, 262, 0.01, 0.2, 0.1); },
+    born() { const t = ctx.currentTime; [523.3, 659.3, 784].forEach((f, i) => tone(bus.sfx, 'sine', f, f, 0.006, 0.5, 0.11, t + i * 0.06)); },
+    buy() { const t = ctx.currentTime; tone(bus.sfx, 'triangle', 330, 330, 0.008, 0.28, 0.14, t); tone(bus.sfx, 'triangle', 494, 494, 0.008, 0.34, 0.12, t + 0.06); tone(bus.sfx, 'sine', 659, 659, 0.008, 0.4, 0.08, t + 0.12); },
+    skill() { const t = ctx.currentTime; [392, 494, 587, 784].forEach((f, i) => tone(bus.sfx, 'sine', f, f, 0.01, 0.7, 0.11, t + i * 0.09)); },
+    build() { noise(bus.sfx, 220, 0.8, 0.02, 0.6, 0.5); tone(bus.sfx, 'sine', 110, 60, 0.01, 0.4, 0.3); },
+    deny() { tone(bus.sfx, 'sine', 196, 150, 0.006, 0.14, 0.14); },
+    deposit() { noise(bus.sfx, 1800, 2.5, 0.003, 0.05, 0.1); },
+    hit() { noise(bus.sfx, 900 + Math.random() * 500, 3, 0.002, 0.045, 0.09); },
+    poof() { noise(bus.sfx, 500, 1, 0.01, 0.2, 0.18); tone(bus.sfx, 'sine', 300, 520, 0.01, 0.15, 0.06); },
+    wave() { const t = ctx.currentTime; tone(bus.sfx, 'triangle', 146.8, 146.8, 0.15, 0.9, 0.16, t); tone(bus.sfx, 'triangle', 220, 220, 0.15, 1.1, 0.13, t + 0.45); },
+    win() { const t = ctx.currentTime; [392, 523.3, 659.3, 784, 1046.5].forEach((f, i) => tone(bus.sfx, 'triangle', f, f, 0.01, 0.6, 0.12, t + i * 0.1)); },
+    retreat() { const t = ctx.currentTime; tone(bus.sfx, 'triangle', 294, 294, 0.02, 0.5, 0.12, t); tone(bus.sfx, 'triangle', 247, 247, 0.02, 0.7, 0.12, t + 0.22); },
+    objective() { const t = ctx.currentTime; [523.3, 784].forEach((f, i) => tone(bus.sfx, 'sine', f, f, 0.01, 0.8, 0.12, t + i * 0.14)); },
+    alarm() { const t = ctx.currentTime; for (let i = 0; i < 6; i++) { tone(bus.sfx, 'square', i % 2 ? 440 : 660, i % 2 ? 440 : 660, 0.02, 0.26, 0.09, t + i * 0.3); tone(bus.sfx, 'sawtooth', i % 2 ? 220 : 330, i % 2 ? 220 : 330, 0.02, 0.26, 0.05, t + i * 0.3); } },
+    death() { tone(bus.sfx, 'triangle', 300, 110, 0.005, 0.22, 0.12); },
+    pulse() { tone(bus.sfx, 'sine', 220, 880, 0.3, 0.6, 0.12); }
+  };
+  const GAP = { death: 0.15, click: 0.03, deposit: 0.35, hit: 0.12, hatch: 0.12, pupate: 0.12, born: 0.2, lay: 0.15, poof: 0.1, buy: 0.05 };
+  A.play = function (id) {
+    if (!ctx || vol.mute || document.hidden || !S[id]) return;
+    const t = ctx.currentTime; if (last[id] && t - last[id] < (GAP[id] || 0)) return; last[id] = t;
+    try { S[id](); } catch (e) {}
+  };
+})();
+
+/* ANTIGENESIS v3 — interfaz y bucle */
+(function () {
+  'use strict';
+  const AX = window.AX, Game = AX.Game, Scene = AX.Scene, Au = AX.Audio, fmt = AX.fmt, fmtTime = AX.fmtTime;
+  const $ = id => document.getElementById(id);
+  let lastPanel = '', lastSheet = '';
+  let G, D, speed = 1, paused = false, holding = false, sheet = null;
+  function buyBtn(act, id, cost, label, unit, have) { const miss = cost - have; return `<button class="buy${miss > 0 ? ' no' : ''}" data-act="${act}" data-id="${id}"><b>${label}</b><span>${miss > 0 ? 'Faltan ' + fmt(Math.ceil(miss)) : fmt(Math.ceil(cost))} ${unit}</span></button>`; }
+  function render() {
+    const st = Game.STAGES[G.stage], nx = D.next, f = G.foes, night = G.phase === 'night', dusk = !night && G.t <= 10;
+    $('res').innerHTML = `<div class="res org"><i></i><b>${fmt(Math.floor(G.jelly))}</b><span>jalea, +${fmt(G.rate, G.rate < 10 ? 1 : 0)}/s</span></div>
+      <div class="res pop"><i></i><b>${fmt(G.workers)}</b><span>obreras</span></div><div class="res sol"><i></i><b>${fmt(G.soldiers)}</b><span>soldados</span></div>
+      <div class="res bio"><i></i><b>${fmt(G.bio)}</b><span>biomasa</span></div>
+      <div class="clock ${night ? 'night' : dusk ? 'dusk' : ''}"><b>${night ? 'Noche ' + G.level : 'Día ' + G.level}</b><div class="meter"><i style="width:${100 * G.t / (night ? Game.NIGHT : Game.DAY)}%"></i></div><span>${night ? 'amanece en ' + fmtTime(G.t) : 'anochece en ' + fmtTime(G.t)}</span></div>`;
+    const o = Game.OBJ[G.obj]; $('goal').hidden = !o; if (o) $('goal').innerHTML = `<b>Objetivo</b> ${o[0]}`;
+    const al = $('alarm'); al.hidden = !(dusk || f); document.body.classList.toggle('danger', !!(dusk || f));
+    if (dusk) al.innerHTML = `<b>¡Alarma! Cae la noche</b><span>Se acercan ${D.night.text}. Llegan en ${fmtTime(G.t)}.</span>`;
+    else if (f) { const tot = D.night.totalHp, left = f.count > 0 ? (f.count - 1) * D.night.hpEach + f.cur + f.boss : f.boss;
+      al.innerHTML = `<b>${G.soldiers > 0 ? '¡Nos atacan!' : '¡Sin soldados! Están matando obreras'}</b><div class="hp"><i style="width:${Math.max(0, 100 * left / tot)}%"></i></div><span>${f.count} termitas${f.boss > 0 ? ' y ' + D.night.boss.name : ''}. Bajas: ${f.lost}</span>`; }
+    Au.setTension(!!f);
+    $('bPause').textContent = paused ? 'Reanudar' : 'Pausa'; $('bSpeed').textContent = '×' + speed; $('bMute').textContent = Au.vol.mute ? 'Sonido no' : 'Sonido sí';
+    $('bTree').classList.toggle('hot', Object.keys(Game.NODE).some(id => Game.skillState(G, id) === 'open' && G.bio >= Game.NODE[id].cost));
+    $('bLegacy').hidden = !(G.level > 3 || G.gen > 1); $('bLegacy').classList.toggle('hot', Game.legacy(G).ready);
+    if (sheet) renderSheet();
+    if (holding) return;
+    const fc = Game.forecast(G, D);
+    let h = `<section><h3>${st.name}</h3><p>Próximo huevo: ${fmt(G.lay, 0)} de ${fmt(D.eggCost, 0)} de comida</p><div class="meter"><i style="width:${Math.min(100, 100 * G.lay / D.eggCost)}%"></i></div>
+      ${nx ? `<p>Hasta ${nx.name}: ${fmt(Math.floor(G.eaten))} de ${fmt(nx.at)}</p><div class="meter grow"><i style="width:${Math.min(100, 100 * (G.eaten - st.at) / (nx.at - st.at))}%"></i></div>` : '<p>Ha alcanzado su forma final en este demo.</p>'}
+      <p>${fmt(D.carry, 1)} de comida por viaje.${night && !D.nightWork ? ' De noche las obreras se refugian.' : ''}</p></section>
+      <section><h3>Defensa</h3><div class="row"><span>Nacen soldados</span><button class="mini" data-act="pct" data-id="-10">−</button><b>${G.pct}%</b><button class="mini" data-act="pct" data-id="10">+</button></div>
+      <p>Solo cambia a las que nazcan a partir de ahora. Cada soldado: ${fmt(D.dmg, 1)} de daño, ${fmt(D.hp, 0)} de vida.</p>
+      <p>Esta noche: <b>${D.night.text}</b>, ${fmt(D.night.totalHp)} de vida.</p>
+      <p class="${fc.win ? 'good' : 'warn'}">${fc.win ? 'Previsión: aguantan, con unas ' + fc.losses + ' bajas.' : G.soldiers ? 'Previsión: los soldados caerán y matarán obreras hasta el amanecer.' : 'No tienes soldados: matarán obreras hasta el amanecer.'}</p></section>
+      <section class="wide"><h3>Mejoras</h3><div class="grid">`;
+    for (const d of Game.UPG) { const l = G.upg[d.id] || 0; h += `<div class="card"><h4>${d.name} <small>nivel ${l}</small></h4><p>Cada nivel: ${d.what}.</p>${d.max && l >= d.max ? '<button class="buy no" disabled><b>Al máximo</b></button>' : buyBtn('upg', d.id, Game.cost(G, d), 'Comprar', 'jalea', G.jelly)}</div>`; }
+    h += '</div></section>'; if (h !== lastPanel) { lastPanel = h; const pn = $('panel'), sc = pn.scrollTop; pn.innerHTML = h; pn.scrollTop = sc; }
+  }
+  function renderSheet() {
+    if (holding) return; let h = '';
+    if (sheet === 'tree') {
+      h = `<h2>Árbol de la colonia</h2><p>Se aprende con biomasa, que sueltan los enemigos al morir. Tienes <b>${fmt(G.bio)}</b>.</p><div class="tree">`;
+      for (const b of Game.TREE) { h += `<div class="branch"><h4>${b.name}</h4>`; for (const n of b.nodes) { const s = Game.skillState(G, n.id), can = s === 'open' && G.bio >= n.cost;
+        h += `<button class="node ${s}${can ? ' can' : ''}" data-act="learn" data-id="${n.id}" ${s !== 'open' ? 'disabled' : ''}><b>${n.name}</b><span>${n.fx}</span><em>${s === 'owned' ? 'Aprendida' : s === 'locked' ? 'Requiere la anterior' : n.cost + ' de biomasa'}</em></button>`; } h += `</div>`; }
+      h += `</div>`;
+    } else {
+      const l = Game.legacy(G);
+      h = `<h2>Legado</h2><p>Una princesa abandona el nido y funda una colonia nueva. Empiezas de cero, pero el ADN ancestral se queda para siempre: cada punto da +15% de comida, daño y vida.</p>
+        <p>Generación ${G.gen}. ADN ancestral: <b>${G.adn}</b> (bonificación actual +${l.now}%).</p>
+        ${l.ready ? `<p class="good">Si fundas ahora ganas <b>${l.gain}</b> de ADN y pasarías a +${Math.round((G.adn + l.gain) * 15)}%.</p><button class="buy" data-act="prestige"><b>Fundar una nueva colonia</b><span>se pierde todo lo demás</span></button>`
+          : `<p class="warn">Disponible cuando derrotes a la araña de la quinta noche. Vas por la ${G.level}.</p>`}`;
+    }
+    if (h !== lastSheet) { lastSheet = h; $('sheetBody').innerHTML = h; }
+  }
+  function openSheet(s) { sheet = s; $('sheet').hidden = !s; if (s) renderSheet(); }
+  function act(a, id) {
+    let ok = true, sfx = 'buy';
+    if (a === 'upg') ok = Game.buy(G, id); else if (a === 'learn') { ok = Game.learn(G, id); sfx = 'skill'; }
+    else if (a === 'pct') { G.pct = Math.max(0, Math.min(90, G.pct + (+id))); sfx = 'click'; }
+    else if (a === 'prestige') { const N = Game.prestige(G); if (N) { Scene.reset(); G = N; Game.save(G); openSheet(null); toast('Nueva colonia. El ADN ancestral la hace más fuerte desde el primer día.', 'good'); sfx = 'win'; } else ok = false; }
+    else if (a === 'close') { openSheet(null); sfx = 'click'; }
+    Au.play(ok ? sfx : 'deny'); D = Game.calc(G); holding = false; render();
+  }
+  function toast(text, tone) { const t = document.createElement('div'); t.className = 'toast ' + (tone || ''); t.textContent = text; $('toasts').appendChild(t); setTimeout(() => t.remove(), 6500); while ($('toasts').children.length > 3) $('toasts').firstChild.remove(); }
+  function float(text, pos, cls) { const p = Scene.toScreen(pos), f = document.createElement('div'); f.className = 'float ' + (cls || ''); f.textContent = text; f.style.left = p.x + 'px'; f.style.top = p.y + 'px'; $('floats').appendChild(f); setTimeout(() => f.remove(), 900); }
+  function clickScene(hit) {
+    if (!hit) return;
+    if (hit.kind === 'enemy') { const d = Game.hit(G, D); if (d > 0) { Scene.enemyHit(); float('−' + fmt(d, 0), hit.pos, 'hit'); Au.play('hit'); } return; }
+    const r = Game.click(G, hit.kind, hit.id); Scene.bump(hit); const p = Scene.entityPos(hit.kind, hit.slot);
+    float(r.laid ? '+huevo' : r.food ? '+' + fmt(r.food, 1) : '+' + r.pct + '%', p, r.laid ? 'good' : ''); Au.play('click');
+  }
+  function wire() {
+    $('ui').addEventListener('pointerdown', e => { if (e.target.closest('#panel,#sheet')) holding = true; });
+    window.addEventListener('pointerup', () => setTimeout(() => { holding = false; }, 0));
+    $('ui').addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && !b.disabled) act(b.dataset.act, b.dataset.id); });
+    $('bPause').onclick = () => { paused = !paused; render(); };
+    $('bSpeed').onclick = () => { speed = { 1: 2, 2: 4, 4: 8, 8: 1 }[speed]; render(); };
+    $('bMute').onclick = () => { Au.start(); Au.set('mute', !Au.vol.mute); G.mute = Au.vol.mute; render(); };
+    $('bTree').onclick = () => openSheet(sheet === 'tree' ? null : 'tree'); $('bLegacy').onclick = () => openSheet(sheet === 'legacy' ? null : 'legacy');
+    let armed = 0;
+    $('bReset').onclick = () => { if (Date.now() - armed < 4000) { Game.wipe(); Scene.reset(); G = Game.newGame(); D = Game.calc(G); $('bReset').textContent = 'Reiniciar'; toast('Partida nueva.'); } else { armed = Date.now(); $('bReset').textContent = '¿Seguro? Pulsa otra vez'; setTimeout(() => { $('bReset').textContent = 'Reiniciar'; }, 4000); } };
+    $('start').onclick = () => { $('intro').hidden = true; Au.start(); Au.set('mute', !!G.mute); };
+    const cv = $('stage'), pts = new Map(); let down = null, drag = false, pinch = 0;
+    const local = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+    cv.addEventListener('pointerdown', e => { pts.set(e.pointerId, e); down = [e.clientX, e.clientY]; drag = false; if (pts.size === 2) { const a = [...pts.values()]; pinch = Math.hypot(a[0].clientX - a[1].clientX, a[0].clientY - a[1].clientY); drag = true; } });
+    cv.addEventListener('pointermove', e => {
+      if (pts.has(e.pointerId)) { const prev = pts.get(e.pointerId); pts.set(e.pointerId, e);
+        if (pts.size === 2) { const a = [...pts.values()], d = Math.hypot(a[0].clientX - a[1].clientX, a[0].clientY - a[1].clientY); if (pinch) Scene.zoomBy(pinch / d); pinch = d; return; }
+        if (down && Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 7) drag = true; if (drag) Scene.panBy(e.clientX - prev.clientX, e.clientY - prev.clientY);
+      } else { const p = local(e), h = Scene.pick(p[0], p[1]); Scene.hover(h); cv.style.cursor = h ? 'pointer' : 'grab'; }
+    });
+    cv.addEventListener('pointerup', e => { if (!pts.has(e.pointerId)) return; pts.delete(e.pointerId); if (!drag && down) { const p = local(e); clickScene(Scene.pick(p[0], p[1])); } if (!pts.size) down = null; });
+    cv.addEventListener('pointercancel', e => pts.delete(e.pointerId));
+    cv.addEventListener('wheel', e => { e.preventDefault(); Scene.zoomBy(e.deltaY > 0 ? 1.12 : 0.89); }, { passive: false });
+    cv.addEventListener('dblclick', Scene.resetView); window.addEventListener('resize', Scene.resize);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) Game.save(G); }); window.addEventListener('pagehide', () => Game.save(G));
+    AX.on('feed', d => { Game.feed(G, d.amount); float('+' + fmt(d.amount, d.amount < 10 ? 1 : 0), d.pos, 'crit'); Au.play('deposit'); Au.play('hatch'); });
+    AX.on('lay', () => Au.play('lay')); AX.on('hatch', () => Au.play('pupate')); AX.on('sfx', d => Au.play(d.id));
+    AX.on('born', d => { Au.play('born'); float(d.caste === 'soldiers' ? '+1 soldado' : '+1 obrera', Scene.entityPos('larva', d.slot), 'good'); });
+    AX.on('death', d => { Au.play('death'); float(d.caste === 'soldiers' ? '−1 soldado' : '−1 obrera', new (window.THREE.Vector3)(8.5 + Math.random() * 1.5, 0.6, Math.random() * 3), 'hit'); });
+    AX.on('foeDeath', () => Au.play('poof'));
+    AX.on('goal', d => { toast('Objetivo cumplido' + (d.prize ? ': +' + fmt(d.prize) + ' de jalea.' : '.'), 'good'); Au.play('objective'); });
+    AX.on('stage', d => { toast('La reina ha crecido: ahora es ' + d.stage.name + '. Sus obreras cargan un 50% más.', 'good'); Au.play('skill'); });
+    AX.on('dusk', () => { Au.play('alarm'); });
+    AX.on('night', d => { Au.play('alarm'); Au.play('wave'); toast('Noche ' + d.def.n + ': ' + d.def.text + ' salen de la hierba hacia la entrada.', 'warn'); });
+    AX.on('nightWin', d => { toast('Noche ' + d.level + ' superada con ' + d.lost + ' bajas. +' + fmt(d.prize) + ' de jalea. Amanece.', 'good'); Au.play('win'); });
+    AX.on('nightLost', d => { toast('Amanece y los invasores se retiran. Perdiste ' + d.lost + ' hormigas. Volverán igual de fuertes: cría más soldados.', 'warn'); Au.play('retreat'); });
+    AX.on('skill', d => toast('Habilidad aprendida: ' + Game.NODE[d.id].name + '.', 'good'));
+  }
+  function away(secs) { const r = Game.away(G, secs); if (r) toast('Mientras no estabas (' + fmtTime(r.secs) + ') trajeron ' + fmt(r.food) + ' de comida' + (r.born ? ' y nacieron ' + r.born + ' hormigas.' : '.'), 'good'); }
+  let lastT = 0, lastWall = Date.now(), uiT = 0, saveT = 0;
+  function frame(t) {
+    requestAnimationFrame(frame);
+    const now = Date.now(), gap = (now - lastWall) / 1000; lastWall = now;
+    let dt = Math.min(0.2, (t - lastT) / 1000 || 0); lastT = t; if (gap > 5) { away(gap); dt = 0; }
+    const n = paused ? 0 : speed; D = Game.calc(G);
+    for (let i = 0; i < n; i++) { D = Game.tick(G, dt); Scene.update(G, D, dt, dt, i < n - 1); }
+    if (!n) Scene.update(G, D, 0, dt);
+    uiT += dt; if (uiT > 0.33) { uiT = 0; render(); }
+    saveT += dt; if (saveT > 10) { saveT = 0; Game.save(G); }
+  }
+  window.addEventListener('DOMContentLoaded', () => {
+    if (!window.THREE) { $('intro').innerHTML = '<div><h1>ANTIGENESIS</h1><p>No se pudo cargar el motor 3D. Comprueba la conexión y recarga.</p></div>'; return; }
+    const saved = Game.load(); G = saved || Game.newGame(); D = Game.calc(G); Scene.init($('stage')); wire();
+    if (saved) { $('start').textContent = 'Continuar'; away((Date.now() - saved.last) / 1000); }
+    render(); requestAnimationFrame(frame);
+  });
+  AX.debug = { get G() { return G; }, set speed(v) { speed = v; } };
+})();
+</script>
+</body></html>

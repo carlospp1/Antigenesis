@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visor de modelos</title>
+<style>
+  html,body{margin:0;height:100%;background:#3a2a20;color:#f6ead6;font:14px system-ui,sans-serif;overflow:hidden}
+  #info{position:absolute;left:12px;top:10px;background:rgba(30,18,12,.8);padding:8px 12px;border-radius:8px;max-width:520px}
+  #info b{color:#f0b84c}
+  .lbl{position:absolute;transform:translate(-50%,0);font-size:13px;background:rgba(30,18,12,.75);padding:2px 8px;border-radius:8px;white-space:nowrap}
+</style></head><body>
+<div id="info"><b>Visor de modelos</b>: cada modelo ya normalizado, mirando hacia la flecha (+X). Al lado, la versión procedimental de respaldo. Arriba: vista lateral; abajo: vista cenital.</div>
+<script type="module" src="/src/viewer.js"></script>
+</body></html>

@@ -1,0 +1,10 @@
+{
+  "name": "ANTIGENESIS",
+  "short_name": "Antigenesis",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#241208",
+  "theme_color": "#241208",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

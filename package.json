@@ -1,0 +1,21 @@
+{
+  "name": "antigenesis",
+  "version": "4.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:watch": "vite build --watch",
+    "preview": "vite preview",
+    "dev:movil": "vite --host",
+    "sim": "node tools/sim.mjs",
+    "tune": "node tools/sim.mjs --tune"
+  },
+  "dependencies": {
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}
