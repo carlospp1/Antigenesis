@@ -246,7 +246,7 @@ function wireGameEvents() {
   on('raid', () => { toast('¡Han caído todas! Van a por la reina.', 'warn'); Audio.play('alarm'); });
   on('queenSurvives', () => toast('El nido resiste: la reina sobrevive.', 'good'));
   on('queenDeath', d => {
-    Audio.play('retreat'); closeTree();
+    Audio.play('retreat'); closeTree(); Scene.resetView(); // vuelve a la vista entera aunque estuvieras con zoom
     $('deathText').textContent = `Generación ${d.gen}. Tu colonia aguantó ${d.level - 1} ${d.level - 1 === 1 ? 'noche' : 'noches'}.`;
     $('deathAdn').textContent = '+' + d.gain;
     setTimeout(() => { $('deathView').hidden = false; }, 1800);

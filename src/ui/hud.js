@@ -7,6 +7,8 @@ import { toScreen, anchors, broodBars } from '../scene/index.js';
 import { icon } from './icons.js';
 
 const $ = id => document.getElementById(id);
+/** Versión del juego (se ve en Ajustes). */
+const VERSION = '0.1';
 export const ui = { sheet: null, holding: false, paused: false, speed: 1, tab: 'colony', debug: false, devOpen: false };
 let lastDock = '', lastSheet = '';
 const cache = {};
@@ -149,6 +151,7 @@ function renderSheet(G) {
       ${row('Sonido', btn(!Audio.vol.mute, 'mute', icon(Audio.vol.mute ? 'mute' : 'sound') + (Audio.vol.mute ? ' Apagado' : ' Encendido')))}
       ${row('Juego', btn(ui.paused, 'pause', ui.paused ? 'Reanudar' : 'Pausar'))}
       ${row('Partida', '<button class="btn-plain" data-act="reset" id="bReset">Reiniciar</button>')}
+      ${row('Versión', `<b>${VERSION}</b>`)}
       <button class="dev-head${ui.devOpen ? ' open' : ''}" data-act="dev" aria-expanded="${!!ui.devOpen}">Pruebas y depuración</button>
       ${ui.devOpen ? `<div class="dev">
         ${row('Velocidad', [1, 2, 4, 6, 10, 20].map(v => btn(ui.speed === v, 'speed', '×' + v, v)).join(''))}

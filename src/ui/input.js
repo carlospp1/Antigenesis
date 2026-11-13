@@ -7,6 +7,7 @@ export function wireStageInput(stage, onPick) {
   let down = null, drag = false, pinch = 0;
   const local = e => { const r = stage.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
   const spread = () => { const a = [...pts.values()]; return Math.hypot(a[0].clientX - a[1].clientX, a[0].clientY - a[1].clientY); };
+  const touring = () => !!document.getElementById('tour'); // con el tutorial abierto la cámara no se mueve
 
   stage.addEventListener('pointerdown', e => {
     // el dedo o el ratón se quedan con la escena: si aparece encima un panel (p. ej. al morir la reina),
@@ -24,15 +25,15 @@ export function wireStageInput(stage, onPick) {
     }
     const prev = pts.get(e.pointerId);
     pts.set(e.pointerId, e);
+    if (touring()) return;
     if (pts.size === 2) { const d = spread(); if (pinch) Scene.zoomBy(pinch / d); pinch = d; return; }
     if (down && Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 7) drag = true;
     if (drag) Scene.panBy(e.clientX - prev.clientX, e.clientY - prev.clientY);
   });
   stage.addEventListener('pointerup', e => {
     if (!pts.has(e.pointerId)) return;
-    pts.delete(e.pointerId);
     if (!drag && down) { const p = local(e); onPick(Scene.pick(p[0], p[1])); }
-    if (!pts.size) down = null;
+    forget(e); // al levantar un dedo del pellizco se olvida también el pellizco
   });
   // soltar o cancelar en cualquier otro sitio también cuenta (sin tocar nada de la escena)
   function forget(e) { pts.delete(e.pointerId); if (pts.size < 2) pinch = 0; if (!pts.size) { down = null; drag = false; } }
@@ -40,5 +41,5 @@ export function wireStageInput(stage, onPick) {
   stage.addEventListener('lostpointercapture', forget);
   window.addEventListener('pointerup', e => { if (pts.has(e.pointerId) && e.target !== stage && !stage.contains(e.target)) forget(e); });
   window.addEventListener('pointercancel', forget);
-  stage.addEventListener('wheel', e => { e.preventDefault(); Scene.zoomBy(e.deltaY > 0 ? 1.12 : 0.89); }, { passive: false });
+  stage.addEventListener('wheel', e => { e.preventDefault(); if (!touring()) Scene.zoomBy(e.deltaY > 0 ? 1.12 : 0.89); }, { passive: false });
 }
