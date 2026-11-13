@@ -51,6 +51,7 @@ export const BAL = {
   eggBase: 16,       // coste del primer huevo
   eggCurve: 1.2,     // cada hormiga o cría encarece el siguiente huevo
   cutMax: 0.25,      // «Toque menguante»: lo más que los toques rebajan un huevo (con el linaje, hasta 0,5)
+  feast: 0.001,      // «Festín»: probabilidad base de una entrega ×50 (las mejoras la suben, nunca pasa de 0,03)
   reserve: 0.2,      // comida por segundo que la reina saca de sus reservas
   eggTime: 12, larvaTime: 18,
   dmg: 1, hp: 9,     // de cada hormiga
@@ -78,7 +79,9 @@ export const BAL = {
   foundAfter: 3,               // superada esta noche ya se puede fundar (y ganar ADN) aunque no caiga ningún jefe
   // racha de toques: cada toque seguido (menos de comboGap s de juego desde el anterior) rinde comboStep más,
   // hasta comboCap toques (×1,5 con estos valores). Vale para la reina, la cría y los enemigos.
+  // comboMarks: bonus extra, por encima de ese tope, al llegar a cada marca [toques, extra que se suma]
   comboGap: 0.8, comboStep: 0.025, comboCap: 20,
+  comboMarks: [[200, 0.10], [1000, 0.15], [2000, 0.20], [5000, 0.25], [10000, 0.30]],
   evoAll: 1.45,                // cada evolución: comida, daño y vida ×evoAll (y +5% de velocidad)
   treeK: 0.6, permK: 0.75,     // rebaja de las estadísticas del árbol y del linaje (la evolución ya sube todo)
   blood: 0.015                // «Sangre antigua»: +1,5% de comida, daño y vida por cada ADN ganado en total

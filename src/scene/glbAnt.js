@@ -10,6 +10,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { skinLegs, skinMaterial } from './legSkin.js';
+import { mobile } from './context.js';
+import { thin } from './geometry.js';
 
 /** Se puede cambiar en Ajustes (se guarda en el navegador y se aplica al recargar). */
 export const USE_GLB_ANTS = (() => { try { return localStorage.getItem('antigenesis.antModel') !== 'code'; } catch (e) { return true; } })();
@@ -48,13 +50,21 @@ export async function loadGlbAnts() {
   const loader = new GLTFLoader();
   await Promise.all([
     ...Object.keys(FILES).map(async k => {
-      try { templates[k] = (await loader.loadAsync(BASE + FILES[k])).scene; }
+      try {
+        const scene = (await loader.loadAsync(BASE + FILES[k])).scene;
+        if (mobile()) scene.traverse(o => { if (o.isMesh && !o.isSkinnedMesh) { const t = thin(o.geometry); if (t !== o.geometry) o.geometry = t; } });
+        templates[k] = scene;
+      }
       catch (e) { console.warn('[antigenesis] no se pudo cargar ' + FILES[k] + ', uso las hormigas de código', e); }
     }),
     ...Object.keys(SOLID).map(async k => {
       try {
         const scene = (await loader.loadAsync(BASE + SOLID[k])).scene;
-        scene.traverse(o => { if (o.isMesh) { o.castShadow = true; matte(o.material); } });
+        scene.traverse(o => {
+          if (!o.isMesh) return;
+          o.castShadow = true; matte(o.material);
+          if (mobile() && !o.isSkinnedMesh) { const t = thin(o.geometry); if (t !== o.geometry) o.geometry = t; }
+        });
         if (SKIN[k]) {
           const mesh = firstMesh(scene);
           scene.userData.skin = mesh && skinLegs(mesh.geometry, SKIN[k]);

@@ -7,6 +7,7 @@
 // Solo es presentación: lo que el juego da de más (la racha) se calcula en las reglas.
 import { icon } from './icons.js';
 import * as Audio from '../audio/audio.js';
+import { BAL } from '../game/data.js';
 
 const $ = id => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -26,15 +27,18 @@ export function tap(n, mult, cap = 21) {
   if (!n || n < 3) return;
   Audio.play('combo', n);
   if (!comboEl) { comboEl = document.createElement('div'); comboEl.id = 'combo'; $('fx').appendChild(comboEl); }
-  const max = n >= cap, tier = max ? 3 : n >= 14 ? 2 : n >= 8 ? 1 : 0;
-  comboEl.className = 'combo t' + tier;
-  comboEl.innerHTML = `<small>RACHA</small><b>×${n}</b><em>${max ? 'MÁX · ' : ''}+${Math.round((mult - 1) * 100)}%</em>`;
+  const mark = BAL.comboMarks.find(([at]) => at === n), topped = n >= cap && n < BAL.comboMarks[0][0];
+  const tier = n >= cap ? 3 : n >= 14 ? 2 : n >= 8 ? 1 : 0;
+  comboEl.className = 'combo t' + tier + (n >= 1000 ? ' long' : '');
+  comboEl.innerHTML = `<small>RACHA</small><b>×${n}</b><em>${topped ? 'MÁX · ' : ''}+${Math.round((mult - 1) * 100)}%</em>`;
   comboEl.classList.remove('pop'); void comboEl.offsetWidth; comboEl.classList.add('pop');
   clearTimeout(hideT);
   hideT = setTimeout(() => { if (comboEl) comboEl.classList.add('out'); }, 900);
-  if (narrow.matches) { if (n === 10) buzz(25); else if (n === cap) buzz([30, 40, 30]); }
-  else if (n === 10) { celebrate('¡Buen ritmo!', 'Racha de 10 · tus toques rinden +' + Math.round((mult - 1) * 100) + '%', 'combo'); buzz(25); }
-  else if (n === cap) { celebrate('¡Racha máxima!', 'Tus toques rinden +' + Math.round((mult - 1) * 100) + '%', 'combo'); buzz([30, 40, 30]); }
+  const pct = Math.round((mult - 1) * 100);
+  if (mark) { celebrate('¡Racha de ' + n + '!', 'Bonus extra · tus toques rinden +' + pct + '%', 'record'); buzz([30, 40, 30]); }
+  else if (narrow.matches) { if (n === 10) buzz(25); else if (n === cap) buzz([30, 40, 30]); }
+  else if (n === 10) { celebrate('¡Buen ritmo!', 'Racha de 10 · tus toques rinden +' + pct + '%', 'combo'); buzz(25); }
+  else if (n === cap) { celebrate('¡Racha máxima!', 'Tus toques rinden +' + pct + '%', 'combo'); buzz([30, 40, 30]); }
 }
 
 /* ---------- la recompensa vuela al contador ---------- */
@@ -64,7 +68,7 @@ export function reward(x, y, n = 10, target = 'vJelly', ic = 'leaf') {
 }
 
 /* ---------- celebraciones ---------- */
-const TIERS = { combo: 1, night: 1, goal: 1, record: 2, stage: 2, boss: 3, evolve: 3, win: 4 };
+const TIERS = { combo: 1, night: 1, goal: 1, record: 2, stage: 2, feast: 3, boss: 3, evolve: 3, win: 4 };
 let showing = null;
 
 /**
@@ -92,7 +96,8 @@ export function celebrate(title, sub, kind = 'night', extra = '') {
 const PALETTE = {
   night: ['#ffd76a', '#b8f07a', '#fff6dc'], goal: ['#b8f07a', '#ffd76a'], record: ['#ffd76a', '#ff9a4a', '#fff6dc'],
   stage: ['#ffd76a', '#ff7aa8', '#fff6dc'], boss: ['#ff6a4a', '#ffd76a', '#fff6dc', '#b8f07a'],
-  evolve: ['#c99bff', '#7ad8ff', '#ffd76a', '#fff6dc'], win: ['#ffd76a', '#ff6a4a', '#7ad8ff', '#b8f07a', '#c99bff'], combo: ['#ffd76a', '#ff9a4a']
+  evolve: ['#c99bff', '#7ad8ff', '#ffd76a', '#fff6dc'], win: ['#ffd76a', '#ff6a4a', '#7ad8ff', '#b8f07a', '#c99bff'], combo: ['#ffd76a', '#ff9a4a'],
+  feast: ['#ffcf4a', '#fff6dc', '#ff9a4a', '#b8f07a']
 };
 function confetti(n, kind) {
   const box = $('fx'), cols = PALETTE[kind] || PALETTE.night;

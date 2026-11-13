@@ -90,13 +90,6 @@ const bot = createBot({
   }
 });
 
-/** Autocompra del árbol de la colonia: se mira una vez por segundo. */
-let autoT = 0;
-function runAutoBuy() {
-  if (!G.autoBuy || G.phase === 'dead') return;
-  if (Game.autoBuy(G) > 0) { Audio.play('skill'); D = Game.calc(G); renderTree(G, true); }
-}
-
 function clickScene(hit) {
   if (G.phase === 'dead' || ui.paused) return; // en pausa (o con el tutorial abierto) los toques no juegan
   if (!hit) return;
@@ -134,7 +127,6 @@ function wireButtons() {
     else { closeTree(); setTab('colony'); render(G, D); }
   };
   tv.onBuy = buyNode;
-  tv.onAuto = () => { G.autoBuy = !G.autoBuy; Audio.play('click'); if (G.autoBuy) runAutoBuy(); renderTree(G, true); };
   tv.onClose = () => { closeTree(); Audio.play('click'); };
   tv.onFound = () => { if (found()) Audio.play('win'); };
   let treeArmed = 0;
@@ -197,14 +189,15 @@ function wireGameEvents() {
   on('feed', d => {
     Game.feed(G, d.amount, d.dest);
     const n = fmt(d.amount);
-    const pre = d.gold ? '✦ ' : d.lucky ? '¡×2! ' : '';
+    const pre = d.feast ? '¡Festín! ×50 ' : d.gold ? '✦ ' : d.lucky ? '¡×2! ' : '';
     if (d.dest === 'store') {
       float(pre + '+' + n, d.pos, d.lucky ? 'lucky' : 'good'); Audio.play('deposit');
       // lo guardado sube a la jalea: un icono vuela al contador (como mucho unos pocos por segundo)
       const now = performance.now();
       if (now - lastFly > 350) { lastFly = now; const sp = Scene.toScreen(d.pos); Juice.reward(sp.x, sp.y, d.gold ? 6 : d.lucky ? 3 : 1); }
     }
-    else { float(pre + '+' + n, d.pos, d.lucky ? 'lucky' : 'crit'); Audio.play('deposit'); Audio.play('hatch'); }
+    else { float(pre + '+' + n, d.pos, d.feast || d.lucky ? 'lucky' : 'crit'); Audio.play('deposit'); Audio.play('hatch'); }
+    if (d.feast) Juice.celebrate('¡Festín!', '+' + n + ' de comida · ×50', 'feast');
   });
   on('lay', () => Audio.play('lay'));
   on('hatch', () => Audio.play('pupate'));
@@ -246,7 +239,8 @@ function wireGameEvents() {
   });
   on('harvestLuck', d => {
     const at = Scene.toScreen(d);
-    if (d.gold) { burst('×5', 'Comida dorada', 'gold', at); Audio.play('win'); }
+    if (d.feast) { burst('×50', '¡Festín!', 'gold', at); Audio.play('win'); }
+    else if (d.gold) { burst('×5', 'Comida dorada', 'gold', at); Audio.play('win'); }
     else { burst('×2', 'Cosecha doble', 'harvest', at); Audio.play('skill'); }
   });
   on('lay', d => { if (d.twin) { burst('×2', 'Gemelas', 'x2', Scene.toScreen(Scene.entityPos('egg', d.e.slot))); Audio.play('skill'); } });
@@ -284,7 +278,6 @@ function frame(t) {
   if (tv.open) renderTree(G);
   uiT += dt; if (uiT > 0.25) { uiT = 0; render(G, D); }
   saveT += dt; if (saveT > 10) { saveT = 0; Game.save(G); }
-  autoT += dt; if (autoT > 1) { autoT = 0; runAutoBuy(); }
 }
 
 async function boot() {

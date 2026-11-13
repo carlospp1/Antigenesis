@@ -49,10 +49,13 @@ export function calc(G) {
   for (const e of G.eggs) brood += e.n;
   for (const e of G.larvae) brood += e.n;
   // los huevos «sin precio» no cuentan para encarecer el siguiente
-  D.eggCost = BAL.eggBase * Math.pow(BAL.eggCurve - add('curve'), Math.max(0, D.pop + brood - (G.free || 0))) * mul('eggCostX');
-  // «Toque menguante»: lo rebajado con toques se arrastra a todos los huevos de la colonia (con suelo)
+  const raw = BAL.eggBase * Math.pow(BAL.eggCurve - add('curve'), Math.max(0, D.pop + brood - (G.free || 0))) * mul('eggCostX');
+  // «Toque menguante»: se resta una cantidad fija de comida (la misma para el huevo actual y los siguientes).
+  // El porcentaje solo es el suelo: este huevo no baja de ahí, y lo que sobre del toque vuelve a alimentar a la reina.
   D.cutMax = Math.min(0.5, BAL.cutMax + add('cutMax'));
-  if (G.eggCut) D.eggCost = Math.max(D.eggCost * (1 - D.cutMax), D.eggCost - G.eggCut);
+  const floor = raw * (1 - D.cutMax);
+  D.eggCost = Math.max(floor, raw - (G.eggCut || 0));
+  D.cutRoom = P.tapCut ? Math.max(0, D.eggCost - floor) : 0;
   D.tapCut = !!P.tapCut;
   D.skipDay = !!P.skipDay;
   D.extraEgg = Math.min(0.5, add('extraEgg'));   // probabilidad de un huevo extra gratis
@@ -73,6 +76,7 @@ export function calc(G) {
   D.dmg = BAL.dmg * (1 + add('dmg')) * mul('dmgX') * D.blood * (D.evoDmg || 1);
   D.hp = BAL.hp * (1 + add('hp')) * mul('hpX') * D.blood * (D.evoHp || 1);
   D.reserve = BAL.reserve * (1 + add('reserve'));
+  D.qJelly = add('qJelly') * (1 + add('qJellyP')); // jalea por segundo que genera la reina (linaje; el árbol la sube en %)
   D.prize = 1 + add('prize');
   D.bioKill = 1 + add('bioKill');
   D.nightWork = !!T.nightWork;
@@ -87,6 +91,7 @@ export function calc(G) {
   D.shinyDmg = (T.shinyElite || P.shinyElite) ? 3 : 2;  // …pegan más fuerte…
   D.shinySpeed = 1.5;                                    // …y van más rápido
   D.goldFood = Math.min(0.5, add('goldFood'));      // probabilidad de que una entrega sea comida dorada (×5)
+  D.feast = Math.min(0.03, BAL.feast + add('feast')); // «Festín»: entrega ×50 (0,1% de base, 3% como máximo)
   D.ghost = add('ghost') * mul('ghostX');           // toques por segundo de la mano fantasma
   D.lives = P.lives || 0;
   D.farm = add('farm');        // granjas: jalea sola, en fracción del premio de una noche por minuto
@@ -164,6 +169,10 @@ function digest(G) {
   emergencyEgg(G);
   let n = 0, D = calc(G);
   while (G.lay >= D.eggCost && n++ < 5) { G.lay -= D.eggCost; layEgg(G, D); D = calc(G); }
+  growQueen(G);
+}
+
+function growQueen(G) {
   while (STAGES[G.stage + 1] && G.eaten >= STAGES[G.stage + 1].at) { G.stage++; emit('stage', { stage: STAGES[G.stage] }); }
 }
 
@@ -188,8 +197,15 @@ export function comboTap(G, D = calc(G)) {
   G.comboT = t;
   return comboMult(G, D);
 }
-/** Multiplicador de la racha actual: 1 sin racha; cada toque seguido suma comboStep (×comboX), hasta comboCap toques. */
-export const comboMult = (G, D = calc(G)) => 1 + Math.min(Math.max(0, (G.combo || 1) - 1), D.comboCap) * D.comboStep * D.comboX;
+/** Multiplicador de la racha actual: 1 sin racha; cada toque seguido suma comboStep (×comboX), hasta comboCap toques.
+ *  A partir de ahí no sube más… salvo las marcas (comboMarks), que dan un bonus extra por encima. */
+export function comboMult(G, D = calc(G)) {
+  const n = G.combo || 0;
+  const ramp = 1 + Math.min(Math.max(0, n - 1), D.comboCap) * D.comboStep * D.comboX;
+  let extra = 0;
+  for (const [at, p] of BAL.comboMarks) if (n >= at) extra += p;
+  return ramp + extra;
+}
 
 /** ghost: toque de la mano fantasma (no cuenta como toque tuyo ni alarga tu racha). */
 export function click(G, kind, id, ghost) {
@@ -198,13 +214,15 @@ export function click(G, kind, id, ghost) {
   if (!ghost) G.stats.clicks++;
   if (kind === 'queen') {
     const crit = Math.random() < D.tapCrit, f = BAL.tapFood * D.tapQ * (crit ? D.critX : 1) * m, before = G.stats.laid;
-    // con «Toque menguante» el toque no alimenta: rebaja para siempre lo que cuesta cada huevo
-    if (D.tapCut) G.eggCut = (G.eggCut || 0) + f;
-    else G.lay += f;
+    // con «Toque menguante» el toque rebaja el huevo mientras pueda; al llegar al suelo, alimenta a la reina
+    const cut = D.tapCut ? Math.min(f, D.cutRoom) : 0;
+    if (cut > 0) G.eggCut = (G.eggCut || 0) + cut;
+    const feed = f - cut;
+    if (feed > 0) G.lay += feed;
     G.eaten += f; // solo los toques hacen crecer a la reina
     if (D.gold) G.jelly += f * 0.5;
     digest(G);
-    return { laid: G.stats.laid > before, food: f, cut: D.tapCut, crit: crit ? D.critX : 0, combo: G.combo, mult: m };
+    return { laid: G.stats.laid > before, food: feed > 0 ? feed : f, cut: feed <= 0, crit: crit ? D.critX : 0, combo: G.combo, mult: m };
   }
   const e = (kind === 'egg' ? G.eggs : G.larvae).find(x => x.id === id);
   const crit = Math.random() < D.tapCrit, k = (crit ? D.critX : 1) * m;
@@ -318,7 +336,8 @@ function queenDies(G) {
 function dawn(G) { G.foes = null; G.phase = 'day'; G.t = DAY; G.warned = false; }
 
 /** Ingresos de recolección sin escena (para el simulador). */
-export const forageRate = (G, D) => workForce(G, D) * D.carry * (1 + D.luck) * (1 + 4 * D.goldFood) / BAL.trip * (D.speed / 2.6);
+// el festín (×50) sustituye a la comida dorada (×5) cuando sale; la suerte (×2) se suma aparte
+export const forageRate = (G, D) => workForce(G, D) * D.carry * (1 + D.luck) * ((1 - D.feast) * (1 + 4 * D.goldFood) + 50 * D.feast) / BAL.trip * (D.speed / 2.6);
 
 export function tick(G, dt) {
   const D = calc(G);
@@ -326,6 +345,8 @@ export function tick(G, dt) {
   G.stats.time += dt; G.total += dt;
   G.rate = Math.max(0, G.rate - G.rate * dt / 20);
   G.lay += D.reserve * dt;
+  // la jalea que genera la reina también la hace crecer
+  if (D.qJelly > 0) { const j = D.qJelly * dt; G.jelly += j; G.eaten += j; G.rate += j / 20; growQueen(G); }
   if (D.farm > 0) G.jelly += D.farm * nightPrize(G, D) / 60 * dt; // granjas: jalea sola, también de noche
   // mano fantasma: toca a la reina sola cada cierto tiempo
   if (D.ghost > 0) {

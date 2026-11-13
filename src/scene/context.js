@@ -14,6 +14,9 @@ export const ctx = {
 
 export const rnd = (a, b) => a + Math.random() * (b - a);
 
+/** Teléfono o tablet: ahí se aligera el dibujo. */
+export const mobile = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+
 export function mulberry(a) {
   return function () {
     a |= 0; a = (a + 0x6D2B79F5) | 0;

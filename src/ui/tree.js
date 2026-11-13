@@ -11,7 +11,7 @@ const $ = id => document.getElementById(id);
 const CELL = 112;
 const CUR = { jelly: ['leaf', 'jalea'], bio: ['seed', 'biomasa'], adn: ['dna', 'ADN'] };
 
-export const tv = { open: false, tree: 'skills', sel: null, hover: null, x: 0, y: 0, z: 1, onBuy: null, onClose: null, onFound: null, onReset: null, onAuto: null };
+export const tv = { open: false, tree: 'skills', sel: null, hover: null, x: 0, y: 0, z: 1, onBuy: null, onClose: null, onFound: null, onReset: null };
 let G = null, lastKey = '';
 
 const nodesOf = tree => tree === 'perm' ? Game.PERKS : Game.SKILLS;
@@ -97,10 +97,6 @@ function renderHead() {
   if ($('tvMoney').dataset.k !== h) { $('tvMoney').dataset.k = h; $('tvMoney').innerHTML = h; }
   const dead = G.phase === 'dead';
   $('tvReset').hidden = perm;
-  $('tvAuto').hidden = perm;
-  $('tvAuto').setAttribute('aria-pressed', G.autoBuy ? 'true' : 'false');
-  $('tvAuto').classList.toggle('on', !!G.autoBuy);
-  $('tvAuto').innerHTML = `Autocompra <small>${G.autoBuy ? 'sí · compra lo más barato' : 'no'}</small>`;
   const lg = Game.legacy(G);
   $('tvFound').hidden = !(perm && dead);
   $('tvFound').textContent = 'Empezar la nueva colonia';
@@ -165,6 +161,7 @@ const ghost = ['Mano fantasma', D => D.ghost > 0 ? 'un toque cada ' + secs(1 / D
 const STAT = {
   eggCostX: egg, curve: egg, growth: brood, growthX: brood, twin: ['Gemelas', D => pct(D.twin)],
   reserve: ['La reina produce', D => fmt(D.reserve, 1) + ' de comida/s'],
+  qJelly: ['La reina genera', D => fmt(D.qJelly, 1) + ' de jalea/s'], qJellyP: ['La reina genera', D => fmt(D.qJelly, 1) + ' de jalea/s'],
   food: ['Comida por viaje', D => fmt(D.carry, 1)], foodX: ['Comida por viaje', D => fmt(D.carry, 1)],
   speed: ['Velocidad', D => fmt(D.speed, 1)],
   prize: ['Premio de esta noche', D => fmt(Game.nightPrize(G, D), 0) + ' de jalea'],
@@ -175,6 +172,7 @@ const STAT = {
   tapFoe: ['Toque a los enemigos', D => '×' + fmt(D.tapFoe, 2)],
   tapCrit: ['Toques de suerte', D => pct(D.tapCrit)], luck: ['Entregas dobles', D => pct(D.luck)],
   shiny: ['Hormigas doradas', D => pct(D.shinyP)], goldFood: ['Comida dorada', D => pct(D.goldFood)],
+  feast: ['Festín', D => pct(D.feast)],
   ghost, ghostX: ghost,
   extraEgg: ['Huevo extra', D => pct(D.extraEgg)], freeEgg: ['Huevo sin precio', D => pct(D.freeEgg)],
   instaHatch: ['Eclosión precoz', D => pct(D.instaHatch)], dodge: ['Esquivar un golpe mortal', D => pct(D.dodge)],
@@ -266,5 +264,4 @@ export function wireTree(getGame) {
   $('tvClose').onclick = () => tv.onClose && tv.onClose();
   $('tvFound').onclick = () => tv.onFound && tv.onFound();
   $('tvReset').onclick = () => tv.onReset && tv.onReset($('tvReset'));
-  $('tvAuto').onclick = () => tv.onAuto && tv.onAuto();
 }

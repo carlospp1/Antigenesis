@@ -27,7 +27,7 @@ function buildSnacks() {
   };
   // la comida que vuela a la reina se dibuja por delante de todo (no la tapa ni la reina ni el terreno)
   for (const k in SNACK.mat) { SNACK.mat[k].depthTest = false; SNACK.mat[k].depthWrite = false; }
-  for (let i = 0; i < 18; i++) {
+  for (let i = 0; i < 32; i++) {
     const m = new THREE.Mesh(SNACK.geo.leaf, SNACK.mat.leaf); m.visible = false; m.renderOrder = 60; ctx.scene.add(m);
     snacks.push({ m, t: 1, a: new THREE.Vector3(), c: new THREE.Vector3(), b: null, size: 1, k: 1, spin: new THREE.Vector3(), done: null });
   }
@@ -52,6 +52,14 @@ export function feedFly(fromX, fromY, target, onArrive, type, size, front) {
   s.b = target; s.t = 0; s.size = size || rnd(28, 34); s.done = onArrive;
   s.spin.set(rnd(-6, 6), rnd(-6, 6), rnd(-6, 6));
   s.m.visible = true; s.m.position.copy(s.a); s.m.scale.setScalar(0.01);
+}
+
+/** «Festín»: una lluvia de comida, desde arriba, que cae en la boca durante un par de segundos. */
+export function feastRain(x, y, target, onBite) {
+  const types = ['gold', 'berry', 'leaf', 'seed'];
+  for (let i = 0; i < 12; i++) setTimeout(() => {
+    feedFly(x + rnd(-120, 120), y + rnd(-170, -24), target, () => { if (onBite) onBite(); }, types[i % types.length], rnd(36, 58));
+  }, i * 90);
 }
 
 function updateSnacks(dt) {

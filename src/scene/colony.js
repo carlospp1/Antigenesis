@@ -10,7 +10,7 @@ import { randomIn, clampToWalkable, DOWN, UP } from './colliders.js';
 import { NAV } from './layout.js';
 import { gatherPoint } from './ending.js';
 import { queen, mouth, head, slotPos, mouthWorld, queenEats } from './brood.js';
-import { puff, feedFly } from './particles.js';
+import { puff, feedFly, feastRain } from './particles.js';
 import { pantryTop, pantryDrop, pantryPop } from './pantry.js';
 import { emit } from '../core/events.js';
 
@@ -95,24 +95,26 @@ function meander(x0, x1) {
 let turn = 0; // se alternan: una entrega a la reina, la siguiente guarda en la despensa (salvo «Todo para la reina»)
 
 function feedTask(a) {
-  const toQueen = ctx.D.noStore || turn++ % 2 === 0, path = a.at === 'out' ? [...meander(a.x, DOWN[0].x), sidePoint(sideOf(a.x))] : []; // hasta el lado del agujero en el que está
+  // el festín va siempre a la boca: es el momento de la lluvia de comida
+  const toQueen = a.feast || ctx.D.noStore || turn++ % 2 === 0, path = a.at === 'out' ? [...meander(a.x, DOWN[0].x), sidePoint(sideOf(a.x))] : []; // hasta el lado del agujero en el que está
   path.push(...toChamber(a));
   const m = toQueen ? mouth() : pantryDrop();
   path.push({ x: m.x + rnd(-30, 40) * (toQueen ? 1 : 0.4), y: m.y + rnd(-12, 22) * (toQueen ? 1 : 0.5), wait: 0.9, set: 'cham', faceQ: toQueen, faceP: !toQueen, fn: () => {
     const { G, D } = ctx, type = a.carryType || 'leaf';
     setCarry(a, null);
     // cada hormiga dibujada representa a varias reales
-    // las doradas traen el triple; con suerte, la entrega vale el doble
-    const lucky = !!a.lucky, gold = !!a.goldFood; a.lucky = a.goldFood = false;
-    const amount = D.carry * G.ants / Math.max(1, by.ants.length) * (a.shiny ? D.shinyFood : 1) * (lucky ? 2 : 1) * (gold ? 5 : 1);
-    const snack = gold ? 'gold' : type, big = gold ? 34 : 24;
+    // las doradas traen el triple; con suerte, la entrega vale el doble; el festín, ×50
+    const lucky = !!a.lucky, gold = !!a.goldFood, feast = !!a.feast; a.lucky = a.goldFood = a.feast = false;
+    const amount = D.carry * G.ants / Math.max(1, by.ants.length) * (a.shiny ? D.shinyFood : 1) * (lucky ? 2 : 1) * (feast ? 50 : gold ? 5 : 1);
+    const snack = feast || gold ? 'gold' : type, big = feast ? 48 : gold ? 34 : 24;
     const v = new THREE.Vector3();
     if (toQueen) {
-      queenEats(1.2); // alarga las patas para recibir la comida
+      queenEats(feast ? 2.6 : 1.2); // alarga las patas para recibir la comida
       feedFly(a.x, a.y - 22, () => mouthWorld(v), () => {
-        queen.gulp = 1; queenEats(1.4);
-        emit('feed', { amount, lucky, gold, dest: 'queen', pos: { x: v.x, y: -v.y - 50 } });
+        queen.gulp = 1; queenEats(feast ? 2.2 : 1.4);
+        emit('feed', { amount, lucky, gold, feast, dest: 'queen', pos: { x: v.x, y: -v.y - 50 } });
       }, snack, big);
+      if (feast) feastRain(a.x, a.y - 22, () => mouthWorld(v), () => { queen.gulp = 1; });
     } else {
       feedFly(a.x, a.y - 22, () => pantryTop(v), () => {
         pantryPop(); puff(v.x, -v.y, 'green', 5, 60);
@@ -143,9 +145,10 @@ function forageTask(a) {
   p.push({ x: f.x + rnd(-f.r, f.r), y: f.y + rnd(-8, 10), wait: 0.8, set: 'out', fn: () => {
     // la suerte se decide al cosechar, para que el efecto salga en la comida
     const D = ctx.D;
-    a.lucky = Math.random() < D.luck; a.goldFood = Math.random() < D.goldFood;
-    setCarry(a, a.goldFood ? 'gold' : f.type);
-    if (a.lucky || a.goldFood) { puff(a.x, a.y - 20, 'gold', a.goldFood ? 18 : 10, a.goldFood ? 140 : 90, 40); emit('harvestLuck', { x: a.x, y: a.y - 40, lucky: a.lucky, gold: a.goldFood }); }
+    a.feast = Math.random() < D.feast; a.goldFood = !a.feast && Math.random() < D.goldFood; a.lucky = Math.random() < D.luck;
+    setCarry(a, a.feast || a.goldFood ? 'gold' : f.type);
+    if (a.feast) { puff(a.x, a.y - 20, 'gold', 26, 180, 70); emit('harvestLuck', { x: a.x, y: a.y - 40, feast: true }); }
+    else if (a.lucky || a.goldFood) { puff(a.x, a.y - 20, 'gold', a.goldFood ? 18 : 10, a.goldFood ? 140 : 90, 40); emit('harvestLuck', { x: a.x, y: a.y - 40, lucky: a.lucky, gold: a.goldFood }); }
   } });
   a.path = p; a.after = () => feedTask(a);
 }

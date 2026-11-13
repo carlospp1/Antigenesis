@@ -451,12 +451,30 @@ function grow(rows, target, tree, seed) {
 const SKILL_ROWS = [...S.map(r => [r[0], r[1] + OX, r[2] + OY, ...r.slice(3)]), ...S2, ...S3];
 const PERK_ROWS = [...P, ...P3];
 /** Árbol de la colonia y linaje: los diseñados a mano y, alrededor, otro tanto de mejoras pequeñas. */
-export const SKILLS = build(grow(SKILL_ROWS, SKILL_ROWS.length * 2, 'skills', 7));
+// añadidos tras crecer, junto a la reina: suben en % la jalea que genera la reina (necesitan «Reina productora»)
+const QJ = { reqPerk: 'pqj1' };
+const S4 = [
+  ['qj1', 11, 8, 'food', 'crown', 'Jalea real I', 'La jalea que genera la reina +50%', 3, { qJellyP: 0.5 }, ['root'], 0, QJ],
+  ['qj2', 12, 8, 'food', 'crown', 'Jalea real II', 'La jalea que genera la reina +75%', 6, { qJellyP: 0.75 }, ['qj1'], 0, QJ],
+  ['qj3', 13, 8, 'food', 'crown', 'Jalea real III', 'La jalea que genera la reina +100%', 9, { qJellyP: 1 }, ['qj2'], 0, QJ],
+  ['qjK', 9, 8, 'food', 'crown', 'Corona de jalea', 'La jalea que genera la reina +150%', { bio: 30 }, { qJellyP: 1.5 }, ['root'], 1, QJ],
+  // festín: de serie hay un 0,1%; estas tres lo suben dentro de la colonia (el tope del 3% está en las reglas)
+  ['fs1', 14, 8, 'food', 'goldleaf', 'Festín', '+0,2% de probabilidad de festín: una entrega vale ×50 y llueve comida en la boca de la reina', 9, { feast: 0.002 }, ['fo11']],
+  ['fs2', 15, 8, 'food', 'goldleaf', 'Festín II', '+0,4% de probabilidad de festín', 12, { feast: 0.004 }, ['fs1']],
+  ['fsK', 16, 8, 'food', 'goldleaf', 'Festín real', '+0,6% de probabilidad de festín', { bio: 50 }, { feast: 0.006 }, ['fs2'], 1]
+];
+export const SKILLS = build([...grow(SKILL_ROWS, SKILL_ROWS.length * 2, 'skills', 7), ...S4]);
 // añadidos tras crecer, en huecos libres: así no cambian los ids ni el sitio de los generados (partidas guardadas)
 const P4 = [
-  ['ptc', 4, -1, 'brood', 'hand', 'Toque menguante', 'Tocar a la reina ya no la alimenta: cada toque rebaja la comida que piden los huevos (hasta un 25% menos), y la rebaja se mantiene para los siguientes', { adn: 80 }, { tapCut: 1 }, ['pse']],
+  ['ptc', 4, -1, 'brood', 'hand', 'Toque menguante', 'Tocar a la reina rebaja la comida que pide el huevo (una cantidad fija, que arrastra el siguiente). Al llegar al mínimo, el toque vuelve a alimentarla', { adn: 80 }, { tapCut: 1 }, ['pse']],
   ['ptc2', 4, -2, 'brood', 'hand', 'Toque menguante II', 'Los toques pueden rebajar los huevos hasta un 35%', { adn: 60 }, { cutMax: 0.1 }, ['ptc']],
   ['ptc3', 3, -2, 'brood', 'hand', 'Toque menguante III', 'Los toques pueden rebajar los huevos hasta un 50%', { adn: 100 }, { cutMax: 0.15 }, ['ptc2']],
+  ['pqj1', 9, 4, 'food', 'crown', 'Reina productora', 'La reina genera 1 de jalea por segundo en todas las colonias (y eso también la hace crecer)', { adn: 30 }, { qJelly: 1 }, ['ppz']],
+  ['pqj2', 10, 4, 'food', 'crown', 'Reina productora II', 'La reina genera 3 de jalea por segundo más', { adn: 70 }, { qJelly: 3 }, ['pqj1']],
+  ['pqj3', 11, 4, 'food', 'crown', 'Reina productora III', 'La reina genera 8 de jalea por segundo más', { adn: 140 }, { qJelly: 8 }, ['pqj2']],
+  ['pfs1', 10, 3, 'food', 'goldleaf', 'Festín ancestral', '+0,3% de festín (entrega ×50) en todas las colonias', { adn: 48 }, { feast: 0.003 }, ['pf4']],
+  ['pfs2', 11, 3, 'food', 'goldleaf', 'Festín eterno', '+0,6% de festín', { adn: 96 }, { feast: 0.006 }, ['pfs1']],
+  ['pfs3', 12, 3, 'food', 'goldleaf', 'Festín de la estirpe', '+0,8% de festín. Con todo comprado, el festín llega a su máximo: 3%', { adn: 160 }, { feast: 0.008 }, ['pfs2']],
   ['psk', 6, -1, 'war', 'moon', 'Saltar el día', 'Un botón junto al reloj hace que caiga la noche ya. Las noches con el día saltado dan la mitad de ADN', { adn: 60 }, { skipDay: 1 }, ['pbio']]
 ];
 export const PERKS = build([...grow(PERK_ROWS, PERK_ROWS.length * 2, 'perm', 11), ...P4]);

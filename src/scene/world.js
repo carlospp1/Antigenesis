@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { ctx } from './context.js';
+import { ctx, mobile } from './context.js';
 import { IMG, REF, MAP, PXW } from './layout.js';
 
 const BASE = import.meta.env.BASE_URL;
@@ -57,7 +57,36 @@ export async function loadWorld(onProgress) {
 
   bake();
   ctx.scene.add(map);
+  if (mobile()) freezeMap();
   return map;
+}
+
+/**
+ * En el teléfono el nido no se dibuja en 3D: se fotografía una vez desde la cámara de referencia
+ * (con sus luces) y ese plano ocupa exactamente lo que veía esa cámara. Las hormigas siguen en 3D,
+ * y como la cámara de juego no se mueve de sitio, caen en el mismo punto de la foto.
+ */
+function freezeMap() {
+  const { renderer } = ctx, w = 1280, h = Math.round(w * IMG.h / IMG.w);
+  const rt = new THREE.WebGLRenderTarget(w, h);
+  rt.texture.colorSpace = THREE.SRGBColorSpace;
+  rt.texture.minFilter = THREE.LinearFilter;
+  rt.texture.magFilter = THREE.LinearFilter;
+  renderer.setRenderTarget(rt); renderer.setClearColor('#2a160c', 1); renderer.clear();
+  renderer.render(ctx.scene, world.ref);
+  renderer.setRenderTarget(null); renderer.setClearColor('#2a160c', 1);
+
+  const eye = new THREE.Vector3().fromArray(REF.pos), at = new THREE.Vector3().fromArray(REF.target);
+  const dist = eye.distanceTo(at);
+  const height = 2 * dist * Math.tan(THREE.MathUtils.degToRad(REF.fov) / 2);
+  const mat = new THREE.MeshBasicMaterial({ map: rt.texture, depthTest: false, depthWrite: false, toneMapped: false });
+  mat.userData.base = mat.color.clone(); world.materials.push(mat);
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(height * IMG.w / IMG.h, height), mat);
+  plane.position.copy(at); plane.quaternion.copy(world.ref.quaternion);
+  plane.renderOrder = -5; plane.frustumCulled = false;
+  ctx.scene.add(plane);
+  world.map.visible = false; // el modelo sigue en memoria: hace falta para saber dónde pisan y dónde se toca
+  world.photo = plane;
 }
 
 /** Pinta el mapa desde la cámara de referencia y guarda posición y normal por píxel. */
@@ -191,13 +220,15 @@ export function pickWorld(camera, px, py, w, h, out = new THREE.Vector3()) {
   const cam = camera.clone();
   cam.setViewOffset(w, h, Math.floor(px), Math.floor(py), 1, 1);
   cam.updateProjectionMatrix();
-  const parent = world.map.parent;
+  const parent = world.map.parent, hidden = !world.map.visible;
+  if (hidden) world.map.visible = true;
   pickScene.add(world.map); pickScene.overrideMaterial = posMat;
   renderer.setRenderTarget(pickRT); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(pickScene, cam);
   const buf = float ? new Float32Array(4) : new Uint16Array(4);
   renderer.readRenderTargetPixels(pickRT, 0, 0, 1, 1, buf);
   renderer.setRenderTarget(null); renderer.setClearColor('#2a160c', 1);
   pickScene.overrideMaterial = null; parent.add(world.map);
+  if (hidden) world.map.visible = false;
   const v = float ? buf : Array.from(buf, THREE.DataUtils.fromHalfFloat);
   if (v[3] < 0.5) return null;
   return out.set(v[0], v[1], v[2]);
