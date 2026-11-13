@@ -578,3 +578,37 @@ button, .tab, .node, .evo { touch-action: manipulation; }   /* sin el retardo de
 #endingView .ev-skip { position: absolute; right: max(16px, env(safe-area-inset-right)); top: calc(14px + env(safe-area-inset-top)); color: var(--dim); font-size: 12px; opacity: .7; }
 @keyframes evIn { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { #endingView, #endingView h1, #endingView .ev-sub { animation: none; } }
+
+/* ---------- tutorial de bienvenida (src/ui/tour.js) ---------- */
+#tour { position: fixed; inset: 0; z-index: 35; animation: tourIn .35s ease-out both; }
+#tour.out { animation: tourOut .3s ease-in both; }
+/* el foco: un hueco en un velo oscuro que se desliza de un objetivo al siguiente */
+.tour-hole { position: fixed; border-radius: 16px; pointer-events: none;
+  box-shadow: 0 0 0 200vmax rgba(14, 7, 3, .74), 0 0 0 2px rgba(240, 184, 76, .9), 0 0 28px 6px rgba(240, 184, 76, .45);
+  transition: left .5s cubic-bezier(.2, .9, .2, 1), top .5s cubic-bezier(.2, .9, .2, 1), width .5s cubic-bezier(.2, .9, .2, 1), height .5s cubic-bezier(.2, .9, .2, 1), border-radius .5s; }
+.tour-hole.round { border-radius: 50%; }
+.tour-hole::after { content: ""; position: absolute; inset: -8px; border-radius: inherit; border: 2px solid rgba(240, 184, 76, .7); animation: tourPulse 1.6s ease-out infinite; }
+/* la burbuja */
+.tour-tip { position: fixed; width: min(340px, calc(100vw - 24px)); padding: 14px 16px 12px; border: 1.5px solid var(--honey); border-radius: 16px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .5), 0 0 30px rgba(240, 184, 76, .18); transition: left .45s cubic-bezier(.2, .9, .2, 1), top .45s cubic-bezier(.2, .9, .2, 1); }
+.tour-tip.in { animation: tipIn .38s cubic-bezier(.2, 1.4, .4, 1) both; }
+.tour-tip::before { content: ""; position: absolute; left: var(--arrow, 50%); width: 14px; height: 14px; margin-left: -7px; background: inherit;
+  border: 1.5px solid var(--honey); transform: rotate(45deg); }
+.tour-tip[data-side="below"]::before { top: -8.5px; border-right: 0; border-bottom: 0; }
+.tour-tip[data-side="above"]::before { bottom: -8.5px; border-left: 0; border-top: 0; }
+.tour-tip[data-side="none"]::before { display: none; }
+.tour-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.tour-step { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+.tour-skip { font-size: 13px; color: var(--dim); padding: 2px 4px; } .tour-skip:hover { color: var(--ink); }
+.tour-tip h3 { margin: 6px 0 2px; font: 700 22px Cinzel, Georgia, serif; color: var(--honey); letter-spacing: .02em; }
+.tour-tip p { margin: 0 0 12px; font-size: 15px; font-weight: 600; line-height: 1.4; color: var(--ink); text-wrap: pretty; }
+.tour-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.tour-dots { display: flex; gap: 5px; } .tour-dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 236, 205, .2); transition: background .3s, transform .3s; }
+.tour-dots i.on { background: var(--honey); } .tour-dots i.on:last-of-type { transform: scale(1.2); }
+.tour-next { padding: 7px 18px; font-size: 15px; }
+@keyframes tourIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes tourOut { to { opacity: 0; } }
+@keyframes tipIn { from { opacity: 0; transform: translateY(8px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes tourPulse { 0% { transform: scale(1); opacity: .9; } 100% { transform: scale(1.18); opacity: 0; } }
+@media (max-width: 720px) { .tour-tip h3 { font-size: 19px; } .tour-tip p { font-size: 14px; } }
+@media (prefers-reduced-motion: reduce) { .tour-hole, .tour-tip { transition: none; } .tour-hole::after, .tour-tip.in { animation: none; } }

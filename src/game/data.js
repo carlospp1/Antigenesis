@@ -24,12 +24,13 @@ export const eraFor = n => ERAS.reduce((e, x) => n >= x.from ? x : e, ERAS[0]);
  */
 export const EVOS = [
   { name: 'Hormiga común', req: 0, cost: 0, fx: {}, desc: 'La forma con la que empieza todo.' },
-  { name: 'Hormiga de fuego', req: 4, cost: 3, fx: { dmg: 1.5, hp: 1.3 }, desc: 'Aguijón ardiente: daño ×1,5 y vida ×1,3' },
-  { name: 'Hormiga cortadora', req: 8, cost: 8, fx: { food: 1.6, hp: 1.3 }, desc: 'Mandíbulas de tijera: comida ×1,6 y vida ×1,3' },
-  { name: 'Hormiga bala', req: 12, cost: 16, fx: { dmg: 2 }, desc: 'La picadura más dolorosa: daño ×2' },
-  { name: 'Hormiga legionaria', req: 16, cost: 28, fx: { hp: 1.8, speed: 1.4 }, desc: 'Marcha imparable: vida ×1,8 y velocidad ×1,4' },
-  { name: 'Hormiga bulldog', req: 20, cost: 45, fx: { dmg: 2, hp: 1.5 }, desc: 'Salta y muerde: daño ×2 y vida ×1,5' },
-  { name: 'Hormiga titán', req: 24, cost: 70, fx: { dmg: 2, hp: 2, food: 2 }, desc: 'La especie definitiva: daño, vida y comida ×2' }
+  // cada evolución sube comida, daño y vida a la vez (BAL.evoAll, ver calc en rules.js)
+  { name: 'Hormiga de fuego', req: 4, cost: 3, fx: {}, desc: 'Aguijón ardiente. Comida, daño y vida ×1,45' },
+  { name: 'Hormiga cortadora', req: 8, cost: 8, fx: {}, desc: 'Mandíbulas de tijera. Comida, daño y vida ×1,45' },
+  { name: 'Hormiga bala', req: 12, cost: 16, fx: {}, desc: 'La picadura más dolorosa. Comida, daño y vida ×1,45' },
+  { name: 'Hormiga legionaria', req: 16, cost: 28, fx: {}, desc: 'Marcha imparable. Comida, daño y vida ×1,45' },
+  { name: 'Hormiga bulldog', req: 20, cost: 45, fx: {}, desc: 'Salta y muerde. Comida, daño y vida ×1,45' },
+  { name: 'Hormiga titán', req: 24, cost: 70, fx: {}, desc: 'La única que puede herir a los humanos. Comida, daño y vida ×1,45' }
 ];
 
 /** Noche final: al ganarla las hormigas conquistan el mundo (se puede seguir jugando). */
@@ -62,19 +63,24 @@ export const BAL = {
   bossHp: 5, bossDps: 3,       // jefe de cada era (cuarta noche), en múltiplos de un enemigo normal
   humanHp: 40, humanDps: 9,     // la noche final
   prize0: 15, prizeG: 1.4,
-  skill0: 18, skillG: 2.5,     // coste en jalea del árbol por nivel de nodo
-  skillOwnG: 1.12,             // cada nodo de jalea comprado encarece un 12% los siguientes
-  skillFree: 5,                // …a partir del sexto (las primeras compras no encarecen)
-  bioOwnG: 1.1,                // cada rombo comprado encarece un 10% los siguientes rombos
+  skill0: 18, skillG: 2.5,     // niveles 1–12: lo que ya pagaba una colonia (noche 4 ~200, noche 15 ~60 000)
+  skillKnee: 12, skillTop: 0.38, // del 13 al 18 el precio afloja: el 18 queda en ~4 millones, lo que junta la noche 24
+  skillOwnG: 1.006,            // hay cientos de nodos; un 12% por compra cerraba el árbol a mitad con la jalea aún subiendo
+  skillFree: 8,                // las primeras compras no encarecen
+  bioOwnG: 1.02,               // la biomasa del registro: ~8 en la noche 4, ~60 en la 12, ~160 al final
+  bioK: 1,                     // los rombos ya cuestan eso; solo se les quita el recargo que los cerraba
+  perkK: 0.25,                 // el linaje suma ~2100 de ADN y la partida del registro deja unos 350 antes de las evoluciones
   stageFood: 1.25,             // cada etapa de la reina multiplica la comida por viaje
   // ADN al morir o fundar: crece con las noches superadas
-  adnK: 0.8, adnP: 1.35,       // ajustado con tools/sim.mjs: unas 4 h jugando para una persona media
-  evoCostK: 2.6,                // multiplica el precio en ADN de las evoluciones
+  adnK: 1.5, adnP: 1.35,      // noche 4 ~10 ADN, noche 12 ~50, noche 24 ~130: da para el linaje y para la evolución de esa era
+  evoCostK: 1.5,                // la evolución de una era cabe en el ADN de esa era, sin vaciar el linaje
   foundAfter: 3,               // superada esta noche ya se puede fundar (y ganar ADN) aunque no caiga ningún jefe
   // racha de toques: cada toque seguido (menos de comboGap s de juego desde el anterior) rinde comboStep más,
   // hasta comboCap toques (×1,5 con estos valores). Vale para la reina, la cría y los enemigos.
   comboGap: 0.8, comboStep: 0.025, comboCap: 20,
-  blood: 0.015                 // «Sangre antigua»: +1,5% de comida, daño y vida por cada ADN ganado en total
+  evoAll: 1.45,                // cada evolución: comida, daño y vida ×evoAll (y +5% de velocidad)
+  treeK: 0.6, permK: 0.75,     // rebaja de las estadísticas del árbol y del linaje (la evolución ya sube todo)
+  blood: 0.015                // «Sangre antigua»: +1,5% de comida, daño y vida por cada ADN ganado en total
 };
 
 export const STAGES = [

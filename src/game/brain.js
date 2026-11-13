@@ -55,9 +55,10 @@ export function makeTapper(rnd = Math.random) {
 function utility(G, D, cps, warW) {
   const g = G.ants >= 3 ? G : { ...G, ants: 3 };
   // racha media de una ráfaga de makeTapper (3–14 toques: unos 4 toques de racha de media)
-  const combo = 1 + Math.min(4, D.comboCap) * D.comboStep * D.comboX;
+  const combo = D.combo ? 1 + Math.min(4, D.comboCap) * D.comboStep * D.comboX : 1; // sin «Racha» no hay racha
   const tap = cps * BAL.tapFood * D.tapQ * (1 + D.tapCrit * (D.critX - 1)) * combo;
-  const inc = R.forageRate(g, D) + D.reserve + tap + D.ghost * BAL.tapFood * D.tapQ;
+  // las granjas dan jalea sola (fracción del premio de una noche por minuto)
+  const inc = R.forageRate(g, D) + D.reserve + tap + D.ghost * BAL.tapFood * D.tapQ + D.farm * R.nightPrize(G, D) / 60;
   const war = D.dmg * D.hp / (1 - D.dodge);
   return Math.log(inc + 0.1) + 0.5 * Math.log(D.brood) - 0.7 * Math.log(D.eggCost) + warW * Math.log(war) + 0.3 * Math.log(D.prize * D.bioKill);
 }
@@ -107,10 +108,15 @@ export function pickSmart(G, tree, { cps = 1, warW = 1, income = 0, patience = 6
   return bestAff ? { id: bestAff.id, why: warW > 1 ? 'la noche pinta mal: prioriza combate' : 'mejor valor por coste' } : null;
 }
 
-/** ¿Fundar ya? Justo antes de una noche que se va a perder seguro (y sin vida extra que salve a la reina). */
+/**
+ * ¿Fundar ya? Justo antes de una noche que se va a perder seguro (y sin vida extra que salve a la reina).
+ * Ante los humanos sin la Hormiga titán, siempre: son inmunes y hace falta ADN para evolucionar.
+ */
 export function shouldFound(G) {
-  if (G.phase !== 'day' || G.t >= 6 || G.level >= FINAL_NIGHT || !R.legacy(G).ready) return false;
+  if (G.phase !== 'day' || G.t >= 6 || !R.legacy(G).ready) return false;
   const D = R.calc(G), fc = R.forecast(G, D);
+  if (fc.immune) return true;
+  if (G.level >= FINAL_NIGHT) return false;
   return !fc.win && fc.losses >= G.ants && (G.livesUsed || 0) >= D.lives;
 }
 

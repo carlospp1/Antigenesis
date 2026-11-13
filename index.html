@@ -74,12 +74,7 @@
   <div id="sheet" hidden><div class="box panel"><button class="x" data-act="close" aria-label="Cerrar"><i data-icon="close"></i></button><div id="sheetBody"></div></div></div>
 
   <div id="intro"><div class="box panel"><h1>ANTIGENESIS</h1><p class="tag">Una colonia. Una evolución. Un nuevo mundo.</p>
-    <p>De día las hormigas suben a la hierba, recogen comida y se la dan a la reina en la boca. Cada bocado la acerca a un huevo nuevo.</p>
-    <p>Empiezas sin hormigas: toca a la reina para que ponga huevos y a la cría para que crezca. Al caer la noche salen todas a pelear. Si caen todas, los enemigos entran al nido y matan a la reina.</p>
-    <p>Cada 4 noches llega una especie más fuerte: hormigas rivales, bachacos, termitas, cucarachas, arañas, escarabajos… y al final, los humanos. Si vences a los humanos, las hormigas conquistan el mundo.</p>
-    <p>Cuando muere una reina ganas ADN: con él mejoras el Linaje y fundas una colonia más fuerte.</p>
-    <p>Toca a la reina, los huevos y las larvas para ayudar. Arrastra para mover la vista y usa la rueda <span class="touch-only">o pellizca</span> para acercarte.</p>
-    <p class="touch-only small-tip">En el móvil se juega mejor en horizontal.</p>
+    <p>Cría hormigas, defiende el nido cada noche y evoluciona hasta conquistar el mundo.</p>
     <p id="loadStatus">Cargando…</p>
     <button id="start" class="btn-green big">Empezar</button></div></div>
 </div>
@@ -87,14 +82,14 @@
 <template id="guideTpl">
   <h2>Guía</h2>
   <ul class="guide">
-    <li><b>Jalea</b> (hoja): la traen las hormigas a la reina. Se gasta en el <b>Árbol</b>.</li>
-    <li><b>Biomasa</b> (semilla): la sueltan los enemigos. Se gasta en los nodos en rombo del Árbol.</li>
-    <li><b>ADN</b>: lo ganas al morir la reina o al fundar una colonia (en cuanto superas la noche 3; siempre al menos 1). Se gasta en el <b>Linaje</b>, que es permanente. Además, cada ADN ganado da +3% a todo.</li>
-    <li>Empiezas sin hormigas, pero la reina pone enseguida su primer huevo: si la colonia se queda vacía, el siguiente huevo cuesta como mucho lo que tengas. Después pone un huevo cada vez que come lo suficiente: tócala para ayudarla. Huevo → larva → hormiga. Cada huevo cuesta comida. Las hormigas se turnan: una le da su carga a la reina (huevos) y la siguiente la guarda en la despensa del nido (jalea para el Árbol). Cada hormiga nueva encarece el siguiente huevo. Tocar a la reina es gratis.</li>
-    <li>De noche todas salen a pelear. Si no queda ninguna, los enemigos bajan por el túnel y matan a la reina.</li>
-    <li>En los árboles solo puedes comprar lo que está conectado a algo que ya tienes. Reiniciar el Árbol devuelve todo lo gastado.</li>
-    <li>Atajos: <b>T</b> abre el Árbol, <b>L</b> el Linaje, <b>C</b> las colisiones, <b>espacio</b> pausa.</li>
+    <li><b>Jalea</b>: la guardan tus hormigas. Se gasta en el <b>Árbol</b>.</li>
+    <li><b>Biomasa</b>: la sueltan los enemigos. Compra los nodos en rombo.</li>
+    <li><b>ADN</b>: lo ganas al caer la reina o al fundar. Se gasta en el <b>Linaje</b>, que es para siempre.</li>
+    <li><b>Racha</b>: toca seguido y cada toque rinde más.</li>
+    <li><b>Noche</b>: todas salen a pelear. Si caen todas, los enemigos van a por la reina.</li>
+    <li>Atajos: <b>T</b> Árbol · <b>L</b> Linaje · <b>espacio</b> pausa.</li>
   </ul>
+  <button class="btn-plain" data-act="tour">Repetir el tutorial</button>
   <h2>Créditos</h2>
   <p>Modelos 3D de <a href="https://poly.pizza" target="_blank" rel="noopener">Poly Pizza</a>:</p>
   <ul class="credits">

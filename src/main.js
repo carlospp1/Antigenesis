@@ -12,6 +12,7 @@ import { burst, ghostHand } from './ui/fx.js';
 import { tv, openTree, closeTree, renderTree, wireTree } from './ui/tree.js';
 import * as Juice from './ui/juice.js';
 import { playEnding, cancelEnding } from './ui/ending.js';
+import { startTour, tourPending } from './ui/tour.js';
 import { createBot } from './ui/bot.js';
 
 const $ = id => document.getElementById(id);
@@ -23,6 +24,7 @@ function act(a, id, btn) {
   else if (a === 'prestige') { leave(); return; }
   else if (a === 'close') { openSheet(G, null); sfx = 'click'; }
   else if (a === 'mute') { Audio.start(); Audio.set('mute', !Audio.vol.mute); G.mute = Audio.vol.mute; sfx = 'click'; }
+  else if (a === 'tour') { openSheet(G, null); setTimeout(startTour, 250); sfx = 'click'; }
   else if (a === 'dev') { ui.devOpen = !ui.devOpen; sfx = 'click'; }
   else if (a === 'pause') { ui.paused = !ui.paused; sfx = 'click'; }
   else if (a === 'antModel') { try { localStorage.setItem('antigenesis.antModel', id); } catch (e) { /* nada */ } Game.save(G); location.reload(); return; }
@@ -155,6 +157,7 @@ function wireButtons() {
   try { $('bookBadge').hidden = !!localStorage.getItem('antigenesis.guideSeen'); } catch (e) { /* nada */ }
 
   $('start').onclick = () => {
+    if (tourPending() && !bot.on) setTimeout(startTour, 700); // primera partida: el tutorial
     $('intro').hidden = true; Audio.start(); Audio.set('mute', !!G.mute);
     if (G.phase === 'dead' && G.leaving) setTimeout(() => openTree(G, 'perm'), 0); // se cerró a mitad de fundar: vuelve al Linaje
   };
@@ -202,18 +205,18 @@ function wireGameEvents() {
   on('death', d => { Audio.play('death'); float('−1', Scene.entityPos('front'), 'hit'); });
   on('foeDeath', () => Audio.play('poof'));
   on('goal', d => {
-    toast('Objetivo cumplido' + (d.prize ? ': +' + fmt(d.prize) + ' de jalea.' : '.'), 'good'); Audio.play('objective');
+    Audio.play('objective');
     Juice.celebrate('¡Objetivo cumplido!', d.prize ? '+' + fmt(d.prize) + ' de jalea' : d.text, 'goal');
     if (d.prize) Juice.reward(innerWidth / 2, innerHeight * 0.3, 8);
   });
   on('stage', d => {
-    toast('La reina ha crecido: ahora es ' + d.stage.name + '. Sus hormigas cargan un 50% más.', 'good'); Audio.play('skill');
+    Audio.play('skill');
     Juice.celebrate('¡' + d.stage.name + '!', 'La reina ha crecido · sus hormigas cargan un 50% más', 'stage');
   });
   on('dusk', () => Audio.play('alarm'));
-  on('night', d => { topNight = G.best; Audio.play('alarm'); Audio.play('wave'); toast('Noche ' + d.def.n + ': ' + d.def.text + ' salen de la hierba hacia el agujero.', 'warn'); });
+  on('night', d => { topNight = G.best; Audio.play('alarm'); Audio.play('wave'); toast('Noche ' + d.def.n + ': llegan ' + d.def.text + '.', 'warn'); });
   on('nightWin', d => {
-    toast('Noche ' + d.level + ' superada con ' + d.lost + ' bajas. +' + fmt(d.prize) + ' de jalea. Amanece.', 'good'); Audio.play('win');
+    Audio.play('win');
     // celebración: más grande si cae un jefe (fin de era) o si es la noche más lejos a la que has llegado
     const boss = d.level % 4 === 0 && d.level < Game.FINAL_NIGHT, record = d.level > topNight && G.gen > 1;
     const next = boss ? Game.eraFor(d.level + 1) : null;
@@ -222,9 +225,9 @@ function wireGameEvents() {
     else Juice.celebrate('¡Noche ' + d.level + ' superada!', '+' + fmt(d.prize) + ' de jalea' + (d.lost ? '' : ' · sin bajas'), 'night');
     Juice.reward(innerWidth / 2, innerHeight * 0.32, boss ? 22 : 14);
   });
-  on('nightLost', d => { toast('Amanece y los invasores se retiran. Perdiste ' + d.lost + ' hormigas. La próxima noche viene más fuerte.', 'warn'); Audio.play('retreat'); });
+  on('nightLost', d => { toast('Se retiran. Perdiste ' + d.lost + ' hormigas.', 'warn'); Audio.play('retreat'); });
   on('skill', d => { const n = (d.tree === 'perm' ? Game.PERKS : Game.SKILLS)[d.id]; if (n) toast((d.tree === 'perm' ? 'Linaje: ' : 'Árbol: ') + n.name + '.', 'good'); });
-  on('emergencyEgg', d => { if (G.stats.laid > 1) toast(d.paid > 0 ? `La colonia estaba vacía: la reina pone un huevo con lo que tenías (${fmt(d.paid, 0)} de comida).` : 'La colonia estaba vacía: la reina pone un huevo de sus últimas reservas.', 'good'); });
+  on('emergencyEgg', d => { if (G.stats.laid > 1) toast('Colonia vacía: la reina pone un huevo de reserva.', 'good'); });
   on('ghost', r => {
     if (!$('intro').hidden || tv.open) return;
     const q = Scene.entityPos('queen'), from = { x: q.x - 120 + Math.random() * 90, y: q.y - 90 - Math.random() * 40 }, sp = Scene.toScreen(from);
@@ -238,9 +241,9 @@ function wireGameEvents() {
     else { burst('×2', 'Cosecha doble', 'harvest', at); Audio.play('skill'); }
   });
   on('lay', d => { if (d.twin) { burst('×2', 'Gemelas', 'x2', Scene.toScreen(Scene.entityPos('egg', d.e.slot))); Audio.play('skill'); } });
-  on('evolve', d => { Juice.celebrate('¡Evolución!', d.name, 'evolve'); Audio.play('win'); toast('Tu especie evoluciona: ' + d.name + '.', 'good'); });
-  on('raid', () => { toast('¡Han caído todas! Los enemigos bajan por el túnel hacia la reina…', 'warn'); Audio.play('alarm'); });
-  on('queenSurvives', () => toast('El nido fortificado resiste: la reina sobrevive esta vez.', 'good'));
+  on('evolve', d => { Juice.celebrate('¡Evolución!', d.name, 'evolve'); Audio.play('win'); });
+  on('raid', () => { toast('¡Han caído todas! Van a por la reina.', 'warn'); Audio.play('alarm'); });
+  on('queenSurvives', () => toast('El nido resiste: la reina sobrevive.', 'good'));
   on('queenDeath', d => {
     Audio.play('retreat'); closeTree();
     $('deathText').textContent = `Generación ${d.gen}. Tu colonia aguantó ${d.level - 1} ${d.level - 1 === 1 ? 'noche' : 'noches'}.`;

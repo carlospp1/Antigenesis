@@ -10,6 +10,7 @@ import * as Audio from '../audio/audio.js';
 
 const $ = id => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const narrow = matchMedia('(max-width: 720px)');
 
 /** Vibración corta (móvil). */
 export function buzz(pattern) { try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) { /* nada */ } }
@@ -31,7 +32,8 @@ export function tap(n, mult, cap = 21) {
   comboEl.classList.remove('pop'); void comboEl.offsetWidth; comboEl.classList.add('pop');
   clearTimeout(hideT);
   hideT = setTimeout(() => { if (comboEl) comboEl.classList.add('out'); }, 900);
-  if (n === 10) { celebrate('¡Buen ritmo!', 'Racha de 10 · tus toques rinden +' + Math.round((mult - 1) * 100) + '%', 'combo'); buzz(25); }
+  if (narrow.matches) { if (n === 10) buzz(25); else if (n === cap) buzz([30, 40, 30]); }
+  else if (n === 10) { celebrate('¡Buen ritmo!', 'Racha de 10 · tus toques rinden +' + Math.round((mult - 1) * 100) + '%', 'combo'); buzz(25); }
   else if (n === cap) { celebrate('¡Racha máxima!', 'Tus toques rinden +' + Math.round((mult - 1) * 100) + '%', 'combo'); buzz([30, 40, 30]); }
 }
 

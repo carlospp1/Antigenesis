@@ -300,7 +300,7 @@ const P = [
   ['psh3', 1, 5, 'brood', 'sparkle', 'Realeza dorada', 'Las doradas traen ×5 comida y pegan ×3 desde el primer día', { adn: 24 }, { shinyElite: 1 }, ['psh2', 'pgh2']],
   ['pl2', 7, 4, 'tap', 'clover', 'Fortuna ancestral', '+8% de toques ×2 y +8% de entregas ×2', { adn: 10 }, { tapCrit: 0.08, luck: 0.08 }, ['ph1', 'ppz']],
   ['ps1', 5, 2, 'tap', 'ant', 'Escolta', 'Cada colonia empieza con 2 hormigas', { adn: 2 }, { startAnts: 2 }, ['root']],
-  ['ptp', 4, 2, 'tap', 'hand', 'Mano de la estirpe', 'Tus toques ×1,5', { adn: 1 }, { clickX: 1.5 }, ['ps1', 'pe1']],
+  ['ptp', 4, 2, 'tap', 'bolt', 'Racha', 'Desbloquea la racha: cada toque seguido rinde más. Además, tus toques ×1,2', { adn: 4 }, { combo: 1, clickX: 1.2 }, ['ps1', 'pe1']],
   ['pj1', 6, 2, 'tap', 'leaf', 'Despensa inicial', 'Cada colonia empieza con 40 de jalea', { adn: 2 }, { startJelly: 40 }, ['ps1']],
   ['ps2', 5, 1, 'tap', 'ant', 'Séquito', 'Empiezas con 3 hormigas más', { adn: 7 }, { startAnts: 3 }, ['ps1']],
   ['pds', 4, 1, 'tap', 'arrows', 'Saber heredado', 'El árbol de la colonia cuesta un 25% menos', { adn: 6 }, { discount: 0.25 }, ['ps2', 'ptp']],
@@ -324,19 +324,23 @@ const P = [
 const NEEDS = {
   gh2: ['ghK'], gh3: ['gh2'], lkK: ['lk1'], shK: ['sh1'], sh2: ['sh1'], sh3: ['sh1'], gf2: ['gf1'], lc2: ['lc1'],
   t2a: ['gh3'], b5a: ['brK2'], t1c: ['ghK'],
-  pgh2: ['pgh1'], pgh3: ['pgh2'], pgf2: ['pgf'], psh2: ['psh'], psh3: ['psh'], pqk: ['pdx1']
+  pgh2: ['pgh1'], pgh3: ['pgh2'], pcb1: ['ptp'], pgf2: ['pgf'], psh2: ['psh'], psh3: ['psh'], pqk: ['pdx1']
 };
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI'];
 
 function build(rows) {
   const N = {}, byName = {};
-  for (const [id, x, y, cat, icon, name, desc, cost, fx, links, key] of rows) {
-    N[id] = { id, x, y, cat, icon, name, desc, cost, fx, links, key: !!key, adj: new Set(links), needs: [...(NEEDS[id] || [])] };
+  // al crecer, las coordenadas pueden salir negativas: todo se desplaza para empezar en 0
+  const mx = Math.min(...rows.map(r => r[1])), my = Math.min(...rows.map(r => r[2]));
+  for (const [id, x, y, cat, icon, name, desc, cost, fx, links, key, extra] of rows) {
+    N[id] = { id, x: x - mx, y: y - my, cat, icon, name, desc, cost, fx, links, key: !!key, adj: new Set(links), needs: [...(NEEDS[id] || []), ...((extra && extra.needs) || [])],
+      reqPerk: (extra && extra.reqPerk) || REQ_PERK[id] || null, gen: !!(extra && extra.gen) };
     byName[name] = id;
   }
   for (const id in N) for (const l of N[id].links) N[l].adj.add(id); // los enlaces van en ambos sentidos
-  // «Caricia III» exige «Caricia II»; «Mimo a la cría II» exige «Mimo a la cría»
+  // «Caricia III» exige «Caricia II»; «Mimo a la cría II» exige «Mimo a la cría» (los generados no: van por caminos distintos)
   for (const id in N) {
+    if (N[id].gen) continue;
     const m = N[id].name.match(/^(.*) (II|III|IV|V|VI)$/);
     if (!m) continue;
     const i = ROMAN.indexOf(m[2]), prev = byName[m[1] + ' ' + ROMAN[i - 1]] || (i === 1 ? byName[m[1]] : null);
@@ -369,8 +373,86 @@ const P3 = [
   ['pcb3', 0, 5, 'tap', 'hand', 'Pulso de la estirpe', 'Cuatro décimas más entre toques sin perder la racha', { adn: 14 }, { comboGap: 0.4 }, ['pcb2']]
 ];
 
-export const SKILLS = build([...S.map(r => [r[0], r[1] + OX, r[2] + OY, ...r.slice(3)]), ...S2, ...S3]);
-export const PERKS = build([...P, ...P3]);
+/** Nodos del árbol de la colonia que necesitan algo del linaje (la racha se desbloquea con «Racha»). */
+const REQ_PERK = { cb1: 'ptp', cb2: 'ptp', cb3: 'ptp', cbK: 'ptp', cb4: 'ptp' };
+
+/* ---------- crecimiento: los árboles se amplían hacia fuera con mejoras pequeñas ---------- */
+const toRoman = n => { let r = ''; for (const [v, s] of [[10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']]) while (n >= v) { r += s; n -= v; } return r; };
+/**
+ * Familias de mejoras pequeñas por rama: [nombre, icono, descripción con {v}, efecto, valor, peso, extra].
+ * Cada nodo nuevo es de la rama de su vecino. «farm» son granjas que producen jalea solas (ver rules.tick):
+ * cada punto es esa fracción del premio de una noche por minuto, también de noche y sin hormigas.
+ */
+const FAMILIES = {
+  skills: {
+    brood: [['Calor suave', 'flame', '+{v}% de velocidad de cría', 'growth', 0.08, 3], ['Cáscara fina', 'egg', 'Cada huevo cuesta un {v}% menos', 'eggCostX', 0.97, 3],
+      ['Reserva templada', 'crown', 'La reina produce +{v}% por su cuenta', 'reserve', 0.25, 2], ['Granja de hongos', 'seed', 'Produce jalea sola: {v}% del premio de una noche por minuto', 'farm', 0.06, 2]],
+    food: [['Buche ancho', 'leaf', '+{v}% de comida por viaje', 'food', 0.08, 4], ['Paso firme', 'boot', '+{v}% de velocidad', 'speed', 0.04, 2],
+      ['Pulgones', 'clover', 'Produce jalea sola: {v}% del premio de una noche por minuto', 'farm', 0.06, 2], ['Botín', 'coin', '+{v}% de jalea al ganar una noche', 'prize', 0.12, 1]],
+    war: [['Colmillo', 'sword', '+{v}% de daño', 'dmg', 0.08, 4], ['Quitina', 'shield', '+{v}% de vida', 'hp', 0.08, 4],
+      ['Reflejos', 'shield', '+{v}% de probabilidad de esquivar', 'dodge', 0.015, 1], ['Rapiña', 'seed', '+{v} de biomasa por enemigo', 'bioKill', 0.4, 1]],
+    tap: [['Caricia suave', 'hand', '+{v}% de efecto de tus toques', 'click', 0.08, 3], ['Mano errante', 'ghost', 'Mano fantasma: +{v} toques por minuto', 'ghost', 0.04, 2],
+      ['Ritmo', 'bolt', 'Cada toque de la racha rinde +{v}% más', 'comboStep', 0.004, 2, { reqPerk: 'ptp' }], ['Fortuna', 'star', '+{v}% de toques de suerte', 'tapCrit', 0.015, 1]]
+  },
+  perm: {
+    brood: [['Linaje fértil', 'flame', '+{v}% de velocidad de cría', 'growth', 0.12, 3], ['Reserva ancestral', 'crown', 'La reina produce +{v}% por su cuenta', 'reserve', 0.5, 2],
+      ['Hongo ancestral', 'seed', 'Produce jalea sola: {v}% del premio de una noche por minuto', 'farm', 0.1, 2]],
+    food: [['Memoria', 'leaf', '+{v}% de comida', 'food', 0.12, 3], ['Senda', 'boot', '+{v}% de velocidad', 'speed', 0.05, 1],
+      ['Rebaño de pulgones', 'clover', 'Produce jalea sola: {v}% del premio de una noche por minuto', 'farm', 0.1, 2]],
+    war: [['Furia', 'sword', '+{v}% de daño', 'dmg', 0.12, 3], ['Coraza', 'shield', '+{v}% de vida', 'hp', 0.12, 3]],
+    tap: [['Mano heredada', 'ghost', 'Mano fantasma: +{v} toques por minuto', 'ghost', 0.06, 2], ['Toque heredado', 'hand', '+{v}% de efecto de tus toques', 'click', 0.12, 2],
+      ['Ritmo ancestral', 'bolt', 'Cada toque de la racha rinde +{v}% más', 'comboStep', 0.006, 1, { needs: ['ptp'] }]]
+  }
+};
+/** Nodos clave (rombo, con biomasa) que salen de vez en cuando al crecer el árbol de la colonia. */
+const KEYS = { brood: ['Nido ancestral', 'flame', 'La cría crece un {v}% más rápido', 'growthX', 1.12], food: ['Sendero real', 'leaf', 'Comida ×{x}', 'foodX', 1.12],
+  war: ['Legión', 'fist', 'Daño ×{x}', 'dmgX', 1.1], tap: ['Manos rápidas', 'ghost', 'La mano fantasma ×{x}', 'ghostX', 1.25] };
+
+/** Generador pseudoaleatorio con semilla: el árbol sale siempre igual. */
+function seeded(a) { return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+
+/**
+ * Hace crecer un árbol hasta `target` nodos: cada nodo nuevo se pega (en vertical u horizontal) a uno que ya
+ * está, en una celda libre más lejos de la raíz, y es de su misma rama. Coste: un nivel más que su vecino
+ * (o unos ADN más en el linaje); cada 7 nodos de una rama, uno clave.
+ */
+function grow(rows, target, tree, seed) {
+  const rnd = seeded(seed), fam = FAMILIES[tree], occ = new Set(rows.map(r => r[1] + ',' + r[2]));
+  const root = rows.find(r => r[0] === 'root'), d = r => Math.abs(r[1] - root[1]) + Math.abs(r[2] - root[2]);
+  const count = {}, perCat = {}, out = rows.slice();
+  const tier = r => typeof r[7] === 'number' ? r[7] : r[7].adn != null ? r[7].adn : 8; // nivel (o ADN) del vecino
+  for (let tries = 0; out.length < target && tries < target * 400; tries++) {
+    // sobre todo desde el borde, para crecer hacia fuera
+    const pool = out.filter(r => r[3] !== 'root'), far = Math.max(...pool.map(d)), p = pool[Math.floor(rnd() * pool.length)];
+    if (d(p) < far - 3 && rnd() < 0.8) continue;
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => !occ.has((p[1] + dx) + ',' + (p[2] + dy)) && Math.abs(p[1] + dx - root[1]) + Math.abs(p[2] + dy - root[2]) > d(p));
+    if (!dirs.length) continue;
+    const [dx, dy] = dirs[Math.floor(rnd() * dirs.length)], x = p[1] + dx, y = p[2] + dy, cat = p[3];
+    const n = (perCat[cat] = (perCat[cat] || 0) + 1), id = 'g' + tree[0] + out.length;
+    let row;
+    if (tree === 'skills' && n % 7 === 0) {
+      const [name, icon, desc, k, v] = KEYS[cat], c = (count[name] = (count[name] || 0) + 1);
+      row = [id, x, y, cat, icon, name + ' ' + toRoman(c), desc.replace('{v}', Math.round((v - 1) * 100)).replace('{x}', String(v).replace('.', ',')),
+        { bio: Math.round(20 + 6 * d(p)) }, { [k]: v }, [p[0]], 1, { gen: 1 }];
+    } else {
+      const list = fam[cat], tot = list.reduce((s, f) => s + f[5], 0);
+      let r = rnd() * tot, f = list[0];
+      for (const it of list) { r -= it[5]; if (r <= 0) { f = it; break; } }
+      const [name, icon, desc, k, v, , extra] = f, c = (count[name] = (count[name] || 0) + 1);
+      const shown = k.endsWith('X') ? Math.round((1 - v) * 100) : k === 'ghost' ? Math.round(v * 60 * 10) / 10 : k === 'bioKill' ? v : Math.round(v * 1000) / 10;
+      const cost = tree === 'perm' ? { adn: Math.round(tier(p) + 2 + d(p) * 0.6) } : Math.min(18, tier(p) + 1);
+      row = [id, x, y, cat, icon, name + ' ' + toRoman(c), desc.replace('{v}', String(shown).replace('.', ',')), cost, { [k]: v }, [p[0]], 0, { gen: 1, ...(extra || {}) }];
+    }
+    out.push(row); occ.add(x + ',' + y);
+  }
+  return out;
+}
+
+const SKILL_ROWS = [...S.map(r => [r[0], r[1] + OX, r[2] + OY, ...r.slice(3)]), ...S2, ...S3];
+const PERK_ROWS = [...P, ...P3];
+/** Árbol de la colonia y linaje: los diseñados a mano y, alrededor, otro tanto de mejoras pequeñas. */
+export const SKILLS = build(grow(SKILL_ROWS, SKILL_ROWS.length * 2, 'skills', 7));
+export const PERKS = build(grow(PERK_ROWS, PERK_ROWS.length * 2, 'perm', 11));
 
 /** Suma los efectos de los nodos comprados: X multiplica, el resto suma. */
 export function treeFx(nodes, owned) {
@@ -388,7 +470,7 @@ export function treeFx(nodes, owned) {
  * 0 owned (comprado) · 1 open (se puede comprar) · 2 seen (se ve) · 3 fog («?») · más lejos hidden.
  */
 const NAMES = ['owned', 'open', 'seen', 'fog'];
-export function treeStates(nodes, owned) {
+export function treeStates(nodes, owned, perm) {
   const dist = {}, q = [];
   for (const id in nodes) if (id === 'root' || owned[id]) { dist[id] = 0; q.push(id); }
   while (q.length) {
@@ -400,6 +482,7 @@ export function treeStates(nodes, owned) {
   for (const id in nodes) {
     out[id] = NAMES[dist[id]] || 'hidden';
     if (out[id] === 'open' && missingNeeds(nodes, owned, id).length) out[id] = 'seen'; // conectado, pero falta lo que mejora
+    if (out[id] === 'open' && nodes[id].reqPerk && !(perm && perm[nodes[id].reqPerk])) out[id] = 'seen'; // falta algo del linaje
   }
   return out;
 }

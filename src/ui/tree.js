@@ -157,7 +157,8 @@ function renderTip(st) {
 
 /** Nodo visible pero no comprable: le falta la mejora anterior o no está conectado. */
 function needsHTML(id) {
-  const miss = Game.missing(G, tv.tree, id), nodes = nodesOf(tv.tree);
+  const miss = Game.missing(G, tv.tree, id), nodes = nodesOf(tv.tree), req = nodes[id].reqPerk;
+  if (req && !G.perm[req]) return `<p class="warn">Necesita «${Game.PERKS[req].name}» en el Linaje.</p>`;
   return miss.length ? `<p class="warn">Primero compra ${miss.map(m => '«' + nodes[m].name + '»').join(' y ')}.</p>` : '<p class="warn">Aún no está conectado a lo que tienes.</p>';
 }
 

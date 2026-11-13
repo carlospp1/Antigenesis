@@ -27,17 +27,22 @@ export function newGame(keep) {
 }
 
 /** Valores derivados del estado (se recalculan cada fotograma). */
+/** Efectos de estadísticas que se rebajan en los árboles (las probabilidades y los extras van enteros). */
+const DAMP = new Set(['food', 'speed', 'dmg', 'hp', 'growth', 'reserve', 'click', 'tapQ', 'tapB', 'prize', 'foodX', 'dmgX', 'hpX', 'growthX', 'clickX']);
+
 export function calc(G) {
   const T = treeFx(SKILLS, G.skills), P = treeFx(PERKS, G.perm), D = { T, P };
-  const add = k => (T[k] || 0) + (P[k] || 0), mul = k => (T[k] ?? 1) * (P[k] ?? 1);
+  // las estadísticas del árbol y del linaje van rebajadas (treeK, permK): la evolución ya sube todo
+  const kT = k => DAMP.has(k) ? BAL.treeK : 1, kP = k => DAMP.has(k) ? BAL.permK : 1;
+  const add = k => (T[k] || 0) * kT(k) + (P[k] || 0) * kP(k), mul = k => Math.pow(T[k] ?? 1, kT(k)) * Math.pow(P[k] ?? 1, kP(k));
   D.blood = 1 + BAL.blood * (G.adnTotal || 0); // Sangre antigua
   D.carry = BAL.carry * (1 + add('food')) * mul('foodX') * Math.pow(BAL.stageFood, G.stage) * D.blood;
   D.speed = 2.6 * (1 + add('speed'));
   // evolución de la especie: multiplica todo lo de las fases conseguidas
+  // evolución de la especie: cada forma sube comida, daño y vida (×evoAll) y algo de velocidad
   for (let i = 1; i <= (G.evo || 0); i++) {
-    const f = EVOS[i].fx;
-    D.carry *= f.food || 1; D.speed *= f.speed || 1;
-    D.evoDmg = (D.evoDmg || 1) * (f.dmg || 1); D.evoHp = (D.evoHp || 1) * (f.hp || 1);
+    D.carry *= BAL.evoAll; D.speed *= 1.05;
+    D.evoDmg = (D.evoDmg || 1) * BAL.evoAll; D.evoHp = (D.evoHp || 1) * BAL.evoAll;
   }
   D.pop = G.ants;
   let brood = 0;
@@ -79,6 +84,8 @@ export function calc(G) {
   D.goldFood = Math.min(0.5, add('goldFood'));      // probabilidad de que una entrega sea comida dorada (×5)
   D.ghost = add('ghost') * mul('ghostX');           // toques por segundo de la mano fantasma
   D.lives = P.lives || 0;
+  D.farm = add('farm');        // granjas: jalea sola, en fracción del premio de una noche por minuto
+  D.combo = !!P.combo;         // la racha se desbloquea en el linaje («Racha»)
   D.noStore = storeClosed(G, P);
   D.discount = P.discount || 0;
   D.next = STAGES[G.stage + 1] || null;
@@ -100,10 +107,23 @@ export function nightDef(n) {
   return d;
 }
 
+/** Los humanos solo se pueden herir con la última evolución de la especie. */
+export const immuneBoss = (G, d) => !!(d.boss && d.boss.final && (G.evo || 0) < EVOS.length - 1);
+/** Jalea que da ganar la noche de ahora (también mide las granjas). */
+export const nightPrize = (G, D) => BAL.prize0 * Math.pow(BAL.prizeG, G.level - 1) * D.prize;
+
 /** Predicción del combate de esta noche con las hormigas actuales. */
 export function forecast(G, D) {
   const d = D.night, dps = fightForce(G, D) * D.dmg, pool = G.ants * D.hp;
+  if (immuneBoss(G, d)) return { win: false, losses: G.ants, immune: true };
   if (dps <= 0) return { win: false, losses: 0 };
+  if (!d.count) {
+    // solo un jefe (los humanos): pega todo el rato y cada baja resta daño a las que quedan
+    const kill = d.totalDps * 1.15 * (1 - D.dodge) / D.hp, most = dps * G.ants / (2 * kill); // bajas por segundo; daño máximo antes de caer todas
+    if (d.totalHp >= most) return { win: false, losses: G.ants, time: Infinity };
+    const T = (1 - Math.sqrt(1 - d.totalHp / most)) * G.ants / kill;
+    return { win: T < d.time - 6, losses: Math.min(G.ants, Math.floor(kill * T)), time: T };
+  }
   const T = d.totalHp / dps;
   const dmgTaken = d.totalDps * T * (d.count + 1) / (2 * Math.max(1, d.count)) * 1.15;
   return { win: dmgTaken < pool && T < d.time - 6, losses: Math.min(G.ants, Math.floor(dmgTaken / D.hp)), time: T };
@@ -157,6 +177,7 @@ export function feed(G, amount, dest) {
 
 /** Racha de toques: cuenta el toque y devuelve el multiplicador (cada toque seguido rinde algo más). */
 export function comboTap(G, D = calc(G)) {
+  if (!D.combo) { G.combo = 0; return 1; } // sin «Racha» en el linaje no hay racha
   const t = G.total || 0;
   G.combo = t - (G.comboT ?? -1e9) <= D.comboGap ? (G.combo || 0) + 1 : 1;
   G.comboT = t;
@@ -236,6 +257,7 @@ function tickNight(G, D, dt) {
       const a = Math.min(dmg, f.cur); f.cur -= a; dmg -= a;
       if (f.cur <= 0.0001) { f.count--; f.cur = d.hpEach; G.bio += D.bioKill; emit('foeDeath', {}); }
     } else {
+      if (immuneBoss(G, d)) break; // los humanos: solo los hiere la última evolución
       const a = Math.min(dmg, f.boss); f.boss -= a; dmg -= a;
       if (f.boss <= 0.0001) { f.boss = 0; G.bio += 4 * D.bioKill; emit('foeDeath', { boss: true }); }
     }
@@ -284,6 +306,7 @@ export function tick(G, dt) {
   G.stats.time += dt; G.total += dt;
   G.rate = Math.max(0, G.rate - G.rate * dt / 20);
   G.lay += D.reserve * dt;
+  if (D.farm > 0) G.jelly += D.farm * nightPrize(G, D) / 60 * dt; // granjas: jalea sola, también de noche
   // mano fantasma: toca a la reina sola cada cierto tiempo
   if (D.ghost > 0) {
     G.ghostT = (G.ghostT || 0) + dt * D.ghost;
@@ -332,9 +355,9 @@ export function tick(G, dt) {
 const storeCache = { G: null, key: '', v: false };
 function storeClosed(G, P = treeFx(PERKS, G.perm)) {
   if (!P.noStore) return false;
-  const key = Object.keys(G.skills).join();
+  const key = Object.keys(G.skills).join() + '|' + Object.keys(G.perm).join();
   if (storeCache.G === G && storeCache.key === key) return storeCache.v;
-  const st = treeStates(SKILLS, G.skills);
+  const st = treeStates(SKILLS, G.skills, G.perm); // los que piden algo del linaje no cuentan si falta
   const v = !Object.keys(SKILLS).some(id => st[id] === 'open' && typeof SKILLS[id].cost !== 'object');
   Object.assign(storeCache, { G, key, v });
   return v;
@@ -349,19 +372,21 @@ function ownedCount(G) {
 
 /**
  * Coste de un nodo: { cur: 'jelly' | 'bio' | 'adn', n }.
- * En el árbol de la colonia el precio sube con cada compra (skillOwnG, bioOwnG): llenarlo entero
- * cuesta lo mismo que la partida entera, no una tarde.
+ * La jalea sigue la curva del registro: hasta el nivel 12 como antes, y del 13 al 18
+ * más lenta, para que una colonia que junta unos millones pueda seguir comprando.
  */
 export function nodeCost(G, tree, id) {
   const n = (tree === 'perm' ? PERKS : SKILLS)[id], c = n.cost;
-  if (typeof c === 'object' && c.adn != null) return { cur: 'adn', n: c.adn };
+  if (typeof c === 'object' && c.adn != null) return { cur: 'adn', n: Math.max(1, Math.round(c.adn * (BAL.perkK ?? 1))) };
   const k = ownedCount(G);
-  if (typeof c === 'object') return { cur: 'bio', n: Math.round(c.bio * Math.pow(BAL.bioOwnG, k.bio)) };
+  if (typeof c === 'object') return { cur: 'bio', n: Math.max(1, Math.round(c.bio * (BAL.bioK ?? 1) * Math.pow(BAL.bioOwnG, k.bio))) };
   const disc = treeFx(PERKS, G.perm).discount || 0;
-  return { cur: 'jelly', n: Math.round(BAL.skill0 * Math.pow(BAL.skillG, c - 1) * Math.pow(BAL.skillOwnG, Math.max(0, k.jelly - BAL.skillFree)) * (1 - disc)) };
+  const knee = (BAL.skillKnee ?? 12) - 1, over = Math.max(0, c - 1 - knee);
+  const exp = Math.min(c - 1, knee) + over * (BAL.skillTop ?? 1);
+  return { cur: 'jelly', n: Math.round(BAL.skill0 * Math.pow(BAL.skillG, exp) * Math.pow(BAL.skillOwnG, Math.max(0, k.jelly - BAL.skillFree)) * (1 - disc)) };
 }
 
-export const states = (G, tree) => tree === 'perm' ? treeStates(PERKS, G.perm) : treeStates(SKILLS, G.skills);
+export const states = (G, tree) => tree === 'perm' ? treeStates(PERKS, G.perm) : treeStates(SKILLS, G.skills, G.perm);
 
 export function canBuy(G, tree, id) {
   const st = states(G, tree)[id], c = nodeCost(G, tree, id);
@@ -413,6 +438,7 @@ export const anyBuyable = (G, tree) => Object.keys(tree === 'perm' ? PERKS : SKI
 export function hit(G, D) {
   const f = G.foes;
   if (!f || f.arrive > 0) return 0;
+  if (f.count <= 0 && immuneBoss(G, D.night)) return 0; // a los humanos no les hacen nada los toques sin la última forma
   const a = Math.max(1, D.dmg * 2 * D.tapFoe) * comboTap(G, D);
   if (f.count > 0) f.cur -= Math.min(a, f.cur - 0.01);
   else f.boss = Math.max(0.01, f.boss - a);
@@ -424,6 +450,7 @@ export function hit(G, D) {
 /** Estado de la evolución i: 'done' | 'next' (comprable si hay ADN) | 'locked' (falta vencer al jefe) | 'later'. */
 export function evoState(G, i) {
   const cur = G.evo || 0;
+  if (i < 0 || i >= EVOS.length) return 'later';
   if (i <= cur) return 'done';
   if (debug.free) return 'next';
   if (i > cur + 1) return 'later';

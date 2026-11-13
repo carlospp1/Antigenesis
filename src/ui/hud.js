@@ -77,7 +77,7 @@ function dockColony(G, D) {
     infoCard('egg', 'Cría', `<span class="fx">Huevo ${fmt(Game.BAL.eggTime / D.brood, 1)} s · larva ${fmt(Game.BAL.larvaTime / D.brood, 1)} s</span>`),
     infoCard('shield', G.phase === 'night' ? 'Noche ' + G.level : 'Esta noche', `<span class="fx">${D.night.text}</span><span class="fx stats"><small>Tus hormigas: daño ${fmt(D.dmg, 1)} · vida ${fmt(D.hp, 0)}</small></span>`, '',
       // previsión como chip: se lee de un vistazo (el detalle, en la frase de al lado en pantallas grandes)
-      `<p class="note ${!G.ants || !fc.win ? 'warn' : 'good'}"><b class="chip">${!G.ants ? 'Sin hormigas' : fc.win ? 'Ganáis' : 'No aguantan'}</b><span class="why">${!G.ants ? 'Si llega la noche así, matarán a la reina.' : fc.win ? 'Unas ' + fc.losses + ' bajas.' : 'Cría más o mejora en el Árbol.'}</span></p>`),
+      `<p class="note ${!G.ants || !fc.win ? 'warn' : 'good'}"><b class="chip">${!G.ants ? 'Sin hormigas' : fc.immune ? 'Inmunes' : fc.win ? 'Ganáis' : 'No aguantan'}</b><span class="why">${!G.ants ? 'Si llega la noche así, matarán a la reina.' : fc.immune ? 'Solo la Hormiga titán puede herir a los humanos.' : fc.win ? 'Unas ' + fc.losses + ' bajas.' : 'Cría más o mejora en el Árbol.'}</span></p>`),
     infoCard('arrows', 'Árbol', `<span class="fx">${nBuy ? nBuy + (nBuy === 1 ? ' mejora disponible' : ' mejoras disponibles') : 'Sigue recolectando jalea'}</span>`, `<button class="btn-green${nBuy ? '' : ' no'}" data-act="openTree" data-id="skills">Abrir</button>`)
   ];
   const l = Game.legacy(G);
@@ -187,7 +187,10 @@ export function toast(text, tone) {
 export function float(text, pos, cls) {
   const p = toScreen(pos), f = document.createElement('div');
   f.className = 'float ' + (cls || ''); f.textContent = text;
-  f.style.left = p.x + (Math.random() - 0.5) * 44 + 'px'; f.style.top = p.y + (Math.random() - 0.5) * 22 + 'px';
+  // en el teléfono el dedo tapa el sitio del toque: el número sale bastante más arriba para que se vea
+  // la comida volando a la boca de la reina
+  const lift = matchMedia('(max-width: 720px), (pointer: coarse)').matches ? 72 : 0;
+  f.style.left = p.x + (Math.random() - 0.5) * 44 + 'px'; f.style.top = p.y - lift + (Math.random() - 0.5) * 22 + 'px';
   $('floats').appendChild(f);
   setTimeout(() => f.remove(), 1800);
 }
