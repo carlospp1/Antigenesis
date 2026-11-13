@@ -186,6 +186,9 @@ function wireButtons() {
     if (!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen({ navigationUI: 'hide' }).then(() => screen.orientation?.lock?.('landscape')).catch(() => {});
   }, { once: true });
   document.addEventListener('visibilitychange', () => { if (document.hidden) Game.save(G); });
+  // ni selección de texto, ni menú contextual, ni arrastrar imágenes al tocar el juego (salvo en campos de texto)
+  const typing = e => e.target.closest && e.target.closest('input,textarea');
+  for (const ev of ['selectstart', 'contextmenu', 'dragstart']) document.addEventListener(ev, e => { if (!typing(e)) e.preventDefault(); });
   window.addEventListener('pagehide', () => Game.save(G));
 }
 
