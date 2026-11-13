@@ -4,8 +4,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
-import { mobile } from './context.js';
-import { thin } from './geometry.js';
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -46,7 +44,6 @@ function normalize(gltf, def) {
   model.traverse(o => {
     if (!o.isMesh) return;
     o.castShadow = true;
-    if (mobile() && !o.isSkinnedMesh) { const t = thin(o.geometry); if (t !== o.geometry) o.geometry = t; }
     if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals(); // algunos .glb no traen normales
     const conv = m => toLambert(m, def.recolor);
     o.material = Array.isArray(o.material) ? o.material.map(conv) : conv(o.material);

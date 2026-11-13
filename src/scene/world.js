@@ -62,9 +62,10 @@ export async function loadWorld(onProgress) {
 }
 
 /**
- * En el teléfono el nido no se dibuja en 3D: se fotografía una vez desde la cámara de referencia
- * (con sus luces) y ese plano ocupa exactamente lo que veía esa cámara. Las hormigas siguen en 3D,
- * y como la cámara de juego no se mueve de sitio, caen en el mismo punto de la foto.
+ * En el teléfono el nido no se redibuja: se fotografía una vez desde la cámara de referencia
+ * y el plano son exactamente las cuatro esquinas de lo que esa cámara ve. Sin giro propio:
+ * al arrastrar a los lados se recorre el mapa, no el fondo. Donde no hay mapa, el píxel queda
+ * transparente y se ve el follaje de detrás.
  */
 function freezeMap() {
   const { renderer } = ctx, w = 1280, h = Math.round(w * IMG.h / IMG.w);
@@ -72,17 +73,20 @@ function freezeMap() {
   rt.texture.colorSpace = THREE.SRGBColorSpace;
   rt.texture.minFilter = THREE.LinearFilter;
   rt.texture.magFilter = THREE.LinearFilter;
-  renderer.setRenderTarget(rt); renderer.setClearColor('#2a160c', 1); renderer.clear();
+  renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear();
   renderer.render(ctx.scene, world.ref);
   renderer.setRenderTarget(null); renderer.setClearColor('#2a160c', 1);
 
-  const eye = new THREE.Vector3().fromArray(REF.pos), at = new THREE.Vector3().fromArray(REF.target);
-  const dist = eye.distanceTo(at);
-  const height = 2 * dist * Math.tan(THREE.MathUtils.degToRad(REF.fov) / 2);
-  const mat = new THREE.MeshBasicMaterial({ map: rt.texture, depthTest: false, depthWrite: false, toneMapped: false });
+  // esquinas de la imagen de referencia (NDC), sin rotar el plano aparte
+  const corner = (x, y) => new THREE.Vector3(x, y, 0.5).unproject(world.ref);
+  const bl = corner(-1, -1), br = corner(1, -1), tr = corner(1, 1), tl = corner(-1, 1);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute([bl.x, bl.y, bl.z, br.x, br.y, br.z, tr.x, tr.y, tr.z, tl.x, tl.y, tl.z], 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+  geo.setIndex([0, 1, 2, 0, 2, 3]);
+  const mat = new THREE.MeshBasicMaterial({ map: rt.texture, transparent: true, depthTest: false, depthWrite: false, toneMapped: false });
   mat.userData.base = mat.color.clone(); world.materials.push(mat);
-  const plane = new THREE.Mesh(new THREE.PlaneGeometry(height * IMG.w / IMG.h, height), mat);
-  plane.position.copy(at); plane.quaternion.copy(world.ref.quaternion);
+  const plane = new THREE.Mesh(geo, mat);
   plane.renderOrder = -5; plane.frustumCulled = false;
   ctx.scene.add(plane);
   world.map.visible = false; // el modelo sigue en memoria: hace falta para saber dónde pisan y dónde se toca
