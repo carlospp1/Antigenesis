@@ -37,8 +37,10 @@ function centerOn(id) {
   }
   const n = nodesOf(tv.tree)[id], box = $('tvCanvas').getBoundingClientRect();
   tv.z = Math.min(1, Math.max(box.height < 420 ? 0.45 : 0.55, Math.min(box.width / 1350, box.height / 700)));
-  tv.x = box.width / 2 - (n.x + 0.5) * CELL * tv.z;
-  tv.y = box.height / 2 - (n.y + 0.5) * CELL * tv.z;
+  // la raíz es la punta del ADN: arriba en el árbol (que baja) y a la izquierda en el linaje (que va a la derecha)
+  const fx = id === 'root' && tv.tree === 'perm' ? 0.18 : 0.5, fy = id === 'root' && tv.tree === 'skills' ? 0.2 : 0.5;
+  tv.x = box.width * fx - (n.x + 0.5) * CELL * tv.z;
+  tv.y = box.height * fy - (n.y + 0.5) * CELL * tv.z;
   applyView();
 }
 
@@ -55,26 +57,28 @@ export function renderTree(game, force) {
   G = game;
   if (tv.tree === 'evo') { renderEvo(force); return; }
   const nodes = nodesOf(tv.tree), owned = tv.tree === 'perm' ? G.perm : G.skills, st = Game.states(G, tv.tree);
-  const key = [tv.tree, Object.keys(owned).join(), Math.floor(G.jelly), G.bio, G.adn, tv.sel, tv.hover, G.phase === 'dead'].join('|');
+  const key = [tv.tree, Object.keys(owned).join(), Math.floor(G.jelly), G.bio, G.adn, tv.sel, tv.hover, G.phase === 'dead', Game.debug.free].join('|');
   renderHead();
   if (!force && key === lastKey) return;
   lastKey = key;
 
-  // líneas: doradas entre comprados, tenues si llevan a algo visible
-  let lines = '', maxX = 0, maxY = 0;
-  const drawn = new Set(), vis = s => s !== 'hidden';
+  // enlaces: dorados entre comprados, tenues si llevan a algo visible. En el linaje, la hélice hace de esqueleto.
+  let lines = '', maxX = 0, maxY = 0, reach = 0;
+  const drawn = new Set(), vis = s => s !== 'hidden', dna = tv.tree === 'perm';
   for (const id in nodes) {
     const n = nodes[id]; maxX = Math.max(maxX, n.x); maxY = Math.max(maxY, n.y);
+    if (vis(st[id])) reach = Math.max(reach, n.x);
     for (const a of n.adj) {
       const k = id < a ? id + a : a + id;
       if (drawn.has(k) || !vis(st[id]) || !vis(st[a])) continue;
       drawn.add(k);
       const m = nodes[a], cls = st[id] === 'owned' && st[a] === 'owned' ? 'on' : (st[id] === 'owned' || st[a] === 'owned') ? 'half' : 'off';
+      if (dna && cls !== 'half') continue; // en el ADN el resto lo dibuja la hélice
       lines += `<line class="${cls}" x1="${(n.x + 0.5) * CELL}" y1="${(n.y + 0.5) * CELL}" x2="${(m.x + 0.5) * CELL}" y2="${(m.y + 0.5) * CELL}"/>`;
     }
   }
   const W = (maxX + 1) * CELL, H = (maxY + 1) * CELL;
-  let html = `<svg class="tv-lines" width="${W}" height="${H}">${lines}</svg>`;
+  let html = `<svg class="tv-lines" width="${W}" height="${H}">${dna ? helixSVG(reach + 1.5) : ''}${lines}</svg>`;
   for (const id in nodes) {
     const n = nodes[id], s = st[id];
     if (s === 'hidden') continue;
@@ -89,10 +93,24 @@ export function renderTree(game, force) {
   renderTip(st);
 }
 
+/** Esqueleto de la doble hélice del linaje (horizontal) hasta `len` celdas. */
+function helixSVG(len) {
+  const H = Game.HELIX, P = (a, c) => `${(a + 0.5) * CELL},${(c + 0.5) * CELL}`;
+  const strand = s => { let d = ''; for (let a = 0; a <= len; a += 0.1) d += (d ? ' L' : 'M') + P(a, Game.helixAt(a, s)); return d; };
+  let rungs = '';
+  for (let t = 0; t * H.row <= len; t += H.rungEvery) {
+    const a = t * H.row, cA = Game.helixAt(a, 0), cB = Game.helixAt(a, 1);
+    if (Math.abs(cA - cB) < 0.8) continue;
+    const [x1, y1] = P(a, cA).split(','), [x2, y2] = P(a, cB).split(',');
+    rungs += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+  }
+  return `<g class="dna"><g class="rung">${rungs}</g><path class="s0" d="${strand(0)}"/><path class="s1" d="${strand(1)}"/></g>`;
+}
+
 function renderHead() {
   const perm = tv.tree !== 'skills';
   for (const b of document.querySelectorAll('#tvTabs button')) b.classList.toggle('on', b.dataset.tree === tv.tree);
-  const pills = perm ? [['adn', Game.debug.free ? '∞' : G.adn]] : [['jelly', Math.floor(G.jelly)], ['bio', G.bio]];
+  const inf = Game.debug.free, pills = perm ? [['adn', inf ? '∞' : G.adn]] : [['jelly', inf ? '∞' : Math.floor(G.jelly)], ['bio', inf ? '∞' : G.bio]];
   const h = pills.map(([k, v]) => `<div class="pill panel">${icon(CUR[k][0])}<b>${typeof v === 'string' ? v : fmt(v)}</b><span>${CUR[k][1]}</span></div>`).join('');
   if ($('tvMoney').dataset.k !== h) { $('tvMoney').dataset.k = h; $('tvMoney').innerHTML = h; }
   const dead = G.phase === 'dead';
@@ -145,10 +163,10 @@ function renderTip(st) {
   }
   const n = nodesOf(tv.tree)[id], s = st[id], c = Game.nodeCost(G, tv.tree, id);
   if (s === 'fog') { tip.innerHTML = '<h4>???</h4><p>Desbloquea los nodos cercanos para descubrirlo.</p>'; return; }
-  const can = s === 'open' && ((Game.debug.free && c.cur === 'adn') || G[c.cur] >= c.n);
-  tip.innerHTML = `<h4>${n.key ? '◆ ' : ''}${n.name}</h4><p>${n.desc}</p>${statHTML(n)}
-    ${s === 'owned' ? '<p class="good">Comprado</p>' : s === 'seen' ? needsHTML(id)
-      : `<button class="btn-green${can ? '' : ' no'}" data-buy="${id}">${icon(CUR[c.cur][0])}${can ? 'Comprar' + (Game.debug.free && c.cur === 'adn' ? '' : ' · ' + fmt(c.n)) : 'Faltan ' + fmt(Math.ceil(c.n - G[c.cur]))}</button>`}`;
+  const can = s === 'open' && (Game.debug.free || G[c.cur] >= c.n);
+  tip.innerHTML = `<h4>${n.key ? '◆ ' : ''}${n.name}</h4><p>${n.desc}</p>${linajeHTML(n)}${statHTML(n)}
+    ${s === 'owned' ? `<p class="good">${ownedNote(id)}</p>` : s === 'seen' ? needsHTML(id)
+      : `<button class="btn-green${can ? '' : ' no'}" data-buy="${id}">${icon(CUR[c.cur][0])}${can ? 'Comprar' + (Game.debug.free ? '' : ' · ' + fmt(c.n)) : 'Faltan ' + fmt(Math.ceil(c.n - G[c.cur]))}</button>`}`;
 }
 
 /* ---------- «Actual»: cómo va ahora lo que mejora el nodo ---------- */
@@ -185,9 +203,20 @@ const STAT = {
   startBio: ['Biomasa al empezar', D => fmt(D.P.startBio || 0)], startEggs: ['Huevos al empezar', D => fmt(D.P.startEggs || 0)],
   keepJelly: ['Jalea heredada', D => pct(D.P.keepJelly || 0)]
 };
+function ownedNote(id) {
+  const real = tv.tree === 'perm' ? G.perm[id] : G.skills[id];
+  if (real) return 'Comprado';
+  return Game.debug.free ? 'Debug' : 'Del linaje · para siempre';
+}
+function linajeHTML(n) {
+  const line = (ids, tail) => (ids || []).map(id => `«${Game.SKILLS[id].name}» ${tail}`);
+  const bits = [...line(n.own, 'es tuya en el árbol, para siempre'), ...line(n.unlock, 'se desbloquea en el árbol')];
+  return bits.length ? `<p class="good">${bits.join('. ')}.</p>` : '';
+}
 function statHTML(n) {
-  const D = Game.calc(G), seen = new Set(), out = [];
-  for (const k in n.fx) {
+  const D = Game.calc(G), seen = new Set(), out = [], fx = { ...n.fx };
+  if (tv.tree === 'perm') for (const id of n.own || []) Object.assign(fx, Game.SKILLS[id].fx);
+  for (const k in fx) {
     const s = STAT[k];
     if (!s || seen.has(s[0])) continue;
     seen.add(s[0]); out.push(`${s[0]}: <b>${s[1](D)}</b>`);

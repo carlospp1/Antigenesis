@@ -3,7 +3,7 @@
 import { emit } from '../core/events.js';
 import { EVOS, ERAS, STAGES, OBJ, DAY, NIGHT, NIGHT_FINAL, DUSK, BROOD_SLOTS, BAL, FINAL_NIGHT, RAID, eraFor } from './data.js';
 import { debug } from './debug.js';
-import { SKILLS, PERKS, treeFx, treeStates, missingNeeds } from './trees.js';
+import { SKILLS, PERKS, treeFx, treeStates, missingNeeds, linajeSkills } from './trees.js';
 
 let uid = 1;
 export const adnFor = (nights, stage) => Math.max(1, Math.floor(Math.pow(Math.max(0, nights), BAL.adnP) * BAL.adnK + stage * 2));
@@ -30,8 +30,23 @@ export function newGame(keep) {
 /** Efectos de estadísticas que se rebajan en los árboles (las probabilidades y los extras van enteros). */
 const DAMP = new Set(['food', 'speed', 'dmg', 'hp', 'growth', 'reserve', 'click', 'tapQ', 'tapB', 'prize', 'foodX', 'dmgX', 'hpX', 'growthX', 'clickX']);
 
+/** En debug todo el árbol y el linaje cuentan como comprados, sin escribir la partida. Se cachea: calc se llama muchas veces por segundo. */
+let debugTrees = null;
+function debugOwn() {
+  if (!debug.free) { debugTrees = null; return null; }
+  if (debugTrees) return debugTrees;
+  const skills = {}, perm = {};
+  for (const id in SKILLS) skills[id] = true;
+  for (const id in PERKS) perm[id] = true;
+  const own = linajeSkills(perm).own;
+  debugTrees = { skills, perm, T: treeFx(SKILLS, { ...skills, ...own }), P: treeFx(PERKS, perm) };
+  return debugTrees;
+}
+
 export function calc(G) {
-  const T = treeFx(SKILLS, G.skills), P = treeFx(PERKS, G.perm), D = { T, P };
+  const own = debugOwn();
+  const T = own ? own.T : treeFx(SKILLS, { ...G.skills, ...linajeSkills(G.perm).own });
+  const P = own ? own.P : treeFx(PERKS, G.perm), D = { T, P };
   // las estadísticas del árbol y del linaje van rebajadas (treeK, permK): la evolución ya sube todo
   const kT = k => DAMP.has(k) ? BAL.treeK : 1, kP = k => DAMP.has(k) ? BAL.permK : 1;
   const add = k => (T[k] || 0) * kT(k) + (P[k] || 0) * kP(k), mul = k => Math.pow(T[k] ?? 1, kT(k)) * Math.pow(P[k] ?? 1, kP(k));
@@ -79,12 +94,12 @@ export function calc(G) {
   D.qJelly = add('qJelly') * (1 + add('qJellyP')); // jalea por segundo que genera la reina (linaje; el árbol la sube en %)
   D.prize = 1 + add('prize');
   D.bioKill = 1 + add('bioKill');
-  D.nightWork = !!T.nightWork;
-  D.gold = !!T.gold;
-  D.jaw = !!T.jaw;
+  D.nightWork = !!(T.nightWork || P.nightWork);
+  D.gold = !!(T.gold || P.gold);
+  D.jaw = !!(T.jaw || P.jaw);
   // suerte: críticos al tocar, entregas dobles y hormigas doradas
   D.tapCrit = Math.min(0.9, add('tapCrit'));       // probabilidad de que un toque valga más
-  D.critX = T.critBig ? 5 : 2;                      // cuánto vale un toque de suerte
+  D.critX = (T.critBig || P.critBig) ? 5 : 2;       // cuánto vale un toque de suerte
   D.luck = Math.min(0.9, add('luck'));              // probabilidad de que una entrega valga x2
   D.shinyP = Math.min(0.5, add('shiny'));           // probabilidad de que una hormiga nazca dorada
   D.shinyFood = (T.shinyElite || P.shinyElite) ? 5 : 3; // las doradas traen más comida…
@@ -159,8 +174,8 @@ export const emptyColony = G => G.ants <= 0 && !G.eggs.length && !G.larvae.lengt
  */
 function emergencyEgg(G) {
   if (!emptyColony(G)) return;
-  const D = calc(G), pay = Math.min(D.eggCost, G.lay + G.jelly), fromLay = Math.min(G.lay, pay);
-  G.lay -= fromLay; G.jelly -= pay - fromLay;
+  const D = calc(G), pay = Math.min(D.eggCost, G.lay + (debug.free ? D.eggCost : G.jelly)), fromLay = Math.min(G.lay, pay);
+  G.lay -= fromLay; if (!debug.free) G.jelly -= pay - fromLay;
   layEgg(G, D);
   emit('emergencyEgg', { paid: pay });
 }
@@ -227,6 +242,31 @@ export function click(G, kind, id, ghost) {
   const crit = Math.random() < D.tapCrit, k = (crit ? D.critX : 1) * m;
   if (e) e.p += BAL.tapBrood * D.tapB * k;
   return { pct: Math.round(100 * BAL.tapBrood * D.tapB * k), crit: crit ? D.critX : 0, combo: G.combo, mult: m };
+}
+
+/**
+ * Varios toques fantasma de golpe: un solo digest y un solo evento.
+ * Así no se dispara un click+animación por toque cuando hay muchas manos.
+ */
+function ghostBatch(G, D, n) {
+  if (n < 1 || G.phase === 'dead') return null;
+  let food = 0, cutTot = 0, eaten = 0, jelly = 0, crit = 0, cutLeft = D.cutRoom;
+  const before = G.stats.laid;
+  for (let i = 0; i < n; i++) {
+    const lucky = Math.random() < D.tapCrit, f = BAL.tapFood * D.tapQ * (lucky ? D.critX : 1);
+    if (lucky) crit = D.critX;
+    const cut = D.tapCut ? Math.min(f, cutLeft) : 0;
+    if (cut > 0) { G.eggCut = (G.eggCut || 0) + cut; cutLeft -= cut; cutTot += cut; }
+    const feed = f - cut;
+    if (feed > 0) food += feed;
+    eaten += f;
+    if (D.gold) jelly += f * 0.5;
+  }
+  if (food > 0) G.lay += food;
+  G.eaten += eaten;
+  if (jelly > 0) G.jelly += jelly;
+  digest(G);
+  return { n, laid: G.stats.laid > before, food: food > 0 ? food : eaten, cut: food <= 0 && cutTot > 0, crit, combo: 0, mult: 1 };
 }
 
 /** Las doradas rinden más (ver shinyFood, shinyDmg y shinySpeed en calc). */
@@ -347,10 +387,15 @@ export function tick(G, dt) {
   // la jalea que genera la reina también la hace crecer
   if (D.qJelly > 0) { const j = D.qJelly * dt; G.jelly += j; G.eaten += j; G.rate += j / 20; growQueen(G); }
   if (D.farm > 0) G.jelly += D.farm * nightPrize(G, D) / 60 * dt; // granjas: jalea sola, también de noche
-  // mano fantasma: toca a la reina sola cada cierto tiempo
+  // mano fantasma: acumula toques y los aplica de golpe (máx. 30 por fotograma; el resto se queda para el siguiente)
   if (D.ghost > 0) {
     G.ghostT = (G.ghostT || 0) + dt * D.ghost;
-    while (G.ghostT >= 1) { G.ghostT -= 1; emit('ghost', click(G, 'queen', null, true)); }
+    const n = Math.min(30, Math.floor(G.ghostT));
+    if (n >= 1) {
+      G.ghostT -= n;
+      const r = ghostBatch(G, D, n);
+      if (r) emit('ghost', r);
+    }
   }
   if (emptyColony(G)) digest(G);
   if (G.phase === 'night' && D.nightWork && G.ants > 0) feed(G, forageRate(G, D) * 0.5 * dt);
@@ -397,7 +442,7 @@ function storeClosed(G, P = treeFx(PERKS, G.perm)) {
   if (!P.noStore) return false;
   const key = Object.keys(G.skills).join() + '|' + Object.keys(G.perm).join();
   if (storeCache.G === G && storeCache.key === key) return storeCache.v;
-  const st = treeStates(SKILLS, G.skills, G.perm); // los que piden algo del linaje no cuentan si falta
+  const st = states(G, 'skills'); // en debug ya está todo comprado; si no, solo lo que de verdad tienes
   const v = !Object.keys(SKILLS).some(id => st[id] === 'open' && typeof SKILLS[id].cost !== 'object');
   Object.assign(storeCache, { G, key, v });
   return v;
@@ -426,20 +471,23 @@ export function nodeCost(G, tree, id) {
   return { cur: 'jelly', n: Math.round(BAL.skill0 * Math.pow(BAL.skillG, exp) * Math.pow(BAL.skillOwnG, Math.max(0, k.jelly - BAL.skillFree)) * (1 - disc)) };
 }
 
-export const states = (G, tree) => tree === 'perm' ? treeStates(PERKS, G.perm) : treeStates(SKILLS, G.skills, G.perm);
+export const states = (G, tree) => {
+  const own = debugOwn();
+  return tree === 'perm' ? treeStates(PERKS, own ? own.perm : G.perm) : treeStates(SKILLS, own ? own.skills : G.skills, own ? own.perm : G.perm);
+};
 
 export function canBuy(G, tree, id) {
   const st = states(G, tree)[id], c = nodeCost(G, tree, id);
-  if (debug.free && c.cur === 'adn') return st === 'open';
+  if (debug.free) return st === 'open';
   return st === 'open' && G[c.cur] >= c.n;
 }
 
 export function buyNode(G, tree, id) {
   if (!canBuy(G, tree, id)) return false;
   const c = nodeCost(G, tree, id);
-  if (!(debug.free && c.cur === 'adn')) G[c.cur] -= c.n;
+  if (!debug.free) G[c.cur] -= c.n;
   if (tree === 'perm') G.perm[id] = true;
-  else { G.skills[id] = true; G.spent[c.cur] = (G.spent[c.cur] || 0) + c.n; }
+  else { G.skills[id] = true; if (!debug.free) G.spent[c.cur] = (G.spent[c.cur] || 0) + c.n; }
   emit('skill', { id, tree });
   return true;
 }

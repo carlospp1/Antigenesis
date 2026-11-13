@@ -1,7 +1,12 @@
-// Modo de prueba. También se cambia desde la consola: __ax.free = true
+// Modo de prueba: todo desbloqueado, y jalea, biomasa y ADN infinitos. Consola: __ax.free = true
 const KEY = 'antigenesis.debug';
+let mem = false;
+try { mem = localStorage.getItem(KEY) === '1'; } catch (e) { /* sin localStorage (p. ej. Node) */ }
 
 export const debug = {
-  get free() { try { return localStorage.getItem(KEY) === '1'; } catch (e) { return false; } },
-  set free(v) { try { if (v) localStorage.setItem(KEY, '1'); else localStorage.removeItem(KEY); } catch (e) { /* nada */ } }
+  get free() { return mem; },
+  set free(v) {
+    mem = !!v;
+    try { if (mem) localStorage.setItem(KEY, '1'); else localStorage.removeItem(KEY); } catch (e) { /* nada */ }
+  }
 };

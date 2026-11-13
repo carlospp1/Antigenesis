@@ -328,13 +328,14 @@ const NEEDS = {
 };
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI'];
 
-function build(rows) {
+function build(rows, dna) {
   const N = {}, byName = {};
   // al crecer, las coordenadas pueden salir negativas: todo se desplaza para empezar en 0
   const mx = Math.min(...rows.map(r => r[1])), my = Math.min(...rows.map(r => r[2]));
   for (const [id, x, y, cat, icon, name, desc, cost, fx, links, key, extra] of rows) {
     N[id] = { id, x: x - mx, y: y - my, cat, icon, name, desc, cost, fx, links, key: !!key, adj: new Set(links), needs: [...(NEEDS[id] || []), ...((extra && extra.needs) || [])],
-      reqPerk: (extra && extra.reqPerk) || REQ_PERK[id] || null, gen: !!(extra && extra.gen) };
+      reqPerk: (extra && extra.reqPerk) || REQ_PERK[id] || null, gen: !!(extra && extra.gen),
+      own: (extra && extra.own) || null, unlock: (extra && extra.unlock) || null };
     byName[name] = id;
   }
   for (const id in N) for (const l of N[id].links) N[l].adj.add(id); // los enlaces van en ambos sentidos
@@ -346,7 +347,98 @@ function build(rows) {
     const i = ROMAN.indexOf(m[2]), prev = byName[m[1] + ' ' + ROMAN[i - 1]] || (i === 1 ? byName[m[1]] : null);
     if (prev && !N[id].needs.includes(prev)) N[id].needs.push(prev);
   }
+  if (dna) tidyDna(N); // linaje: hélice horizontal; el árbol de la colonia se queda en cruz desde el centro
+  else freeCollisions(N);
   return N;
+}
+
+/** Si dos nodos caen en la misma celda (añadidos a (0,0)…), el de más se pega al primero libre al lado. */
+function freeCollisions(N) {
+  const used = new Map();
+  for (const id in N) {
+    const n = N[id], k = n.x + ',' + n.y;
+    if (!used.has(k)) { used.set(k, id); continue; }
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]];
+    let placed = false;
+    for (let r = 1; !placed && r < 12; r++) {
+      for (const [dx, dy] of dirs) {
+        const x = n.x + dx * r, y = n.y + dy * r, kk = x + ',' + y;
+        if (used.has(kk)) continue;
+        n.x = x; n.y = y; used.set(kk, id); placed = true; break;
+      }
+    }
+  }
+}
+
+/**
+ * Linaje en doble hélice horizontal. La raíz queda en la punta izquierda; el resto crece a la derecha.
+ * Las dos hebras se cruzan y, cuando se separan, un travesaño las une.
+ */
+function tidyDna(N) {
+  const dist = {}, q = ['root'];
+  dist.root = 0;
+  while (q.length) {
+    const id = q.shift();
+    for (const a of N[id].adj) if (dist[a] == null) { dist[a] = dist[id] + 1; q.push(a); }
+  }
+  const cat = { root: -1, brood: 0, food: 1, tap: 2, war: 3 };
+  const parent = {};
+  for (const id in N) {
+    if (id === 'root') { parent[id] = ''; continue; }
+    let best = null, bd = 1e9;
+    for (const a of N[id].adj) {
+      const d = dist[a] ?? 1e9;
+      if (d < bd || (d === bd && (best == null || a < best))) { bd = d; best = a; }
+    }
+    parent[id] = best || '';
+  }
+  // nivel a nivel desde la raíz; dentro de cada nivel, en el orden de sus padres para que los enlaces no se crucen tanto
+  const levels = [];
+  for (const id in N) (levels[dist[id] ?? levels.length + 99] ||= []).push(id);
+  const slots = helixSlots(Object.keys(N).length), pos = {};
+  let si = 0;
+  for (const lv of levels.filter(Boolean)) {
+    lv.sort((a, b) => {
+      const pa = pos[parent[a]] || { a: 0, c: 0 }, pb = pos[parent[b]] || { a: 0, c: 0 };
+      return (pa.a - pb.a) || (pa.c - pb.c) || (cat[N[a].cat] ?? 9) - (cat[N[b].cat] ?? 9) || N[a].name.localeCompare(N[b].name, 'es');
+    });
+    for (const id of lv) {
+      const s = slots[si++];
+      pos[id] = s;
+      N[id].x = s.a; // a lo largo → horizontal
+      N[id].y = s.c;
+    }
+  }
+}
+
+/**
+ * Forma de la hélice, en celdas. «a» va a lo largo (filas); «c» de lado a lado.
+ * Hebra A: c = amp·(1 + sen) · Hebra B: c = amp·(1 − sen). La fila 0 es un cruce: ahí va la raíz.
+ */
+export const HELIX = { amp: 3, period: 14, row: 0.9, rungEvery: 2 };
+export const helixAt = (a, strand) => {
+  const s = Math.sin((2 * Math.PI * (a / HELIX.row)) / HELIX.period);
+  return HELIX.amp * (1 + (strand ? -s : s));
+};
+
+/** Sitios de la hélice, desde la punta: los dos hilos y, cada rungEvery filas, los peldaños entre ellos. */
+function helixSlots(need) {
+  const out = [];
+  for (let t = 0; out.length < need; t++) {
+    const a = t * HELIX.row, cA = helixAt(a, 0), cB = helixAt(a, 1), span = Math.abs(cA - cB);
+    const row = [];
+    if (span < 0.8) row.push((cA + cB) / 2); // cruce: un solo nodo
+    else {
+      row.push(cA, cB);
+      if (t % HELIX.rungEvery === 0) {
+        const n = Math.floor(span / 0.85) - 1, lo = Math.min(cA, cB);
+        for (let i = 1; i <= n; i++) row.push(lo + (span * i) / (n + 1));
+      }
+    }
+    row.sort((x, y) => x - y);
+    for (const c of row) out.push({ a, c, t });
+  }
+  return out;
 }
 
 /** Lo que le falta a un nodo para poder comprarse aunque esté conectado (lista de ids). */
@@ -461,10 +553,15 @@ const S4 = [
   // festín: de serie hay un 0,1%; estas tres lo suben dentro de la colonia (el tope del 3% está en las reglas)
   ['fs1', 14, 8, 'food', 'goldleaf', 'Festín', '+0,2% de probabilidad de festín: una entrega vale ×50 y llueve comida en la boca de la reina', 9, { feast: 0.002 }, ['fo11']],
   ['fs2', 15, 8, 'food', 'goldleaf', 'Festín II', '+0,4% de probabilidad de festín', 12, { feast: 0.004 }, ['fs1']],
-  ['fsK', 16, 8, 'food', 'goldleaf', 'Festín real', '+0,6% de probabilidad de festín', { bio: 50 }, { feast: 0.006 }, ['fs2'], 1]
+  ['fsK', 16, 8, 'food', 'goldleaf', 'Festín real', '+0,6% de probabilidad de festín', { bio: 50 }, { feast: 0.006 }, ['fs2'], 1],
+  // manos de más: no se compran con biomasa; el linaje las hace tuyas
+  ['mh2', 0, 0, 'tap', 'ghost', 'Segunda mano', 'Otra mano fantasma: un toque cada 5 s', { bio: 8 }, { ghost: 0.2 }, ['ghK'], 1, { reqPerk: 'pgh4' }],
+  ['mh3', 0, 0, 'tap', 'ghost', 'Tercera mano', 'Otra mano fantasma: un toque cada 4 s', { bio: 16 }, { ghost: 0.25 }, ['mh2'], 1, { reqPerk: 'pgh5' }],
+  ['mh4', 0, 0, 'tap', 'ghost', 'Cuarta mano', 'Otra mano fantasma: un toque cada 3 s', { bio: 28 }, { ghost: 1 / 3 }, ['mh3'], 1, { reqPerk: 'pgh6' }],
+  ['mh5', 0, 0, 'tap', 'ghost', 'Quinta mano', 'Otra mano fantasma: un toque cada 2 s', { bio: 40 }, { ghost: 0.5 }, ['mh4'], 1, { reqPerk: 'pgh7' }]
 ];
-export const SKILLS = build([...grow(SKILL_ROWS, SKILL_ROWS.length * 2, 'skills', 7), ...S4]);
-// añadidos tras crecer, en huecos libres: así no cambian los ids ni el sitio de los generados (partidas guardadas)
+export const SKILLS = build([...grow(SKILL_ROWS, SKILL_ROWS.length * 2, 'skills', 7), ...S4], false);
+// añadidos tras crecer, para no cambiar los ids de los generados (partidas guardadas). El linaje lo ordena tidyDna()
 const P4 = [
   ['ptc', 4, -1, 'brood', 'hand', 'Toque menguante', 'Tocar a la reina rebaja la comida que pide el huevo (una cantidad fija, que arrastra el siguiente). Al llegar al mínimo, el toque vuelve a alimentarla', { adn: 80 }, { tapCut: 1 }, ['pse']],
   ['ptc2', 4, -2, 'brood', 'hand', 'Toque menguante II', 'Los toques pueden rebajar los huevos hasta un 35%', { adn: 60 }, { cutMax: 0.1 }, ['ptc']],
@@ -475,9 +572,36 @@ const P4 = [
   ['pfs1', 10, 3, 'food', 'goldleaf', 'Festín ancestral', '+0,3% de festín (entrega ×50) en todas las colonias', { adn: 48 }, { feast: 0.003 }, ['pf4']],
   ['pfs2', 11, 3, 'food', 'goldleaf', 'Festín eterno', '+0,6% de festín', { adn: 96 }, { feast: 0.006 }, ['pfs1']],
   ['pfs3', 12, 3, 'food', 'goldleaf', 'Festín de la estirpe', '+0,8% de festín. Con todo comprado, el festín llega a su máximo: 3%', { adn: 160 }, { feast: 0.008 }, ['pfs2']],
-  ['psk', 6, -1, 'war', 'moon', 'Saltar el día', 'Un botón junto al reloj hace que caiga la noche ya. Las noches con el día saltado dan la mitad de ADN', { adn: 60 }, { skipDay: 1 }, ['pbio']]
+  ['psk', 6, -1, 'war', 'moon', 'Saltar el día', 'Un botón junto al reloj hace que caiga la noche ya. Las noches con el día saltado dan la mitad de ADN', { adn: 60 }, { skipDay: 1 }, ['pbio']],
+  // manos fantasma: cada una es tuya en el árbol en cuanto la compras aquí
+  ['pgh4', 0, 0, 'tap', 'ghost', 'Segunda mano', 'Otra mano fantasma en todas las colonias: un toque cada 5 s. En el árbol es tuya para siempre', { adn: 20 }, {}, ['pgh1'], 0, { own: ['mh2'] }],
+  ['pgh5', 0, 0, 'tap', 'ghost', 'Tercera mano', 'Otra mano fantasma: un toque cada 4 s, para siempre', { adn: 44 }, {}, ['pgh4'], 0, { own: ['mh3'] }],
+  ['pgh6', 0, 0, 'tap', 'ghost', 'Cuarta mano', 'Otra mano fantasma: un toque cada 3 s, para siempre', { adn: 80 }, {}, ['pgh5'], 0, { own: ['mh4'] }],
+  ['pgh7', 0, 0, 'tap', 'ghost', 'Quinta mano', 'Otra mano fantasma: un toque cada 2 s, para siempre', { adn: 140 }, {}, ['pgh6'], 0, { own: ['mh5'] }],
+  // lo que cuesta biomasa: aquí se mejora en % o ×, y el rombo queda desbloqueado en el árbol
+  ['plb1', 0, 0, 'brood', 'flame', 'Nodrizas del linaje', '+15% de velocidad de cría. «Nodrizas» se desbloquea en el árbol', { adn: 16 }, { growth: 0.15 }, ['pe2'], 0, { unlock: ['brK1'] }],
+  ['plb2', 0, 0, 'brood', 'egg', 'Puesta barata', 'Cada huevo cuesta un 8% menos de comida', { adn: 28 }, { eggCostX: 0.92 }, ['plb1']],
+  ['plb3', 0, 0, 'brood', 'flame', 'Cría veloz', 'La cría ×1,3', { adn: 48 }, { growthX: 1.3 }, ['plb2']],
+  ['plb4', 0, 0, 'brood', 'eggs2', 'Gemelas del linaje', 'Un 6% más de huevos traen gemelas. «Puesta doble» se desbloquea en el árbol', { adn: 64 }, { twin: 0.06 }, ['plb3'], 0, { unlock: ['brK2'] }],
+  ['plb5', 0, 0, 'brood', 'egg', 'Huevo heredado', 'Un 6% de los huevos no encarecen el siguiente. «Puesta sin precio» se desbloquea en el árbol', { adn: 96 }, { freeEgg: 0.06 }, ['plb4'], 0, { unlock: ['brK5'] }],
+  ['plf1', 0, 0, 'food', 'leaf', 'Rastro heredado', '+20% de comida. «Rastro de feromonas» se desbloquea en el árbol', { adn: 16 }, { food: 0.2 }, ['pf4'], 0, { unlock: ['foK1'] }],
+  ['plf2', 0, 0, 'food', 'leaf', 'Buche del linaje', '+25% de comida', { adn: 32 }, { food: 0.25 }, ['plf1']],
+  ['plf3', 0, 0, 'food', 'leaf', 'Carga ancestral', 'Comida ×1,4', { adn: 56 }, { foodX: 1.4 }, ['plf2']],
+  ['plf4', 0, 0, 'food', 'moon', 'Noche heredada', '+15% de comida. «Rutas nocturnas» se desbloquea en el árbol', { adn: 72 }, { food: 0.15 }, ['plf3'], 0, { unlock: ['foK3'] }],
+  ['plw1', 0, 0, 'war', 'sword', 'Mandíbulas del linaje', '+20% de daño. «Mandíbulas afiladas» se desbloquea en el árbol', { adn: 16 }, { dmg: 0.2 }, ['pd4'], 0, { unlock: ['waK1'] }],
+  ['plw2', 0, 0, 'war', 'shield', 'Quitina del linaje', '+20% de vida. «Quitina gruesa» se desbloquea en el árbol', { adn: 24 }, { hp: 0.2 }, ['plw1'], 0, { unlock: ['waK2'] }],
+  ['plw3', 0, 0, 'war', 'fist', 'Furia del linaje', 'Daño ×1,35', { adn: 48 }, { dmgX: 1.35 }, ['plw2']],
+  ['plw4', 0, 0, 'war', 'shield', 'Coraza del linaje', 'Vida ×1,35', { adn: 48 }, { hpX: 1.35 }, ['plw3']],
+  ['plw5', 0, 0, 'war', 'fist', 'Mandíbula enorme', '+25% de daño. «Mandíbula reforzada» se desbloquea en el árbol', { adn: 100 }, { dmg: 0.25 }, ['plw4'], 0, { unlock: ['waK3'] }],
+  ['plt1', 0, 0, 'tap', 'hand', 'Manos heredadas', '+25% de efecto de tus toques. «Manos de reina» se desbloquea en el árbol', { adn: 20 }, { click: 0.25 }, ['pl2'], 0, { unlock: ['taK1'] }],
+  ['plt2', 0, 0, 'tap', 'hand', 'Caricia del linaje', '+35% de efecto de tus toques', { adn: 36 }, { click: 0.35 }, ['plt1']],
+  ['plt3', 0, 0, 'tap', 'hand', 'Toque ancestral', 'Tus toques ×1,4', { adn: 64 }, { clickX: 1.4 }, ['plt2']],
+  ['plt4', 0, 0, 'tap', 'coin', 'Dedos de oro', '+15% de efecto de tus toques. «Toque dorado» se desbloquea en el árbol', { adn: 48 }, { click: 0.15 }, ['plt3'], 0, { unlock: ['taK2'] }],
+  ['plt5', 0, 0, 'tap', 'star', 'Fortuna del linaje', '+6% de toques de suerte. «Golpe de fortuna» se desbloquea en el árbol', { adn: 80 }, { tapCrit: 0.06 }, ['plt4'], 0, { unlock: ['lkK'] }],
+  ['pls1', 0, 0, 'brood', 'sparkle', 'Brillo heredado', '+4% de hormigas doradas. «Linaje dorado» se desbloquea en el árbol', { adn: 28 }, { shiny: 0.04 }, ['psh2'], 0, { unlock: ['shK'] }],
+  ['pls2', 0, 0, 'brood', 'sparkle', 'Élite heredada', '+4% de hormigas doradas. «Doradas de élite» se desbloquea en el árbol', { adn: 64 }, { shiny: 0.04 }, ['pls1'], 0, { unlock: ['sh3'] }]
 ];
-export const PERKS = build([...grow(PERK_ROWS, PERK_ROWS.length * 2, 'perm', 11), ...P4]);
+export const PERKS = build([...grow(PERK_ROWS, PERK_ROWS.length * 2, 'perm', 11), ...P4], true);
 
 /** Suma los efectos de los nodos comprados: X multiplica, el resto suma. */
 export function treeFx(nodes, owned) {
@@ -495,7 +619,22 @@ export function treeFx(nodes, owned) {
  * 0 owned (comprado) · 1 open (se puede comprar) · 2 seen (se ve) · 3 fog («?») · más lejos hidden.
  */
 const NAMES = ['owned', 'open', 'seen', 'fog'];
+/** Lo que el linaje deja ya puesto en el árbol: own = es tuyo; unlock = se puede comprar con biomasa desde el principio. */
+export function linajeSkills(perm) {
+  const own = {}, unlock = {};
+  if (!perm) return { own, unlock };
+  for (const id in perm) {
+    if (!perm[id]) continue;
+    const n = PERKS[id];
+    if (!n) continue;
+    for (const s of n.own || []) own[s] = true;
+    for (const s of n.unlock || []) unlock[s] = true;
+  }
+  return { own, unlock };
+}
+
 export function treeStates(nodes, owned, perm) {
+  const lin = nodes === SKILLS ? linajeSkills(perm) : { own: {}, unlock: {} };
   const dist = {}, q = [];
   for (const id in nodes) if (id === 'root' || owned[id]) { dist[id] = 0; q.push(id); }
   while (q.length) {
@@ -508,6 +647,8 @@ export function treeStates(nodes, owned, perm) {
     out[id] = NAMES[dist[id]] || 'hidden';
     if (out[id] === 'open' && missingNeeds(nodes, owned, id).length) out[id] = 'seen'; // conectado, pero falta lo que mejora
     if (out[id] === 'open' && nodes[id].reqPerk && !(perm && perm[nodes[id].reqPerk])) out[id] = 'seen'; // falta algo del linaje
+    if (lin.own[id]) out[id] = 'owned';
+    else if (lin.unlock[id] && out[id] !== 'owned') out[id] = 'open'; // el linaje lo deja comprable aunque esté lejos
   }
   return out;
 }

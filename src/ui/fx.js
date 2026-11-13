@@ -32,12 +32,14 @@ export function burst(big, small, kind, at) {
   setTimeout(() => el.remove(), 1500);
 }
 
-/** La mano fantasma aparece, toca y se desvanece en un punto de la pantalla. */
+/** La mano fantasma aparece, toca y se desvanece. Como mucho 3 a la vez en pantalla. */
 export function ghostHand(x, y) {
+  const box = $('fx'), old = box.querySelectorAll('.ghosthand');
+  if (old.length >= 3) old[0].remove();
   const el = document.createElement('div');
   el.className = 'ghosthand';
   el.innerHTML = icon('ghost');
   el.style.left = x + 'px'; el.style.top = y + 'px';
-  $('fx').appendChild(el);
+  box.appendChild(el);
   setTimeout(() => el.remove(), 1000);
 }

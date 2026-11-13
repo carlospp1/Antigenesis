@@ -32,7 +32,7 @@ function act(a, id, btn) {
   else if (a === 'speed') { ui.speed = +id; sfx = 'click'; }
   else if (a === 'bot') { bot.panel(); openSheet(G, null); sfx = 'click'; }
   else if (a === 'debug') { ui.debug = Scene.toggleDebug(); sfx = 'click'; }
-  else if (a === 'free') { Game.debug.free = !Game.debug.free; toast(Game.debug.free ? 'Debug: cualquier evolución y ADN infinito.' : 'Debug apagado.'); sfx = 'click'; }
+  else if (a === 'free') { Game.debug.free = !Game.debug.free; toast(Game.debug.free ? 'Debug: todo desbloqueado. Jalea, biomasa y ADN infinitos.' : 'Debug apagado.'); sfx = 'click'; }
   else if (a === 'reset') {
     if (Date.now() - resetArmed < 4000) {
       cancelEnding(); Game.wipe(); Scene.reset(); G = Game.newGame(); D = Game.calc(G); resetArmed = 0;
@@ -233,9 +233,12 @@ function wireGameEvents() {
   on('ghost', r => {
     if (!$('intro').hidden || tv.open) return;
     const q = Scene.entityPos('queen'), from = { x: q.x - 120 + Math.random() * 90, y: q.y - 90 - Math.random() * 40 }, sp = Scene.toScreen(from);
+    // como mucho 2 manos en pantalla, aunque el lote lleve muchos toques
     ghostHand(sp.x, sp.y);
+    if ((r.n || 1) > 1) ghostHand(sp.x + 28, sp.y - 18);
     if (r.crit) burst('×' + r.crit, 'Mano fantasma', r.crit >= 5 ? 'x5' : 'x2', sp);
-    setTimeout(() => Scene.feedQueen(from, at => float(r.laid ? '+huevo' : (r.cut ? '−' : '+') + fmt(r.food), at, r.laid ? 'good' : r.crit ? 'lucky' : 'crit')), 250);
+    const label = r.laid ? '+huevo' : (r.cut ? '−' : '+') + fmt(r.food);
+    setTimeout(() => Scene.feedQueen(from, at => float(label, at, r.laid ? 'good' : r.crit ? 'lucky' : 'crit')), 250);
   });
   on('harvestLuck', d => {
     const at = Scene.toScreen(d);

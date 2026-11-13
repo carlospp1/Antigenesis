@@ -21,9 +21,9 @@ export const evoUnlocked = G => G.level - 1 >= Game.BAL.foundAfter || G.gen > 1 
 function renderTop(G, D) {
   const night = G.phase === 'night', dusk = !night && G.t <= 10;
   setText('lv', 'Lv. ' + G.level);
-  setText('vJelly', fmt(Math.floor(G.jelly)));
+  setText('vJelly', Game.debug.free ? '∞' : fmt(Math.floor(G.jelly)));
   setText('vRate', '+' + fmt(G.rate, G.rate < 10 ? 1 : 0) + '/s');
-  setText('vBio', fmt(G.bio));
+  setText('vBio', Game.debug.free ? '∞' : fmt(G.bio));
   setText('vAnts', fmt(G.ants));
   setText('vDay', (night ? 'Noche ' : 'Día ') + G.level);
   setText('vDayLeft', G.phase === 'dead' ? (G.leaving ? 'la princesa se prepara' : 'la reina ha caído') : (night ? 'amanece en ' : 'anochece en ') + fmtTime(G.t));
@@ -159,7 +159,7 @@ function renderSheet(G) {
         ${row('Bot', btn(false, 'bot', 'Abrir panel'), 'tecla B · juega solo y registra cada acción')}
         ${row('Hormigas', btn(!code, 'antModel', 'Ilustradas', 'glb') + btn(code, 'antModel', 'En código', 'code'), 'se aplica al recargar')}
         ${row('Colisiones', btn(ui.debug, 'debug', ui.debug ? 'Visibles' : 'Ocultas'), 'tecla C')}
-        ${row('ADN infinito', btn(Game.debug.free, 'free', Game.debug.free ? 'Activado' : 'Apagado'), '__ax.free')}
+        ${row('Modo debug', btn(Game.debug.free, 'free', Game.debug.free ? 'Activado' : 'Apagado'), 'desbloquea todo al momento · jalea, biomasa y ADN ∞')}
       </div>` : ''}</div>`;
   }
   if (h !== lastSheet) { lastSheet = h; $('sheetBody').innerHTML = h; }

@@ -226,6 +226,10 @@ body.danger #vignette { box-shadow: inset 0 0 140px 40px rgba(200, 30, 10, .55);
 .tv-lines line.on { stroke: #f0b84c; filter: drop-shadow(0 0 4px rgba(240, 184, 76, .6)); }
 .tv-lines line.half { stroke: rgba(240, 184, 76, .55); }
 .tv-lines line.off { stroke: rgba(255, 220, 160, .14); }
+.tv-lines .dna path { fill: none; stroke-width: 14; stroke-linecap: round; opacity: .55; }
+.tv-lines .dna .s0 { stroke: #c9813a; filter: drop-shadow(0 0 6px rgba(240, 160, 70, .5)); }
+.tv-lines .dna .s1 { stroke: #4f8f8a; filter: drop-shadow(0 0 6px rgba(90, 190, 180, .45)); }
+.tv-lines .dna .rung line { stroke: rgba(255, 225, 180, .16); stroke-width: 6; stroke-linecap: round; }
 
 .node { position: absolute; width: 112px; height: 112px; display: grid; place-items: center; }
 .node .face { width: 66px; height: 66px; display: grid; place-items: center; border-radius: 10px; border: 2px solid rgba(255, 210, 150, .35); color: #e9c48c; transition: transform .12s, box-shadow .2s; box-shadow: 0 4px 10px rgba(0, 0, 0, .45); }
