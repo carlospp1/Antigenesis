@@ -62,29 +62,33 @@ export async function loadWorld(onProgress) {
 }
 
 /**
- * En el teléfono el nido no se redibuja: se fotografía una vez desde la cámara de referencia
- * y el plano son exactamente las cuatro esquinas de lo que esa cámara ve. Sin giro propio:
- * al arrastrar a los lados se recorre el mapa, no el fondo. Donde no hay mapa, el píxel queda
- * transparente y se ve el follaje de detrás.
+ * En el teléfono el nido no se redibuja: se fotografía una vez, más abierto que la cámara de
+ * referencia, porque en vertical la pantalla mira por encima y por los lados de esa foto.
+ * El plano son las cuatro esquinas de ESA foto (sin giro aparte). Se dibuja opaco y detrás
+ * de todo, así las hormigas quedan encima. Donde el mapa no llega, el píxel se descarta.
  */
 function freezeMap() {
-  const { renderer } = ctx, w = 1280, h = Math.round(w * IMG.h / IMG.w);
+  const { renderer } = ctx;
+  const cap = world.ref.clone();
+  cap.fov = REF.fov * 2.5; // el teléfono en vertical abre mucho más que la foto de referencia
+  cap.updateProjectionMatrix(); cap.updateMatrixWorld(true);
+  const w = 2048, h = Math.round(w * IMG.h / IMG.w);
   const rt = new THREE.WebGLRenderTarget(w, h);
   rt.texture.colorSpace = THREE.SRGBColorSpace;
   rt.texture.minFilter = THREE.LinearFilter;
   rt.texture.magFilter = THREE.LinearFilter;
   renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear();
-  renderer.render(ctx.scene, world.ref);
+  renderer.render(ctx.scene, cap);
   renderer.setRenderTarget(null); renderer.setClearColor('#2a160c', 1);
 
-  // esquinas de la imagen de referencia (NDC), sin rotar el plano aparte
-  const corner = (x, y) => new THREE.Vector3(x, y, 0.5).unproject(world.ref);
+  const corner = (x, y) => new THREE.Vector3(x, y, 0.5).unproject(cap);
   const bl = corner(-1, -1), br = corner(1, -1), tr = corner(1, 1), tl = corner(-1, 1);
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute([bl.x, bl.y, bl.z, br.x, br.y, br.z, tr.x, tr.y, tr.z, tl.x, tl.y, tl.z], 3));
   geo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
   geo.setIndex([0, 1, 2, 0, 2, 3]);
-  const mat = new THREE.MeshBasicMaterial({ map: rt.texture, transparent: true, depthTest: false, depthWrite: false, toneMapped: false });
+  // alphaTest y no transparent: entra en el pase opaco, antes que las hormigas, y no las tapa
+  const mat = new THREE.MeshBasicMaterial({ map: rt.texture, alphaTest: 0.5, depthTest: false, depthWrite: false, toneMapped: false });
   mat.userData.base = mat.color.clone(); world.materials.push(mat);
   const plane = new THREE.Mesh(geo, mat);
   plane.renderOrder = -5; plane.frustumCulled = false;
