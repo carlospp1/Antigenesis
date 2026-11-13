@@ -374,6 +374,15 @@ function freeCollisions(N) {
   }
 }
 
+/** Dirección preferida por rama: cría↖ comida↗ guerra↘ toques↙. */
+const CAT_DIR = {
+  brood: [[-1, 0], [0, -1]],
+  food: [[1, 0], [0, -1]],
+  war: [[1, 0], [0, 1]],
+  tap: [[-1, 0], [0, 1]],
+  root: [[1, 0], [-1, 0], [0, 1], [0, -1]]
+};
+
 /**
  * Coloca n junto a (ax,ay). `pinned` no se mueve.
  * Si el anillo ortogonal está lleno, aparta a quien estorbe (salvo pinned).
@@ -415,26 +424,40 @@ function nestAt(N, n, ax, ay, pinned = new Set()) {
   for (let r = 2; r < 16; r++) if (tryRing(r, false) || tryRing(r, true)) return;
 }
 
-/** Manos extra en cadena, pegadas al hub (aparta lo que estorbe). */
-function nestHands(N, hubId, ids) {
+/** Cadena pegada al hub, avanzando en la dirección de la rama (aparta lo que estorbe). */
+function nestHands(N, hubId, ids, dirs = CAT_DIR) {
   const hub = N[hubId];
   if (!hub) return;
   const pinned = new Set([hubId, ...ids]);
+  const prefs = dirs[hub.cat] || [[1, 0], [0, 1], [-1, 0], [0, -1]];
   let ax = hub.x, ay = hub.y;
   for (const id of ids) {
     const n = N[id];
     if (!n) continue;
-    nestAt(N, n, ax, ay, pinned);
+    const by = new Map();
+    for (const o of Object.values(N)) if (o !== n) by.set(o.x + ',' + o.y, o);
+    let placed = false;
+    for (const [dx, dy] of prefs) {
+      const x = ax + dx, y = ay + dy, k = x + ',' + y, o = by.get(k);
+      if (!o) { n.x = x; n.y = y; placed = true; break; }
+      if (!pinned.has(o.id)) {
+        // cede la celda preferida y aparta al ocupante cerca del hub
+        n.x = x; n.y = y;
+        nestAt(N, o, hub.x, hub.y, new Set([...pinned, id]));
+        placed = true; break;
+      }
+    }
+    if (!placed) nestAt(N, n, ax, ay, pinned);
     ax = n.x; ay = n.y;
     pinned.add(id);
   }
 }
 
 /**
- * Todo nodo queda a ≤1 de manhattan de su primer enlace (padre).
- * Varias pasadas: al pegar un padre, los hijos se vuelven a pegar.
+ * Coloca el grafo de nuevo desde la raíz: cada nodo junto a su primer enlace,
+ * en la dirección de su rama. Sin empujar a otros (solo celdas libres) → sin espagueti.
  */
-function pullLinked(N) {
+function relayoutTree(N, dirs = CAT_DIR) {
   const order = [], seen = new Set();
   const visit = id => {
     if (seen.has(id) || !N[id]) return;
@@ -443,20 +466,53 @@ function pullLinked(N) {
     order.push(id);
   };
   for (const id in N) visit(id);
-  for (let pass = 0; pass < 12; pass++) {
-    let moved = false;
-    for (const id of order) {
-      const n = N[id];
-      if (!n.links.length) continue;
-      const a = N[n.links[0]];
-      if (!a) continue;
-      if (Math.abs(n.x - a.x) + Math.abs(n.y - a.y) <= 1) continue;
-      const ox = n.x, oy = n.y;
-      // no apartar al padre ni a la raíz
-      nestAt(N, n, a.x, a.y, new Set([a.id, 'root', ...n.links]));
-      if (n.x !== ox || n.y !== oy) moved = true;
+  const occ = new Map();
+  const root = N.root;
+  root.x = 0; root.y = 0; occ.set('0,0', root);
+  const inQuad = (cat, x, y) => {
+    const dx = x - root.x, dy = y - root.y;
+    if (cat === 'brood') return dx <= 0 && dy <= 0;
+    if (cat === 'food') return dx >= 0 && dy <= 0;
+    if (cat === 'war') return dx >= 0 && dy >= 0;
+    if (cat === 'tap') {
+      // colonia: abajo-izq; linaje (PERM_DIR.tap hacia arriba): arriba-izq
+      const up = (dirs.tap || []).some(([ , py]) => py < 0);
+      return up ? dx <= 0 && dy <= 0 : dx <= 0 && dy >= 0;
     }
-    if (!moved) break;
+    return true;
+  };
+  const placeNear = (n, ax, ay) => {
+    const prefs = dirs[n.cat] || dirs.root;
+    const tryAt = (x, y) => {
+      const k = x + ',' + y;
+      if (occ.has(k)) return false;
+      n.x = x; n.y = y; occ.set(k, n); return true;
+    };
+    const candidates = (strictQuad) => {
+      const out = [];
+      for (const [dx, dy] of prefs) out.push([0, ax + dx, ay + dy]);
+      for (let r = 1; r < 28; r++) {
+        for (let dx = -r; dx <= r; dx++) {
+          for (let dy = -r; dy <= r; dy++) {
+            if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue; // anillo de rey (incluye diagonales)
+            const x = ax + dx, y = ay + dy;
+            if (strictQuad && n.cat !== 'root' && !inQuad(n.cat, x, y)) continue;
+            const man = Math.abs(dx) + Math.abs(dy);
+            const align = prefs.some(([px, py]) => (!px || Math.sign(dx) === Math.sign(px)) && (!py || Math.sign(dy) === Math.sign(py)));
+            out.push([(align ? 0 : 2) + man * 0.01, x, y]);
+          }
+        }
+      }
+      return out.sort((a, b) => a[0] - b[0]);
+    };
+    for (const strict of [true, false]) {
+      for (const [, x, y] of candidates(strict)) if (tryAt(x, y)) return;
+    }
+  };
+  for (const id of order) {
+    if (id === 'root') continue;
+    const n = N[id], a = N[n.links[0]] || root;
+    placeNear(n, a.x, a.y);
   }
   let mx = Infinity, my = Infinity;
   for (const o of Object.values(N)) { mx = Math.min(mx, o.x); my = Math.min(my, o.y); }
@@ -539,9 +595,33 @@ function grow(rows, target, tree, seed) {
     // sobre todo desde el borde, para crecer hacia fuera
     const pool = out.filter(r => r[3] !== 'root'), far = Math.max(...pool.map(d)), p = pool[Math.floor(rnd() * pool.length)];
     if (d(p) < far - 3 && rnd() < 0.8) continue;
-    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => !occ.has((p[1] + dx) + ',' + (p[2] + dy)) && Math.abs(p[1] + dx - root[1]) + Math.abs(p[2] + dy - root[2]) > d(p));
-    if (!dirs.length) continue;
-    const [dx, dy] = dirs[Math.floor(rnd() * dirs.length)], x = p[1] + dx, y = p[2] + dy, cat = p[3];
+    const cat = p[3];
+    const inCatQuad = (x, y) => {
+      const dx = x - root[1], dy = y - root[2];
+      if (cat === 'brood') return dx <= 0 && dy <= 0;
+      if (cat === 'food') return dx >= 0 && dy <= 0;
+      if (cat === 'war') return dx >= 0 && dy >= 0;
+      if (cat === 'tap') return tree === 'perm' ? dx <= 0 && dy <= 0 : dx <= 0 && dy >= 0;
+      return true;
+    };
+    // ortogonales hacia fuera y, si puede, dentro del cuadrante de la rama
+    const ortho = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => {
+      const x = p[1] + dx, y = p[2] + dy;
+      return !occ.has(x + ',' + y) && Math.abs(x - root[1]) + Math.abs(y - root[2]) > d(p);
+    });
+    if (!ortho.length) continue;
+    const pref = new Set((CAT_DIR[cat] || []).map(([dx, dy]) => dx + ',' + dy));
+    const ranked = [
+      ...ortho.filter(([dx, dy]) => pref.has(dx + ',' + dy) && inCatQuad(p[1] + dx, p[2] + dy)),
+      ...ortho.filter(([dx, dy]) => inCatQuad(p[1] + dx, p[2] + dy)),
+      ...ortho.filter(([dx, dy]) => pref.has(dx + ',' + dy)),
+      ...ortho
+    ];
+    // únicos conservando orden de prioridad
+    const seenD = new Set();
+    const uniq = ranked.filter(([dx, dy]) => { const k = dx + ',' + dy; if (seenD.has(k)) return false; seenD.add(k); return true; });
+    const [dx, dy] = uniq[Math.floor(rnd() * Math.min(uniq.length, 2))];
+    const x = p[1] + dx, y = p[2] + dy;
     const n = (perCat[cat] = (perCat[cat] || 0) + 1), id = 'g' + tree[0] + out.length;
     let row;
     if (tree === 'skills' && n % 7 === 0) {
@@ -583,10 +663,7 @@ const S4 = [
   ['mh5', 0, 0, 'tap', 'ghost', 'Quinta mano', 'Otra mano fantasma: un toque cada 2 s', { bio: 40 }, { ghost: 0.5 }, ['mh4'], 1, { reqPerk: 'pgh7' }]
 ];
 export const SKILLS = build([...grow(SKILL_ROWS, SKILL_ROWS.length * 2, 'skills', 7), ...S4]);
-pullLinked(SKILLS);
-nestHands(SKILLS, 'ghK', ['mh2', 'mh3', 'mh4', 'mh5']);
-nestHands(SKILLS, 'qj1', ['qj2', 'qj3']);
-nestHands(SKILLS, 'fo11', ['fs1', 'fs2', 'fsK']);
+relayoutTree(SKILLS); // nestHands después lo volvía a enmarañar
 // añadidos tras crecer, para no cambiar los ids de los generados (partidas guardadas)
 const P4 = [
   ['ptc', 4, -1, 'brood', 'hand', 'Toque menguante', 'Tocar a la reina rebaja la comida que pide el huevo (una cantidad fija, que arrastra el siguiente). Al llegar al mínimo, el toque vuelve a alimentarla', { adn: 80 }, { tapCut: 1 }, ['pse']],
@@ -630,21 +707,16 @@ const P4 = [
   ['pls1', 0, 0, 'brood', 'sparkle', 'Brillo heredado', '+4% de hormigas doradas. «Linaje dorado» es tuya en el árbol', { adn: 28 }, { shiny: 0.04 }, ['psh2'], 0, { own: ['shK'] }],
   ['pls2', 0, 0, 'brood', 'sparkle', 'Élite heredada', '+4% de hormigas doradas. «Doradas de élite» es tuya en el árbol', { adn: 64 }, { shiny: 0.04 }, ['pls1'], 0, { own: ['sh3'] }]
 ];
+// linaje: tap/arranque crece hacia arriba (no hacia abajo como en colonia)
+const PERM_DIR = {
+  brood: [[-1, 0], [0, -1]],
+  food: [[1, 0], [0, -1]],
+  war: [[0, 1], [1, 0]],
+  tap: [[0, -1], [-1, 0]],
+  root: [[1, 0], [-1, 0], [0, 1], [0, -1]]
+};
 export const PERKS = build([...grow(PERK_ROWS, PERK_ROWS.length * 2, 'perm', 11), ...P4]);
-pullLinked(PERKS);
-// cadenas a mano al final (si luego se hace pullLinked, se dispersan otra vez)
-nestHands(PERKS, 'pgh1', ['pgh4', 'pgh5', 'pgh6', 'pgh7']);
-nestHands(PERKS, 'pgh2', ['pcb1', 'pcb2', 'pcb3']);
-nestHands(PERKS, 'pe2', ['plb1', 'plb2', 'plb3', 'plb4', 'plb5']);
-nestHands(PERKS, 'pf4', ['plf1', 'plf2', 'plf3', 'plf4']);
-nestHands(PERKS, 'pd4', ['plw1', 'plw2', 'plw3', 'plw4', 'plw5']);
-nestHands(PERKS, 'pl2', ['plt1', 'plt2', 'plt3', 'plt4', 'plt5']);
-nestHands(PERKS, 'psh2', ['pls1', 'pls2']);
-nestHands(PERKS, 'pse', ['ptc', 'ptc2', 'ptc3']);
-nestHands(PERKS, 'ppz', ['pqj1', 'pqj2', 'pqj3']);
-nestHands(PERKS, 'pf4', ['pfs1', 'pfs2', 'pfs3']); // festín: mismo ancla que plf; se pega al hueco libre
-nestHands(PERKS, 'pbio', ['psk']);
-nestHands(PERKS, 'pds', ['pab1', 'pab2']);
+relayoutTree(PERKS, PERM_DIR);
 
 /** Suma los efectos de los nodos comprados: X multiplica, el resto suma. */
 export function treeFx(nodes, owned) {
