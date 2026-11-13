@@ -197,14 +197,13 @@ export function comboTap(G, D = calc(G)) {
   G.comboT = t;
   return comboMult(G, D);
 }
-/** Multiplicador de la racha actual: 1 sin racha; cada toque seguido suma comboStep (×comboX), hasta comboCap toques.
- *  A partir de ahí no sube más… salvo las marcas (comboMarks), que dan un bonus extra por encima. */
+/** Multiplicador de la racha: sube toque a toque hasta comboCap. Al pasar una marca (comboMarks) los toques valen ese ×. */
 export function comboMult(G, D = calc(G)) {
   const n = G.combo || 0;
   const ramp = 1 + Math.min(Math.max(0, n - 1), D.comboCap) * D.comboStep * D.comboX;
-  let extra = 0;
-  for (const [at, p] of BAL.comboMarks) if (n >= at) extra += p;
-  return ramp + extra;
+  let mark = 1;
+  for (const [at, m] of BAL.comboMarks) if (n >= at) mark = m;
+  return Math.max(ramp, mark);
 }
 
 /** ghost: toque de la mano fantasma (no cuenta como toque tuyo ni alarga tu racha). */

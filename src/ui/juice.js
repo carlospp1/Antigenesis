@@ -27,18 +27,29 @@ export function tap(n, mult, cap = 21) {
   if (!n || n < 3) return;
   Audio.play('combo', n);
   if (!comboEl) { comboEl = document.createElement('div'); comboEl.id = 'combo'; $('fx').appendChild(comboEl); }
-  const mark = BAL.comboMarks.find(([at]) => at === n), topped = n >= cap && n < BAL.comboMarks[0][0];
+  const reached = BAL.comboMarks.filter(([at]) => n >= at).length;
+  const mark = BAL.comboMarks.find(([at]) => at === n), topped = n >= cap && !reached;
   const tier = n >= cap ? 3 : n >= 14 ? 2 : n >= 8 ? 1 : 0;
-  comboEl.className = 'combo t' + tier + (n >= 1000 ? ' long' : '');
-  comboEl.innerHTML = `<small>RACHA</small><b>×${n}</b><em>${topped ? 'MÁX · ' : ''}+${Math.round((mult - 1) * 100)}%</em>`;
+  const xm = (Math.round(mult * 10) / 10).toString().replace('.', ',');
+  comboEl.className = 'combo' + (reached ? ' mk' : ' t' + tier) + (n >= 1000 ? ' long' : '');
+  comboEl.style.setProperty('--mk', reached);
+  comboEl.style.setProperty('--hot', markColor(reached));
+  comboEl.innerHTML = `<small>RACHA</small><b>×${n}</b><em>${topped ? 'MÁX · ' : ''}${reached ? '×' + xm : '+' + Math.round((mult - 1) * 100) + '%'}</em>`;
   comboEl.classList.remove('pop'); void comboEl.offsetWidth; comboEl.classList.add('pop');
   clearTimeout(hideT);
   hideT = setTimeout(() => { if (comboEl) comboEl.classList.add('out'); }, 900);
-  const pct = Math.round((mult - 1) * 100);
-  if (mark) { celebrate('¡Racha de ' + n + '!', 'Bonus extra · tus toques rinden +' + pct + '%', 'record'); buzz([30, 40, 30]); }
+  if (mark) { celebrate('¡Racha de ' + n + '!', 'Tus toques valen ×' + xm, 'record'); buzz([30, 40, 30]); }
   else if (narrow.matches) { if (n === 10) buzz(25); else if (n === cap) buzz([30, 40, 30]); }
-  else if (n === 10) { celebrate('¡Buen ritmo!', 'Racha de 10 · tus toques rinden +' + pct + '%', 'combo'); buzz(25); }
-  else if (n === cap) { celebrate('¡Racha máxima!', 'Tus toques rinden +' + pct + '%', 'combo'); buzz([30, 40, 30]); }
+  else if (n === 10) { celebrate('¡Buen ritmo!', 'Racha de 10 · tus toques rinden +' + Math.round((mult - 1) * 100) + '%', 'combo'); buzz(25); }
+  else if (n === cap) { celebrate('¡Racha máxima!', 'Tus toques rinden +' + Math.round((mult - 1) * 100) + '%', 'combo'); buzz([30, 40, 30]); }
+}
+
+/** Verde suave al principio de las marcas; rojo vivo en la última. */
+function markColor(k) {
+  const stops = ['#c6e86a', '#ffe14a', '#ffb020', '#ff7a18', '#ff4d12', '#ff2a1a'];
+  if (k <= 0) return stops[0];
+  const t = Math.min(1, (k - 1) / Math.max(1, BAL.comboMarks.length - 1));
+  return stops[Math.round(t * (stops.length - 1))];
 }
 
 /* ---------- la recompensa vuela al contador ---------- */

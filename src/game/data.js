@@ -192,24 +192,28 @@ export const BAL = {
     foundAfter: 3, // superada esta noche ya se puede fundar (y ganar ADN) aunque no caiga ningún jefe
     // racha de toques: cada toque seguido (menos de comboGap s de juego desde el anterior) rinde comboStep más,
     // hasta comboCap toques (×1,5 con estos valores). Vale para la reina, la cría y los enemigos.
-    // comboMarks: bonus extra, por encima de ese tope, al llegar a cada marca [toques, extra que se suma].
-    // 200, 300, 500, 750, 1000, 1250, 1500, 2000 y la misma serie un orden de magnitud más arriba.
+    // comboMarks: al llegar a la marca, los toques pasan a valer ese multiplicador (no se suma al de antes).
+    // 200 ×2, 500 ×3, 1000 ×4, 3000 ×6 y, siguiendo el hueco, hasta 10000 ×10. De ahí en adelante se queda en ×10.
     comboGap: 0.8,
     comboStep: 0.025,
     comboCap: 20,
     comboMarks: [
-        [200, 0.05],
-        [300, 0.05],
-        [500, 0.07],
-        [750, 0.07],
-        [1000, 0.1],
-        [1250, 0.11],
-        [1500, 0.13],
-        [2000, 0.15],
-        [3000, 0.2],
-        [5000, 0.3],
-        [7500, 0.05],
-        [10000, 0.7],
+        [200, 2],
+        [300, 2.5],
+        [500, 3],
+        [750, 3.5],
+        [1000, 4],
+        [1250, 4.5],
+        [1500, 5],
+        [2000, 5.5],
+        [3000, 6],
+        [5000, 7],
+        [7500, 8],
+        [10000, 10],
+        [100000, 10],
+        [300000, 10],
+        [500000, 10],
+        [1000000, 10],
     ],
     evoAll: 1.45, // cada evolución: comida, daño y vida ×evoAll (y +5% de velocidad)
     treeK: 0.6,
@@ -223,6 +227,13 @@ export const STAGES = [
     { name: 'Gran madre', at: 12000 },
     { name: 'Matriarca', at: 200000 },
     { name: 'Reina primordial', at: 3000000 },
+    { name: 'Reina ancestral', at: 10000000 },
+    { name: 'Reina eterna', at: 30000000 },
+    { name: 'Emperatriz', at: 100000000 },
+    { name: 'Soberana', at: 300000000 },
+    { name: 'Reina absoluta', at: 1000000000 },
+    { name: 'Madre origen', at: 3000000000 },
+    { name: 'La primera', at: 10000000000 },
 ]
 
 // [texto, condición, premio en jalea, progreso 0..1 opcional]

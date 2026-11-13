@@ -465,7 +465,10 @@ button, .tab, .node, .evo { touch-action: manipulation; }   /* sin el retardo de
 #combo b { display: block; font: 900 46px Nunito, sans-serif; line-height: 1; }
 #combo.t1 b { color: #b8f07a; } #combo.t2 b { color: #ffd76a; font-size: 54px; } #combo.t3 b { color: #ff9a4a; font-size: 62px; text-shadow: 0 0 18px rgba(255, 140, 40, .8), 0 3px 6px rgba(40, 20, 8, .7); }
 #combo.long b { font-size: 40px; }
+#combo.mk b { font-size: calc(46px + var(--mk) * 3px); color: var(--hot); text-shadow: 0 0 calc(6px + var(--mk) * 2px) var(--hot), 0 3px 6px rgba(40, 20, 8, .7); }
+#combo.mk.long b { font-size: calc(32px + var(--mk) * 2px); }
 #combo em { display: block; font: 900 15px Nunito, sans-serif; font-style: normal; color: #b8f07a; letter-spacing: .04em; }
+#combo.mk em { color: var(--hot); font-size: calc(15px + var(--mk) * 0.6px); }
 #combo.pop { animation: comboPop .22s ease-out; } #combo.out { opacity: 0; }
 @keyframes comboPop { 0% { transform: translate(-50%, -50%) scale(1.35) rotate(-4deg); } 100% { transform: translate(-50%, -50%) scale(1); } }
 
@@ -506,6 +509,7 @@ button, .tab, .node, .evo { touch-action: manipulation; }   /* sin el retardo de
 
 @media (max-width: 720px) {
   #combo { left: 50%; top: 30%; } #combo b { font-size: 36px; } #combo.t2 b { font-size: 42px; } #combo.t3 b { font-size: 48px; }
+  #combo.mk b { font-size: calc(34px + var(--mk) * 2px); } #combo.mk.long b { font-size: calc(26px + var(--mk) * 1.4px); }
   .celebrate { top: 22%; } .celebrate .ribbon { padding: 9px 18px 11px; } .celebrate b { font-size: 24px; white-space: normal; } .celebrate.win b { font-size: 28px; } .celebrate span { font-size: 13px; }
 }
 @media (prefers-reduced-motion: reduce) { .celebrate, #combo.pop, .pill.gain { animation: none; } }
