@@ -30,6 +30,7 @@ function renderTop(G, D) {
   $('vDayBar').style.width = 100 * G.t / (night ? D.night.time : Game.DAY) + '%';
   $('clock').className = 'pill panel clock ' + (night ? 'night' : dusk ? 'dusk' : '');
   setHTML($('clockIc'), icon(night ? 'moon' : 'sun'), 'clockIc');
+  $('bSkip').hidden = !(D.skipDay && G.phase === 'day' && !dusk);
 
   const o = Game.OBJ[G.obj];
   $('quest').hidden = !o;
@@ -75,7 +76,7 @@ function dockColony(G, D) {
   const nBuy = Object.keys(Game.SKILLS).filter(id => Game.canBuy(G, 'skills', id)).length;
   const cards = [
     infoCard('crown', st.name, `<span class="fx">Huevo: ${fmt(Math.min(G.lay, D.eggCost), 0)} / ${fmt(D.eggCost, 0)} de comida</span><div class="meter"><i style="width:${fill * 100}%"></i></div>
-      `),
+      ${nx ? `<span class="fx">Crece a ${nx.name}: ${fmt(Math.min(G.eaten, nx.at), 0)} / ${fmt(nx.at, 0)} con tus toques</span><div class="meter green"><i style="width:${Math.min(100, 100 * G.eaten / nx.at)}%"></i></div>` : ''}`),
     infoCard('egg', 'Cría', `<span class="fx">Huevo ${fmt(Game.BAL.eggTime / D.brood, 1)} s · larva ${fmt(Game.BAL.larvaTime / D.brood, 1)} s</span>`),
     infoCard('shield', G.phase === 'night' ? 'Noche ' + G.level : 'Esta noche', `<span class="fx">${D.night.text}</span><span class="fx stats"><small>Tus hormigas: daño ${fmt(D.dmg, 1)} · vida ${fmt(D.hp, 0)}</small></span>`, '',
       // previsión como chip: se lee de un vistazo (el detalle, en la frase de al lado en pantallas grandes)

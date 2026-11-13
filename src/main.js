@@ -27,6 +27,7 @@ function act(a, id, btn) {
   else if (a === 'tour') { openSheet(G, null); setTimeout(startTour, 250); sfx = 'click'; }
   else if (a === 'dev') { ui.devOpen = !ui.devOpen; sfx = 'click'; }
   else if (a === 'pause') { ui.paused = !ui.paused; sfx = 'click'; }
+  else if (a === 'skipDay') { ok = Game.skipDay(G); sfx = 'click'; }
   else if (a === 'antModel') { try { localStorage.setItem('antigenesis.antModel', id); } catch (e) { /* nada */ } Game.save(G); location.reload(); return; }
   else if (a === 'speed') { ui.speed = +id; sfx = 'click'; }
   else if (a === 'bot') { bot.panel(); openSheet(G, null); sfx = 'click'; }
@@ -110,7 +111,7 @@ function clickScene(hit) {
   Juice.tap(r.combo, r.mult, D.comboCap + 1); // racha de toques seguidos (rinden más)
   if (hit.kind === 'queen') { // la comida vuela hasta su boca y el número sale al tragarla
     if (r.crit) { float('¡×' + r.crit + '!', hit.click, 'lucky'); burst('×' + r.crit, 'Toque de suerte', r.crit >= 5 ? 'x5' : 'x2', Scene.toScreen(hit.click)); Audio.play('skill'); }
-    Scene.feedQueen(hit.click, at => { float(r.laid ? '+huevo' : '+' + fmt(r.food), at, r.laid ? 'good' : r.crit ? 'lucky' : 'crit'); Audio.play('deposit'); });
+    Scene.feedQueen(hit.click, at => { float(r.laid ? '+huevo' : (r.cut ? '−' : '+') + fmt(r.food), at, r.laid ? 'good' : r.crit ? 'lucky' : 'crit'); Audio.play('deposit'); });
     return;
   }
   float((r.crit ? '¡×' + r.crit + '! ' : '') + '+' + r.pct + '%', Scene.entityPos(hit.kind, hit.slot), r.crit ? 'lucky' : '');
@@ -176,6 +177,9 @@ function wireButtons() {
   // móvil: al girar la pantalla o al cambiar la barra del navegador, recalcula tamaño
   window.visualViewport?.addEventListener('resize', Scene.resize);
   screen.orientation?.addEventListener?.('change', () => setTimeout(Scene.resize, 150));
+  // el lienzo se estira al 100% del escenario: si este cambia sin aviso (pantalla completa, barras del móvil…) la imagen se deforma
+  if (window.ResizeObserver) new ResizeObserver(() => Scene.resize()).observe($('stage'));
+  document.addEventListener('fullscreenchange', () => setTimeout(Scene.resize, 150));
   // pantalla completa al primer toque (si el navegador lo permite) y se intenta fijar en horizontal
   if (matchMedia('(pointer: coarse)').matches) $('start').addEventListener('click', () => {
     const el = document.documentElement;
@@ -235,7 +239,7 @@ function wireGameEvents() {
     const q = Scene.entityPos('queen'), from = { x: q.x - 120 + Math.random() * 90, y: q.y - 90 - Math.random() * 40 }, sp = Scene.toScreen(from);
     ghostHand(sp.x, sp.y);
     if (r.crit) burst('×' + r.crit, 'Mano fantasma', r.crit >= 5 ? 'x5' : 'x2', sp);
-    setTimeout(() => Scene.feedQueen(from, at => float(r.laid ? '+huevo' : '+' + fmt(r.food), at, r.laid ? 'good' : r.crit ? 'lucky' : 'crit')), 250);
+    setTimeout(() => Scene.feedQueen(from, at => float(r.laid ? '+huevo' : (r.cut ? '−' : '+') + fmt(r.food), at, r.laid ? 'good' : r.crit ? 'lucky' : 'crit')), 250);
   });
   on('harvestLuck', d => {
     const at = Scene.toScreen(d);
@@ -260,11 +264,6 @@ function wireGameEvents() {
   });
 }
 
-function away(secs) {
-  const r = Game.away(G, secs);
-  if (r) toast('Mientras no estabas (' + fmtTime(r.secs) + ') trajeron ' + fmt(r.food) + ' de comida' + (r.born ? ' y nacieron ' + r.born + ' hormigas.' : '.'), 'good');
-}
-
 let lastT = 0, lastWall = Date.now(), uiT = 0, saveT = 0;
 function frame(t) {
   requestAnimationFrame(frame);
@@ -272,7 +271,7 @@ function frame(t) {
   lastWall = now;
   let dt = Math.min(0.2, (t - lastT) / 1000 || 0);
   lastT = t;
-  if (gap > 5) { away(gap); dt = 0; } // la pestaña estuvo dormida
+  if (gap > 5) dt = 0; // la pestaña estuvo dormida: sin conexión no se gana nada
   const n = ui.paused || tv.open ? 0 : ui.speed; // con el árbol abierto el tiempo se detiene
   D = Game.calc(G);
   for (let i = 0; i < n; i++) { bot.step(dt); D = Game.tick(G, dt); Scene.update(G, D, dt, dt, i < n - 1); }
@@ -302,7 +301,7 @@ async function boot() {
   wireButtons(); wireGameEvents();
   wireStageInput($('stage'), clickScene);
   start.disabled = false;
-  if (saved) { start.textContent = 'Continuar'; away((Date.now() - saved.last) / 1000); if (G.phase === 'dead' && !G.leaving) $('deathView').hidden = false; }
+  if (saved) { start.textContent = 'Continuar'; if (G.phase === 'dead' && !G.leaving) $('deathView').hidden = false; }
   render(G, D);
   requestAnimationFrame(frame);
   const qs = new URLSearchParams(location.search); // ?bot=1&speed=6 arranca el bot solo

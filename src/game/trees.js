@@ -452,7 +452,12 @@ const SKILL_ROWS = [...S.map(r => [r[0], r[1] + OX, r[2] + OY, ...r.slice(3)]), 
 const PERK_ROWS = [...P, ...P3];
 /** Árbol de la colonia y linaje: los diseñados a mano y, alrededor, otro tanto de mejoras pequeñas. */
 export const SKILLS = build(grow(SKILL_ROWS, SKILL_ROWS.length * 2, 'skills', 7));
-export const PERKS = build(grow(PERK_ROWS, PERK_ROWS.length * 2, 'perm', 11));
+// añadidos tras crecer, en huecos libres: así no cambian los ids ni el sitio de los generados (partidas guardadas)
+const P4 = [
+  ['ptc', 4, -1, 'brood', 'hand', 'Toque menguante', 'Tocar a la reina ya no la alimenta: cada toque rebaja la comida que piden los huevos, y la rebaja se mantiene para los siguientes', { adn: 80 }, { tapCut: 1 }, ['pse']],
+  ['psk', 6, -1, 'war', 'moon', 'Saltar el día', 'Un botón junto al reloj hace que caiga la noche ya. Las noches con el día saltado dan la mitad de ADN', { adn: 60 }, { skipDay: 1 }, ['pbio']]
+];
+export const PERKS = build([...grow(PERK_ROWS, PERK_ROWS.length * 2, 'perm', 11), ...P4]);
 
 /** Suma los efectos de los nodos comprados: X multiplica, el resto suma. */
 export function treeFx(nodes, owned) {

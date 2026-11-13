@@ -10,7 +10,7 @@
 //   smart    true: compra lo que más mejora la colonia por lo que cuesta · false: lo más barato
 //   auto     usa la autocompra del juego en vez de mirar el árbol
 //   found    'smart': funda antes de una derrota segura · 'death': espera a que muera la reina
-//   session  { on, off }: juega `on` segundos y se va `off` (progreso sin conexión del juego)
+//   session  { on, off }: juega `on` segundos y se va `off` (sin conexión no se gana nada)
 import * as R from '../src/game/rules.js';
 import { FINAL_NIGHT } from '../src/game/data.js';
 import { on } from '../src/core/events.js';
@@ -73,9 +73,8 @@ export function playGame(profileName, seed, opts = {}) {
     skills: Object.keys(G.skills).length, perms: Object.keys(G.perm).length, evo: G.evo || 0, ants: G.ants });
 
   while (!G.won && S.active < capA && S.cal < capC) {
-    if (P.session && sessT >= P.session.on) { // la persona se va: el juego aplica su progreso sin conexión
+    if (P.session && sessT >= P.session.on) { // la persona se va: sin conexión no se gana nada
       sessT = 0; S.cal += P.session.off;
-      if (G.phase !== 'dead') R.away(G, P.session.off);
       S.lastBuy = S.active;
       continue;
     }

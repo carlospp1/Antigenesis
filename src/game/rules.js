@@ -50,6 +50,10 @@ export function calc(G) {
   for (const e of G.larvae) brood += e.n;
   // los huevos «sin precio» no cuentan para encarecer el siguiente
   D.eggCost = BAL.eggBase * Math.pow(BAL.eggCurve - add('curve'), Math.max(0, D.pop + brood - (G.free || 0))) * mul('eggCostX');
+  // «Toque menguante»: lo rebajado con toques se arrastra a todos los huevos de la colonia (con suelo)
+  if (G.eggCut) D.eggCost = Math.max(D.eggCost * BAL.cutFloor, D.eggCost - G.eggCut);
+  D.tapCut = !!P.tapCut;
+  D.skipDay = !!P.skipDay;
   D.extraEgg = Math.min(0.5, add('extraEgg'));   // probabilidad de un huevo extra gratis
   D.freeEgg = Math.min(0.6, add('freeEgg'));     // probabilidad de que un huevo no encarezca el siguiente
   D.instaHatch = Math.min(0.6, add('instaHatch')); // probabilidad de saltarse la fase de larva
@@ -165,13 +169,13 @@ function digest(G) {
 /**
  * Llega comida al nido. Las hormigas se turnan: una se la da a la reina (dest 'queen': llena la
  * barra del próximo huevo) y la siguiente la guarda en la despensa (dest 'store': jalea para el árbol).
- * Sin dest (simulador, rutas nocturnas, progreso sin conexión) se reparte mitad y mitad.
+ * Sin dest (simulador, rutas nocturnas) se reparte mitad y mitad.
  */
 export function feed(G, amount, dest) {
   const all = storeClosed(G); // «Todo para la reina»: la despensa ya no hace falta
   const toQueen = all || dest === 'queen' ? amount : dest === 'store' ? 0 : amount / 2;
   G.lay += toQueen; G.jelly += amount - toQueen;
-  G.eaten += amount; G.rate += amount / 20;
+  G.rate += amount / 20; // la comida no hace crecer a la reina: solo los toques (click)
   digest(G);
 }
 
@@ -193,10 +197,13 @@ export function click(G, kind, id, ghost) {
   if (!ghost) G.stats.clicks++;
   if (kind === 'queen') {
     const crit = Math.random() < D.tapCrit, f = BAL.tapFood * D.tapQ * (crit ? D.critX : 1) * m, before = G.stats.laid;
-    G.lay += f;
+    // con «Toque menguante» el toque no alimenta: rebaja para siempre lo que cuesta cada huevo
+    if (D.tapCut) G.eggCut = (G.eggCut || 0) + f;
+    else G.lay += f;
+    G.eaten += f; // solo los toques hacen crecer a la reina
     if (D.gold) G.jelly += f * 0.5;
     digest(G);
-    return { laid: G.stats.laid > before, food: f, crit: crit ? D.critX : 0, combo: G.combo, mult: m };
+    return { laid: G.stats.laid > before, food: f, cut: D.tapCut, crit: crit ? D.critX : 0, combo: G.combo, mult: m };
   }
   const e = (kind === 'egg' ? G.eggs : G.larvae).find(x => x.id === id);
   const crit = Math.random() < D.tapCrit, k = (crit ? D.critX : 1) * m;
@@ -288,8 +295,18 @@ function tickNight(G, D, dt) {
   }
 }
 
+/** ADN de las noches superadas: las noches con el día saltado cuentan la mitad. */
+const adnGain = G => adnFor(Math.max(0, G.level - 1 - 0.5 * Math.min(G.skips || 0, G.level - 1)), G.stage);
+
+/** «Saltar el día»: la noche llega ya (y dará la mitad de ADN). */
+export function skipDay(G) {
+  if (!calc(G).skipDay || G.phase !== 'day' || G.t <= DUSK) return false;
+  G.t = 0.01; G.skips = (G.skips || 0) + 1;
+  return true;
+}
+
 function queenDies(G) {
-  const gain = adnFor(G.level - 1, G.stage);
+  const gain = adnGain(G);
   // el ADN se cobra ya, para poder gastarlo en el Linaje antes de fundar la colonia nueva
   // se limpian los enemigos: si no, el asalto sigue y la escena parece «desplazada»
   G.phase = 'dead'; G.foes = null; G.pendingAdn = gain; G.adn += gain; G.adnTotal = (G.adnTotal || 0) + gain;
@@ -299,7 +316,7 @@ function queenDies(G) {
 
 function dawn(G) { G.foes = null; G.phase = 'day'; G.t = DAY; G.warned = false; }
 
-/** Ingresos de recolección sin escena (para el simulador y el progreso sin conexión). */
+/** Ingresos de recolección sin escena (para el simulador). */
 export const forageRate = (G, D) => workForce(G, D) * D.carry * (1 + D.luck) * (1 + 4 * D.goldFood) / BAL.trip * (D.speed / 2.6);
 
 export function tick(G, dt) {
@@ -479,7 +496,7 @@ export function legacy(G) {
   // se puede fundar a voluntad tras superar la noche 3 (BAL.foundAfter) o derrotar a algún jefe:
   // así nunca te quedas atascado ante un jefe que no puedes vencer. Siempre da al menos 1 ADN.
   const ready = ((G.hives || 0) > 0 || G.level - 1 >= BAL.foundAfter) && G.phase !== 'dead';
-  return { ready, gain: Math.max(1, adnFor(G.level - 1, G.stage)) };
+  return { ready, gain: Math.max(1, adnGain(G)) };
 }
 
 /**
@@ -505,16 +522,3 @@ export function prestige(G) {
     inherit: G.jelly + (G.spent.jelly || 0), autoBuy: G.autoBuy }); // Herencia: parte de la jalea reunida
 }
 
-/** Progreso simplificado mientras la pestaña estuvo cerrada (máx. 2 h, de día y sin peligro). */
-export function away(G, secs) {
-  secs = Math.min(secs, 2 * 3600);
-  if (secs < 20 || G.phase === 'dead' || G.ants <= 0) return null;
-  if (G.phase === 'night') dawn(G);
-  G.t = DAY;
-  const D = calc(G), food = forageRate(G, D) * secs * 0.25;
-  const q = food / 2;
-  G.jelly += food - q; G.eaten += food;
-  G.lay = Math.min(G.lay + q * 0.2, D.eggCost * 0.95);
-  digest(G);
-  return { secs, food, born: 0 };
-}

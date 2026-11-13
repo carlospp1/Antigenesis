@@ -352,6 +352,8 @@ body.shake #stage { animation: shk .4s linear; }
 .pill.found { cursor: pointer; color: #f1dcff; border-color: rgba(215, 168, 232, .7); animation: foundGlow 2s ease-in-out infinite; }
 .pill.found b { color: #e6c6f5; } .pill.found span { color: #d7a8e8; font-size: 12px; font-weight: 700; } .pill.found .ic { color: #d7a8e8; }
 .pill.found:hover { border-color: #e6c6f5; transform: translateY(-1px); }
+.pill.skip { cursor: pointer; color: var(--night); } .pill.skip b { color: var(--night); font-size: 13px; }
+.pill.skip:hover { border-color: var(--night); transform: translateY(-1px); }
 @keyframes foundGlow { 50% { box-shadow: 0 0 0 2px rgba(215, 168, 232, .25), 0 0 18px rgba(215, 168, 232, .45); } }
 
 /* estallidos locales: más pequeños, en el sitio donde pasó */
@@ -555,6 +557,7 @@ button, .tab, .node, .evo { touch-action: manipulation; }   /* sin el retardo de
   #tvTabs button { white-space: nowrap; }
   /* recursos: el reloj del día va antes que «Fundar» (que es una acción, al final de la fila) */
   .pill.found { order: 9; }
+  .pill.skip { order: 8; }
   /* pie de los árboles: una sola fila compacta, del color de los paneles; la ayuda queda encima */
   .tv-foot { flex-wrap: nowrap; gap: 14px; padding: 8px max(12px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
     background: var(--panel); border-top: 1px solid var(--line); }

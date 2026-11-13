@@ -15,6 +15,7 @@ const size = () => Math.max(48, Math.min(innerWidth, innerHeight) * 0.11);
 
 const STEPS = [
   { title: 'La reina', text: 'Tócala para darle de comer. Cuando come lo suficiente, pone un huevo.', at: () => around(Scene.entityPos('queen'), size() * 1.2, 0.35) },
+  { title: 'La reina crece', text: 'Tus toques hacen crecer a la reina: en cada etapa, sus hormigas cargan más. En su tarjeta ves cuánto le falta.', at: () => box(document.querySelector('#dock .card')) || around(Scene.entityPos('queen'), size() * 1.2, 0.35) },
   { title: 'La cría', text: 'Toca huevos y larvas para que se conviertan antes en hormigas.', at: () => around(Scene.anchors().eggs, size(), 0.5) },
   { title: 'Jalea', text: 'Tus hormigas traen comida. Lo que guardan en la despensa es jalea.', at: () => box($('vJelly')?.closest('.pill')) },
   { title: 'Día y noche', text: 'Al anochecer llegan enemigos y todas tus hormigas salen a defender el nido.', at: () => box($('clock')) },

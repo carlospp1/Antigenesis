@@ -50,6 +50,7 @@ export const BAL = {
   carry: 4,          // comida por viaje al empezar (se reparte entre la reina y la despensa)
   eggBase: 16,       // coste del primer huevo
   eggCurve: 1.2,     // cada hormiga o cría encarece el siguiente huevo
+  cutFloor: 0.25,    // «Toque menguante»: un huevo nunca baja de esta fracción de su coste
   reserve: 0.2,      // comida por segundo que la reina saca de sus reservas
   eggTime: 12, larvaTime: 18,
   dmg: 1, hp: 9,     // de cada hormiga
