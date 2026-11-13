@@ -8,7 +8,7 @@ import { icon } from './icons.js';
 
 const $ = id => document.getElementById(id);
 /** Versión del juego (se ve en Ajustes). */
-const VERSION = '0.1';
+const VERSION = '0.1.2';
 export const ui = { sheet: null, holding: false, paused: false, speed: 1, tab: 'colony', debug: false, devOpen: false };
 let lastDock = '', lastSheet = '';
 const cache = {};
