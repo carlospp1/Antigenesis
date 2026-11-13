@@ -150,9 +150,51 @@ function renderTip(st) {
   const n = nodesOf(tv.tree)[id], s = st[id], c = Game.nodeCost(G, tv.tree, id);
   if (s === 'fog') { tip.innerHTML = '<h4>???</h4><p>Desbloquea los nodos cercanos para descubrirlo.</p>'; return; }
   const can = s === 'open' && ((Game.debug.free && c.cur === 'adn') || G[c.cur] >= c.n);
-  tip.innerHTML = `<h4>${n.key ? '◆ ' : ''}${n.name}</h4><p>${n.desc}</p>
+  tip.innerHTML = `<h4>${n.key ? '◆ ' : ''}${n.name}</h4><p>${n.desc}</p>${statHTML(n)}
     ${s === 'owned' ? '<p class="good">Comprado</p>' : s === 'seen' ? needsHTML(id)
       : `<button class="btn-green${can ? '' : ' no'}" data-buy="${id}">${icon(CUR[c.cur][0])}${can ? 'Comprar' + (Game.debug.free && c.cur === 'adn' ? '' : ' · ' + fmt(c.n)) : 'Faltan ' + fmt(Math.ceil(c.n - G[c.cur]))}</button>`}`;
+}
+
+/* ---------- «Actual»: cómo va ahora lo que mejora el nodo ---------- */
+const pct = v => fmt(v * 100, v * 100 < 10 ? 1 : 0) + '%';
+const secs = v => fmt(v, 1) + ' s';
+const egg = ['Coste del huevo', D => fmt(D.eggCost, 0) + ' de comida'];
+const brood = ['Cría', D => 'huevo ' + secs(Game.BAL.eggTime / D.brood) + ' · larva ' + secs(Game.BAL.larvaTime / D.brood)];
+const tapQ = ['Toque a la reina', D => fmt(Game.BAL.tapFood * D.tapQ, 1) + ' de comida'];
+const ghost = ['Mano fantasma', D => D.ghost > 0 ? 'un toque cada ' + secs(1 / D.ghost) : 'no tienes'];
+const STAT = {
+  eggCostX: egg, curve: egg, growth: brood, growthX: brood, twin: ['Gemelas', D => pct(D.twin)],
+  reserve: ['La reina produce', D => fmt(D.reserve, 1) + ' de comida/s'],
+  food: ['Comida por viaje', D => fmt(D.carry, 1)], foodX: ['Comida por viaje', D => fmt(D.carry, 1)],
+  speed: ['Velocidad', D => fmt(D.speed, 1)],
+  prize: ['Premio de esta noche', D => fmt(Game.nightPrize(G, D), 0) + ' de jalea'],
+  dmg: ['Daño por hormiga', D => fmt(D.dmg, 1)], dmgX: ['Daño por hormiga', D => fmt(D.dmg, 1)],
+  hp: ['Vida por hormiga', D => fmt(D.hp, 0)], hpX: ['Vida por hormiga', D => fmt(D.hp, 0)],
+  bioKill: ['Biomasa por enemigo', D => '×' + fmt(D.bioKill, 2)],
+  click: tapQ, clickX: tapQ, tapQ, tapB: ['Toque a la cría', D => '+' + pct(Game.BAL.tapBrood * D.tapB)],
+  tapFoe: ['Toque a los enemigos', D => '×' + fmt(D.tapFoe, 2)],
+  tapCrit: ['Toques de suerte', D => pct(D.tapCrit)], luck: ['Entregas dobles', D => pct(D.luck)],
+  shiny: ['Hormigas doradas', D => pct(D.shinyP)], goldFood: ['Comida dorada', D => pct(D.goldFood)],
+  ghost, ghostX: ghost,
+  extraEgg: ['Huevo extra', D => pct(D.extraEgg)], freeEgg: ['Huevo sin precio', D => pct(D.freeEgg)],
+  instaHatch: ['Eclosión precoz', D => pct(D.instaHatch)], dodge: ['Esquivar un golpe mortal', D => pct(D.dodge)],
+  comboStep: ['Extra por toque de racha', D => '+' + pct(D.comboStep * D.comboX)], comboCap: ['Toques de racha', D => fmt(D.comboCap)],
+  comboGap: ['Margen entre toques', D => secs(D.comboGap)], comboX: ['Extra de la racha', D => '×' + fmt(D.comboX, 1)],
+  farm: ['Granjas', D => D.farm > 0 ? fmt(D.farm * Game.nightPrize(G, D) / 60, 1) + ' de jalea/s' : 'no tienes'],
+  lives: ['Asaltos que resiste la reina', D => fmt(D.lives)],
+  discount: ['Descuento del árbol', D => pct(D.discount)], cutMax: ['Rebaja máxima de los huevos', D => pct(D.cutMax)],
+  startAnts: ['Hormigas al empezar', D => fmt(D.P.startAnts || 0)], startJelly: ['Jalea al empezar', D => fmt(D.P.startJelly || 0)],
+  startBio: ['Biomasa al empezar', D => fmt(D.P.startBio || 0)], startEggs: ['Huevos al empezar', D => fmt(D.P.startEggs || 0)],
+  keepJelly: ['Jalea heredada', D => pct(D.P.keepJelly || 0)]
+};
+function statHTML(n) {
+  const D = Game.calc(G), seen = new Set(), out = [];
+  for (const k in n.fx) {
+    const s = STAT[k];
+    if (!s || seen.has(s[0])) continue;
+    seen.add(s[0]); out.push(`${s[0]}: <b>${s[1](D)}</b>`);
+  }
+  return out.length ? `<p class="stat">Actual · ${out.join(' · ')}</p>` : '';
 }
 
 /** Nodo visible pero no comprable: le falta la mejora anterior o no está conectado. */
