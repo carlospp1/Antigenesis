@@ -20,7 +20,7 @@ const STEPS = [
   { title: 'Día y noche', text: 'Al anochecer llegan enemigos y todas tus hormigas salen a defender el nido.', at: () => box($('clock')) },
   { title: 'El Árbol', text: 'Gasta la jalea en mejoras para tu colonia.', at: () => box($('tabTree')) },
   { title: 'El Linaje', text: 'Si la reina cae, ganas ADN para mejoras que duran para siempre.', at: () => box($('tabEvo')) },
-  { title: '¡A conquistar el mundo!', text: 'Vamos a por ello!.', at: () => null, last: true }
+  { title: '¡A por ello!', text: 'Haz crecer tu colonia y aguanta cada noche.', at: () => null, last: true }
 ];
 
 let run = null;

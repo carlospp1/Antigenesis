@@ -106,7 +106,7 @@ export const OBJ = [
   ['Derrota a la araña cazadora (noche 16)', G => G.level > 16 || G.best >= 16, 8000, G => (G.level - 1) / 16],
   ['Derrota al escarabajo ciervo (noche 20)', G => G.level > 20 || G.best >= 20, 30000, G => (G.level - 1) / 20],
   ['Derrota a la mantis religiosa (noche 24)', G => G.level > 24 || G.best >= 24, 100000, G => (G.level - 1) / 24],
-  ['Vence a los humanos: las hormigas conquistan el mundo', G => G.won, 0, G => (G.best || G.level - 1) / 25]
+  ['Vence a los humanos', G => G.won, 0, G => (G.best || G.level - 1) / 25]
 ];
 
 /** Huecos para huevos y para larvas (cada uno). */
