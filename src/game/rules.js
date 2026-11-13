@@ -51,7 +51,8 @@ export function calc(G) {
   // los huevos «sin precio» no cuentan para encarecer el siguiente
   D.eggCost = BAL.eggBase * Math.pow(BAL.eggCurve - add('curve'), Math.max(0, D.pop + brood - (G.free || 0))) * mul('eggCostX');
   // «Toque menguante»: lo rebajado con toques se arrastra a todos los huevos de la colonia (con suelo)
-  if (G.eggCut) D.eggCost = Math.max(D.eggCost * BAL.cutFloor, D.eggCost - G.eggCut);
+  D.cutMax = Math.min(0.5, BAL.cutMax + add('cutMax'));
+  if (G.eggCut) D.eggCost = Math.max(D.eggCost * (1 - D.cutMax), D.eggCost - G.eggCut);
   D.tapCut = !!P.tapCut;
   D.skipDay = !!P.skipDay;
   D.extraEgg = Math.min(0.5, add('extraEgg'));   // probabilidad de un huevo extra gratis
