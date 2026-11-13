@@ -4,7 +4,8 @@
 // En horizontal la ventana cubre la pantalla (como antes, con zoom y arrastre limitados a los bordes, así que
 // nunca se ve el borde del diorama). En vertical (teléfono) se ve la parte central del ancho (PORTRAIT_W) con
 // toda la altura; por encima y por debajo queda el fondo (world.buildBackdrop: follaje arriba, tierra abajo).
-// Lo único automático es el temblor de los pisotones de la noche final, que vuelve solo a su sitio.
+// Lo único automático es el temblor de los pisotones de la noche final, que vuelve solo a su sitio,
+// y la secuencia del final del juego (playCinematic), que mueve la cámara mientras dura.
 import * as THREE from 'three';
 import { ctx } from './context.js';
 import { IMG, REF } from './layout.js';
@@ -30,8 +31,38 @@ function clampCenter(z, c) {
 }
 
 const _d = new THREE.Vector3(), _look = new THREE.Vector3(), _b = new THREE.Vector3();
+
+/* ---------- secuencia de cámara (solo el final del juego) ---------- */
+let cine = null;
+const cs = { pos: new THREE.Vector3(), look: new THREE.Vector3(), fov: REF.fov };
+/**
+ * fn(t) devuelve la pose que toca a los t segundos ({ pos: Vector3, look: Vector3, fov }) o null para acabar;
+ * la cámara la sigue con suavidad. playCinematic(null) la corta y vuelve a la vista del jugador.
+ */
+export function playCinematic(fn) {
+  const { camera } = ctx;
+  if (fn && camera) {
+    cs.pos.copy(camera.position);
+    camera.getWorldDirection(cs.look); cs.look.multiplyScalar(2).add(camera.position);
+    cs.fov = camera.fov;
+  }
+  cine = fn ? { fn, t: 0 } : null;
+}
+function cinematicStep(dt) {
+  const p = cine.fn(cine.t += dt);
+  if (!p) { cine = null; return false; }
+  const k = 1 - Math.exp(-dt * (p.k || 2.2)), { camera } = ctx;
+  cs.pos.lerp(p.pos, k); cs.look.lerp(p.look, k); cs.fov += (p.fov - cs.fov) * k;
+  camera.position.copy(cs.pos); camera.up.set(0, 1, 0); camera.lookAt(cs.look);
+  camera.fov = cs.fov; camera.aspect = view.w / view.h;
+  camera.updateProjectionMatrix(); camera.updateMatrixWorld(true);
+  fitBackdrop(camera);
+  return true;
+}
+
 export function updateCamera(dt) {
   if (!world.ref) return; // el mapa aún no ha cargado
+  if (cine && cinematicStep(dt)) return;
   const k = Math.min(1, dt * 8);
   const g = { x: view.gcx, y: view.gcy };
   clampCenter(view.gzoom, g); view.gcx = g.x; view.gcy = g.y;

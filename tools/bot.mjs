@@ -14,7 +14,7 @@
 import * as R from '../src/game/rules.js';
 import { FINAL_NIGHT } from '../src/game/data.js';
 import { on } from '../src/core/events.js';
-import { cpsFor, pickSmart, pickCheapest, shouldFound, saveForEvo, warWeight } from '../src/game/brain.js';
+import { cpsFor, pickSmart, pickCheapest, shouldFound, saveForEvo, warWeight, makeTapper } from '../src/game/brain.js';
 
 export const PROFILES = {
   promedio: { desc: 'Persona media del tirón: 2–3 toques/s que van bajando, compra con cabeza (igual que el bot del navegador)', cps: 'curva', foe: 0.4, buyEvery: 3, smart: true, found: 'smart', session: null },
@@ -67,7 +67,8 @@ export function playGame(profileName, seed, opts = {}) {
   let G = R.newGame();
   if (P.auto) G.autoBuy = true;
   S = { G, active: 0, cal: 0, colT: 0, lastBuy: 0, maxGap: 0, colonies: [], milestones: {}, evos: [], nightsWon: 0, nightsLost: 0, trace: opts.trace ? [] : null, clicks: 0 };
-  let sessT = 0, clickAcc = 0, buyT = 0, cps = 2.5, cpsT = 0;
+  let sessT = 0, buyT = 0, cps = 2.5, cpsT = 0, aim = 'queen';
+  const tapper = makeTapper();
   const closeColony = cause => S.colonies.push({ gen: G.gen, night: G.level, min: +(S.colT / 60).toFixed(1), cause, adn: G.pendingAdn || 0,
     skills: Object.keys(G.skills).length, perms: Object.keys(G.perm).length, evo: G.evo || 0, ants: G.ants });
 
@@ -90,12 +91,14 @@ export function playGame(profileName, seed, opts = {}) {
     if (G.phase === 'day') R.feed(G, R.forageRate(G, D) * dt);
 
     if ((cpsT -= dt) <= 0) { cpsT = 5; cps = P.cps === 'curva' ? cpsFor(G, S.colT) : (S.colT < 300 ? P.cps[0] : P.cps[1]); }
-    clickAcc += cps * dt;
-    while (clickAcc >= 1) {
-      clickAcc--; S.clicks++;
-      if (G.foes && G.foes.arrive <= 0 && Math.random() < P.foe) { R.hit(G, R.calc(G)); continue; }
+    // como una persona: ráfagas cortas sobre una misma cosa y pausas (brain.makeTapper)
+    const taps = tapper.step(dt, cps);
+    if (tapper.fresh) aim = G.foes && G.foes.arrive <= 0 && Math.random() < P.foe ? 'enemy' : (G.larvae[0] || G.eggs[0]) && Math.random() < 0.5 ? 'brood' : 'queen';
+    for (let i = 0; i < taps; i++) {
+      S.clicks++;
+      if (aim === 'enemy' && G.foes && G.foes.arrive <= 0) { R.hit(G, R.calc(G)); continue; }
       const target = G.larvae[0] || G.eggs[0];
-      if (target && Math.random() < 0.5) R.click(G, G.larvae[0] ? 'larva' : 'egg', target.id);
+      if (aim === 'brood' && target) R.click(G, G.larvae[0] ? 'larva' : 'egg', target.id);
       else R.click(G, 'queen');
     }
 

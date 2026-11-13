@@ -28,9 +28,10 @@ import { PROFILES, MILESTONES } from './bot.mjs';
  *   wallH      máximo de horas entre dos hitos seguidos (paredes de progreso)
  */
 const TARGETS = {
-  promedio: { winRate: 1, activeH: [3, 6], first: [3, 5], colonies: [8, 18], maxGapMin: 5, wallH: 1.2 },
-  activo: { winRate: 1, activeH: [2.5, 5], first: [3, 5], colonies: [8, 18], maxGapMin: 5, wallH: 1.2 },
-  normal: { winRate: 1, activeH: [3, 6], days: [2, 5], first: [3, 5], maxGapMin: 6, wallH: 1.5 },
+  // la idea: unas 4 horas jugando para una persona media (algo menos si juega mucho y bien)
+  promedio: { winRate: 1, activeH: [3.7, 4.3], first: [3, 5], colonies: [10, 20], maxGapMin: 5, wallH: 1.3 },
+  activo: { winRate: 1, activeH: [3.2, 4.2], first: [3, 5], colonies: [9, 20], maxGapMin: 5, wallH: 1.3 },
+  normal: { winRate: 1, activeH: [3.6, 4.6], days: [2, 5], first: [3, 5], maxGapMin: 6, wallH: 1.5 },
   casual: { winRate: 0.8, days: [5, 14], first: [2, 5] },
   idle: {}
 };

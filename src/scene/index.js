@@ -18,6 +18,8 @@ import { syncAgents, updateAgents, onBorn, onDeath, refreshMutation, clearAgents
 import { buildEnemies, updateEnemies, resetEnemies, retreat, aliveFoes, enemyHit, enemyPos } from './enemies.js';
 import { createCamera, fitCamera, updateCamera, zoomBy, panBy, resetView, focus, screenToImage, imageToScreen } from './camera.js';
 import { toggleDebug, initNav } from './colliders.js';
+import { startEnding, stopEnding, updateEnding } from './ending.js';
+export { startEnding, stopEnding };
 import { on } from '../core/events.js';
 import { EGG_PILE, LARVA_PILE } from './layout.js';
 
@@ -85,7 +87,7 @@ export function resize() {
   if (ctx.camera) updateCamera(1);
 }
 
-export function reset() { clearAgents(); ctx.G = null; resetEnemies(); }
+export function reset() { stopEnding(); clearAgents(); ctx.G = null; resetEnemies(); }
 
 /** Posición de pantalla de un punto de la imagen (`up`: píxeles de imagen por encima del terreno). */
 export const toScreen = p => imageToScreen(p.x, p.y, p.up || 0);
@@ -153,7 +155,7 @@ export function update(game, derived, dt, realDt, skipDraw) {
   if (first) { refreshQueen(); queen.s = 1 + 0.1 * game.stage; syncAgents(true); refreshMutation(); syncT = 1; }
   syncT -= dt;
   if (syncT <= 0) { syncT = 1; syncAgents(false); }
-  updateEnemies(dt); updateAgents(dt); updateBrood(dt); updatePantry(dt); updateParticles(dt);
+  updateEnemies(dt); updateAgents(dt); updateBrood(dt); updateEnding(dt); updatePantry(dt); updateParticles(dt);
   if (skipDraw) return;
 
   // día, atardecer y noche: se oscurece el mapa y se enfría la luz; el nido brilla

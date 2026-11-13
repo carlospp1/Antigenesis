@@ -7,7 +7,7 @@ import { toScreen, anchors, broodBars } from '../scene/index.js';
 import { icon } from './icons.js';
 
 const $ = id => document.getElementById(id);
-export const ui = { sheet: null, holding: false, paused: false, speed: 1, tab: 'colony', debug: false };
+export const ui = { sheet: null, holding: false, paused: false, speed: 1, tab: 'colony', debug: false, devOpen: false };
 let lastDock = '', lastSheet = '';
 const cache = {};
 const setText = (id, v) => { if (cache[id] !== v) { cache[id] = v; $(id).textContent = v; } };
@@ -75,8 +75,9 @@ function dockColony(G, D) {
     infoCard('crown', st.name, `<span class="fx">Huevo: ${fmt(Math.min(G.lay, D.eggCost), 0)} / ${fmt(D.eggCost, 0)} de comida</span><div class="meter"><i style="width:${fill * 100}%"></i></div>
       `),
     infoCard('egg', 'Cría', `<span class="fx">Huevo ${fmt(Game.BAL.eggTime / D.brood, 1)} s · larva ${fmt(Game.BAL.larvaTime / D.brood, 1)} s</span>`),
-    infoCard('shield', G.phase === 'night' ? 'Noche ' + G.level : 'Esta noche', `<span class="fx">${D.night.text}</span><span class="fx"><small>Tus hormigas: daño ${fmt(D.dmg, 1)} · vida ${fmt(D.hp, 0)}</small></span>`, '',
-      `<p class="note ${fc.win ? 'good' : 'warn'}">${!G.ants ? '¡Sin hormigas! Si llega la noche así, matarán a la reina.' : fc.win ? 'Previsión: ganáis, con unas ' + fc.losses + ' bajas.' : 'Previsión: no aguantan. Cría más o mejora en el Árbol.'}</p>`),
+    infoCard('shield', G.phase === 'night' ? 'Noche ' + G.level : 'Esta noche', `<span class="fx">${D.night.text}</span><span class="fx stats"><small>Tus hormigas: daño ${fmt(D.dmg, 1)} · vida ${fmt(D.hp, 0)}</small></span>`, '',
+      // previsión como chip: se lee de un vistazo (el detalle, en la frase de al lado en pantallas grandes)
+      `<p class="note ${!G.ants || !fc.win ? 'warn' : 'good'}"><b class="chip">${!G.ants ? 'Sin hormigas' : fc.win ? 'Ganáis' : 'No aguantan'}</b><span class="why">${!G.ants ? 'Si llega la noche así, matarán a la reina.' : fc.win ? 'Unas ' + fc.losses + ' bajas.' : 'Cría más o mejora en el Árbol.'}</span></p>`),
     infoCard('arrows', 'Árbol', `<span class="fx">${nBuy ? nBuy + (nBuy === 1 ? ' mejora disponible' : ' mejoras disponibles') : 'Sigue recolectando jalea'}</span>`, `<button class="btn-green${nBuy ? '' : ' no'}" data-act="openTree" data-id="skills">Abrir</button>`)
   ];
   const l = Game.legacy(G);
@@ -140,15 +141,22 @@ function renderSheet(G) {
       return `<li class="${st}">${icon(i < G.obj ? 'check' : 'trophy')}<span>${o[0]}</span>${o[2] ? `<em>${icon('leaf')}${fmt(o[2])}</em>` : ''}</li>`;
     }).join('') + '</ul>';
   } else if (ui.sheet === 'settings') {
+    // cada fila: nombre a la izquierda, controles a la derecha (y una nota debajo si hace falta)
+    const row = (name, ctl, note = '') => `<div class="line"><span>${name}</span><div class="ctl">${ctl}${note ? `<small>${note}</small>` : ''}</div></div>`;
+    const btn = (on, act, label, id = '') => `<button class="btn-plain${on ? ' on' : ''}" data-act="${act}"${id ? ` data-id="${id}"` : ''}>${label}</button>`;
+    let code = false; try { code = localStorage.getItem('antigenesis.antModel') === 'code'; } catch (e) { /* nada */ }
     h = `<h2>Ajustes</h2><div class="settings">
-      <div class="line"><span>Sonido</span><button class="btn-plain${Audio.vol.mute ? '' : ' on'}" data-act="mute">${icon(Audio.vol.mute ? 'mute' : 'sound')} ${Audio.vol.mute ? 'Apagado' : 'Encendido'}</button></div>
-      <div class="line"><span>Juego</span><button class="btn-plain${ui.paused ? ' on' : ''}" data-act="pause">${ui.paused ? 'Reanudar' : 'Pausar'}</button></div>
-      <div class="line"><span>Hormigas</span>${(() => { let code = false; try { code = localStorage.getItem('antigenesis.antModel') === 'code'; } catch (e) { /* nada */ } return `<button class="btn-plain${code ? '' : ' on'}" data-act="antModel" data-id="glb">Modelo ilustrado</button><button class="btn-plain${code ? ' on' : ''}" data-act="antModel" data-id="code">Hechas en código</button><small style="color:var(--dim)">se aplica al recargar</small>`; })()}</div>
-      <div class="line"><span>Velocidad (pruebas)</span>${[1, 2, 4, 6, 10, 20].map(v => `<button class="btn-plain${ui.speed === v ? ' on' : ''}" data-act="speed" data-id="${v}">×${v}</button>`).join('')}</div>
-      <div class="line"><span>Bot (prueba)</span><button class="btn-plain" data-act="bot">Abrir panel del bot</button><small style="color:var(--dim)">tecla B · juega solo y registra cada acción</small></div>
-      <div class="line"><span>Colisiones</span><button class="btn-plain${ui.debug ? ' on' : ''}" data-act="debug">${ui.debug ? 'Visibles' : 'Ocultas'}</button><small style="color:var(--dim)">tecla C</small></div>
-      <div class="line"><span>Debug</span><button class="btn-plain${Game.debug.free ? ' on' : ''}" data-act="free">${Game.debug.free ? 'Evolución libre' : 'Apagado'}</button><small style="color:var(--dim)">ADN infinito · __ax.free</small></div>
-      <div class="line"><span>Partida</span><button class="btn-plain" data-act="reset" id="bReset">Reiniciar</button></div></div>`;
+      ${row('Sonido', btn(!Audio.vol.mute, 'mute', icon(Audio.vol.mute ? 'mute' : 'sound') + (Audio.vol.mute ? ' Apagado' : ' Encendido')))}
+      ${row('Juego', btn(ui.paused, 'pause', ui.paused ? 'Reanudar' : 'Pausar'))}
+      ${row('Partida', '<button class="btn-plain" data-act="reset" id="bReset">Reiniciar</button>')}
+      <button class="dev-head${ui.devOpen ? ' open' : ''}" data-act="dev" aria-expanded="${!!ui.devOpen}">Pruebas y depuración</button>
+      ${ui.devOpen ? `<div class="dev">
+        ${row('Velocidad', [1, 2, 4, 6, 10, 20].map(v => btn(ui.speed === v, 'speed', '×' + v, v)).join(''))}
+        ${row('Bot', btn(false, 'bot', 'Abrir panel'), 'tecla B · juega solo y registra cada acción')}
+        ${row('Hormigas', btn(!code, 'antModel', 'Ilustradas', 'glb') + btn(code, 'antModel', 'En código', 'code'), 'se aplica al recargar')}
+        ${row('Colisiones', btn(ui.debug, 'debug', ui.debug ? 'Visibles' : 'Ocultas'), 'tecla C')}
+        ${row('ADN infinito', btn(Game.debug.free, 'free', Game.debug.free ? 'Activado' : 'Apagado'), '__ax.free')}
+      </div>` : ''}</div>`;
   }
   if (h !== lastSheet) { lastSheet = h; $('sheetBody').innerHTML = h; }
 }

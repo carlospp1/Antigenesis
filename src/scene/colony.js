@@ -8,6 +8,7 @@ import { ANT_LOOKS } from './antRig.js';
 import { createActor, placeActor, lookAt2D, ground } from './actor.js';
 import { randomIn, clampToWalkable, DOWN, UP } from './colliders.js';
 import { NAV } from './layout.js';
+import { gatherPoint } from './ending.js';
 import { queen, mouth, head, slotPos, mouthWorld, queenEats } from './brood.js';
 import { puff, feedFly } from './particles.js';
 import { pantryTop, pantryDrop, pantryPop } from './pantry.js';
@@ -149,9 +150,18 @@ function forageTask(a) {
   a.path = p; a.after = () => feedTask(a);
 }
 
-/** De noche todas van a la línea. De día recolectan. */
+/** Final del juego: todas suben y se arremolinan alrededor de la reina, que ha salido a la hierba. */
+function partyTask(a) {
+  const g = gatherPoint(), p = toSurface(a);
+  if (p.length) p.push(sidePoint(sideOf(g.x)));
+  p.push(randomIn('surface', { x0: g.x - 170, x1: g.x + 170, y0: g.y - 40, y1: g.y + 30 }));
+  p[p.length - 1].wait = rnd(0.6, 2.2); p[p.length - 1].set = 'out';
+  a.path = p; a.after = null;
+}
+
+/** De noche todas van a la línea. De día recolectan. En el final, a la fiesta. */
 function retarget(a) {
-  const job = ctx.G.phase === 'night' ? 'fight' : 'food';
+  const job = ctx.ending ? 'party' : ctx.G.phase === 'night' ? 'fight' : 'food';
   if (a.job === job) return;
   a.job = job; a.path = []; a.after = null; a.wait = 0; a.faceQ = false;
   if (a.hx != null) { a.x = a.hx; a.hx = null; }
@@ -159,7 +169,8 @@ function retarget(a) {
 }
 
 function nextTask(a) {
-  if (a.job === 'fight') fightTask(a);
+  if (a.job === 'party') partyTask(a);
+  else if (a.job === 'fight') fightTask(a);
   else forageTask(a);
 }
 

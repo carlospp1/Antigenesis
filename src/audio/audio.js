@@ -135,14 +135,23 @@ const S = {
     }
   },
   stomp() { noise(bus.sfx, 120, 0.7, 0.005, 0.7, 0.9); tone(bus.sfx, 'sine', 90, 38, 0.005, 0.6, 0.5); },
-  death() { tone(bus.sfx, 'triangle', 300, 110, 0.005, 0.22, 0.12); }
+  death() { tone(bus.sfx, 'triangle', 300, 110, 0.005, 0.22, 0.12); },
+  /** Combo: cada toque seguido suena un semitono más agudo (vuelve a empezar cada octava). */
+  combo(n = 3) { const f = 523.3 * Math.pow(2, ((n - 3) % 12) / 12); tone(bus.sfx, 'sine', f, f * 1.01, 0.004, 0.12, 0.09); tone(bus.sfx, 'triangle', f * 2, f * 2, 0.004, 0.08, 0.03); },
+  /** Una moneda que llega al contador (sube un poco con cada una). */
+  coin(i = 0) { const f = 1318.5 * Math.pow(2, (i % 8) / 24); tone(bus.sfx, 'sine', f, f, 0.002, 0.09, 0.06); tone(bus.sfx, 'sine', f * 1.5, f * 1.5, 0.002, 0.07, 0.03); },
+  /** Fanfarria de celebración; más larga cuanto más importante. */
+  fanfare(tier = 2) {
+    const t = ctx.currentTime, notes = tier >= 3 ? [523.3, 659.3, 784, 1046.5, 784, 1046.5, 1318.5] : [523.3, 659.3, 784, 1046.5];
+    notes.forEach((f, i) => { tone(bus.sfx, 'triangle', f, f, 0.01, 0.45, 0.11, t + i * 0.085); tone(bus.sfx, 'sine', f * 2, f * 2, 0.01, 0.3, 0.035, t + i * 0.085); });
+  }
 };
-const GAP = { death: 0.15, click: 0.03, deposit: 0.35, hit: 0.12, hatch: 0.12, pupate: 0.12, born: 0.2, lay: 0.15, poof: 0.1, buy: 0.05 };
+const GAP = { death: 0.15, click: 0.03, deposit: 0.35, hit: 0.12, hatch: 0.12, pupate: 0.12, born: 0.2, lay: 0.15, poof: 0.1, buy: 0.05, combo: 0.02, coin: 0.03, fanfare: 0.8 };
 
-export function play(id) {
+export function play(id, arg) {
   if (!ctx || vol.mute || document.hidden || !S[id]) return;
   const t = ctx.currentTime;
   if (last[id] && t - last[id] < (GAP[id] || 0)) return;
   last[id] = t;
-  try { S[id](); } catch (e) { /* el audio nunca debe romper el juego */ }
+  try { S[id](arg); } catch (e) { /* el audio nunca debe romper el juego */ }
 }

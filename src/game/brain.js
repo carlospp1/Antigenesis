@@ -19,12 +19,44 @@ export function cpsFor(G, colT, rnd = Math.random) {
 }
 
 /**
+ * Toques como los de una persona: una ráfaga corta y rápida sobre una misma cosa (3–14 toques), una pausa
+ * (mira la pantalla, piensa, cambia de objetivo) y otra ráfaga, quizá sobre otra cosa. Nadie da miles de
+ * toques seguidos. La pausa se calcula para que la media siga siendo la de `cps`, así que el ritmo total
+ * no cambia; lo que cambia es que las rachas (combo) salen como saldrían jugando de verdad.
+ *   const tp = makeTapper();  …  const n = tp.step(dt, cps);  if (tp.fresh) elegir objetivo;  dar n toques
+ */
+export function makeTapper(rnd = Math.random) {
+  const tp = { left: 0, rest: rnd() * 0.5, acc: 0, len: 0, rate: 5, fresh: false };
+  tp.step = (dt, cps) => {
+    tp.fresh = false;
+    if (tp.rest > 0) { tp.rest -= dt; if (tp.rest > 0) return 0; dt = -tp.rest; tp.rest = 0; }
+    if (tp.left <= 0) { // ráfaga nueva (quien la usa elige el objetivo cuando ve fresh)
+      tp.len = tp.left = 3 + Math.floor(rnd() * 12);
+      tp.rate = Math.min(7, Math.max(3, cps * 2.4)) * (0.85 + rnd() * 0.3); // toques/s dentro de la ráfaga
+      tp.acc = 0; tp.fresh = true;
+    }
+    tp.acc += tp.rate * dt;
+    const n = Math.min(tp.left, Math.floor(tp.acc));
+    tp.acc -= n; tp.left -= n;
+    if (tp.left <= 0) {
+      // pausa: lo que falta del ciclo para que la media sea cps (con algo de variación, nunca menos de 0,3 s)
+      const cycle = tp.len / Math.max(0.05, cps), busy = tp.len / tp.rate;
+      tp.rest = Math.max(0.3, (cycle - busy) * (0.6 + rnd() * 0.8));
+    }
+    return n;
+  };
+  return tp;
+}
+
+/**
  * Lo bien que va la colonia (escala logarítmica): ingresos, ritmo de cría y fuerza en combate.
  * warW sube cuando la previsión dice que esta noche se pierde.
  */
 function utility(G, D, cps, warW) {
   const g = G.ants >= 3 ? G : { ...G, ants: 3 };
-  const tap = cps * BAL.tapFood * D.tapQ * (1 + D.tapCrit * (D.critX - 1));
+  // racha media de una ráfaga de makeTapper (3–14 toques: unos 4 toques de racha de media)
+  const combo = 1 + Math.min(4, D.comboCap) * D.comboStep * D.comboX;
+  const tap = cps * BAL.tapFood * D.tapQ * (1 + D.tapCrit * (D.critX - 1)) * combo;
   const inc = R.forageRate(g, D) + D.reserve + tap + D.ghost * BAL.tapFood * D.tapQ;
   const war = D.dmg * D.hp / (1 - D.dodge);
   return Math.log(inc + 0.1) + 0.5 * Math.log(D.brood) - 0.7 * Math.log(D.eggCost) + warW * Math.log(war) + 0.3 * Math.log(D.prize * D.bioKill);

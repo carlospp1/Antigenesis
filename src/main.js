@@ -10,6 +10,8 @@ import { wireStageInput } from './ui/input.js';
 import { hydrateIcons } from './ui/icons.js';
 import { burst, ghostHand } from './ui/fx.js';
 import { tv, openTree, closeTree, renderTree, wireTree } from './ui/tree.js';
+import * as Juice from './ui/juice.js';
+import { playEnding, cancelEnding } from './ui/ending.js';
 import { createBot } from './ui/bot.js';
 
 const $ = id => document.getElementById(id);
@@ -21,6 +23,7 @@ function act(a, id, btn) {
   else if (a === 'prestige') { leave(); return; }
   else if (a === 'close') { openSheet(G, null); sfx = 'click'; }
   else if (a === 'mute') { Audio.start(); Audio.set('mute', !Audio.vol.mute); G.mute = Audio.vol.mute; sfx = 'click'; }
+  else if (a === 'dev') { ui.devOpen = !ui.devOpen; sfx = 'click'; }
   else if (a === 'pause') { ui.paused = !ui.paused; sfx = 'click'; }
   else if (a === 'antModel') { try { localStorage.setItem('antigenesis.antModel', id); } catch (e) { /* nada */ } Game.save(G); location.reload(); return; }
   else if (a === 'speed') { ui.speed = +id; sfx = 'click'; }
@@ -29,7 +32,7 @@ function act(a, id, btn) {
   else if (a === 'free') { Game.debug.free = !Game.debug.free; toast(Game.debug.free ? 'Debug: cualquier evolución y ADN infinito.' : 'Debug apagado.'); sfx = 'click'; }
   else if (a === 'reset') {
     if (Date.now() - resetArmed < 4000) {
-      Game.wipe(); Scene.reset(); G = Game.newGame(); D = Game.calc(G); resetArmed = 0;
+      cancelEnding(); Game.wipe(); Scene.reset(); G = Game.newGame(); D = Game.calc(G); resetArmed = 0;
       openSheet(G, null); toast('Partida nueva.'); sfx = 'click';
     } else { resetArmed = Date.now(); if (btn) btn.textContent = '¿Seguro? Pulsa otra vez'; sfx = 'deny'; Audio.play(sfx); return; }
   }
@@ -74,7 +77,14 @@ const bot = createBot({
   leave: () => leave(),
   found: () => found(),
   getSpeed: () => ui.speed,
-  setSpeed: v => { ui.speed = v; }
+  setSpeed: v => { ui.speed = v; },
+  /** Partida nueva desde cero (el bot la usa al ganar para seguir jugando). */
+  newGame() {
+    cancelEnding(); Game.wipe(); Scene.reset(); G = Game.newGame(); D = Game.calc(G);
+    for (const id of ['winView', 'deathView']) if ($(id)) $(id).hidden = true;
+    openSheet(G, null); closeTree();
+    return G;
+  }
 });
 
 /** Autocompra del árbol de la colonia: se mira una vez por segundo. */
@@ -89,12 +99,13 @@ function clickScene(hit) {
   if (!hit) return;
   if (hit.kind === 'enemy') {
     const d = Game.hit(G, D);
-    if (d > 0) { Scene.enemyHit(); float('−' + fmt(d, 0), hit.pos, 'hit'); Audio.play('hit'); }
+    if (d > 0) { Scene.enemyHit(); float('−' + fmt(d, 0), hit.pos, 'hit'); Audio.play('hit'); Juice.tap(G.combo, Game.comboMult(G, D), D.comboCap + 1); }
     return;
   }
   const r = Game.click(G, hit.kind, hit.id);
   Scene.bump(hit);
   Audio.play('click');
+  Juice.tap(r.combo, r.mult, D.comboCap + 1); // racha de toques seguidos (rinden más)
   if (hit.kind === 'queen') { // la comida vuela hasta su boca y el número sale al tragarla
     if (r.crit) { float('¡×' + r.crit + '!', hit.click, 'lucky'); burst('×' + r.crit, 'Toque de suerte', r.crit >= 5 ? 'x5' : 'x2', Scene.toScreen(hit.click)); Audio.play('skill'); }
     Scene.feedQueen(hit.click, at => { float(r.laid ? '+huevo' : '+' + fmt(r.food), at, r.laid ? 'good' : r.crit ? 'lucky' : 'crit'); Audio.play('deposit'); });
@@ -169,12 +180,18 @@ function wireButtons() {
   window.addEventListener('pagehide', () => Game.save(G));
 }
 
+let lastFly = 0, topNight = 0; // efectos: último icono volando a la jalea; noche más lejana al empezar la de ahora
 function wireGameEvents() {
   on('feed', d => {
     Game.feed(G, d.amount, d.dest);
     const n = fmt(d.amount);
     const pre = d.gold ? '✦ ' : d.lucky ? '¡×2! ' : '';
-    if (d.dest === 'store') { float(pre + '+' + n, d.pos, d.lucky ? 'lucky' : 'good'); Audio.play('deposit'); }
+    if (d.dest === 'store') {
+      float(pre + '+' + n, d.pos, d.lucky ? 'lucky' : 'good'); Audio.play('deposit');
+      // lo guardado sube a la jalea: un icono vuela al contador (como mucho unos pocos por segundo)
+      const now = performance.now();
+      if (now - lastFly > 350) { lastFly = now; const sp = Scene.toScreen(d.pos); Juice.reward(sp.x, sp.y, d.gold ? 6 : d.lucky ? 3 : 1); }
+    }
     else { float(pre + '+' + n, d.pos, d.lucky ? 'lucky' : 'crit'); Audio.play('deposit'); Audio.play('hatch'); }
   });
   on('lay', () => Audio.play('lay'));
@@ -184,11 +201,27 @@ function wireGameEvents() {
   on('dodge', () => float('¡esquiva!', Scene.entityPos('front'), 'good'));
   on('death', d => { Audio.play('death'); float('−1', Scene.entityPos('front'), 'hit'); });
   on('foeDeath', () => Audio.play('poof'));
-  on('goal', d => { toast('Objetivo cumplido' + (d.prize ? ': +' + fmt(d.prize) + ' de jalea.' : '.'), 'good'); Audio.play('objective'); });
-  on('stage', d => { toast('La reina ha crecido: ahora es ' + d.stage.name + '. Sus hormigas cargan un 50% más.', 'good'); Audio.play('skill'); });
+  on('goal', d => {
+    toast('Objetivo cumplido' + (d.prize ? ': +' + fmt(d.prize) + ' de jalea.' : '.'), 'good'); Audio.play('objective');
+    Juice.celebrate('¡Objetivo cumplido!', d.prize ? '+' + fmt(d.prize) + ' de jalea' : d.text, 'goal');
+    if (d.prize) Juice.reward(innerWidth / 2, innerHeight * 0.3, 8);
+  });
+  on('stage', d => {
+    toast('La reina ha crecido: ahora es ' + d.stage.name + '. Sus hormigas cargan un 50% más.', 'good'); Audio.play('skill');
+    Juice.celebrate('¡' + d.stage.name + '!', 'La reina ha crecido · sus hormigas cargan un 50% más', 'stage');
+  });
   on('dusk', () => Audio.play('alarm'));
-  on('night', d => { Audio.play('alarm'); Audio.play('wave'); toast('Noche ' + d.def.n + ': ' + d.def.text + ' salen de la hierba hacia el agujero.', 'warn'); });
-  on('nightWin', d => { toast('Noche ' + d.level + ' superada con ' + d.lost + ' bajas. +' + fmt(d.prize) + ' de jalea. Amanece.', 'good'); Audio.play('win'); });
+  on('night', d => { topNight = G.best; Audio.play('alarm'); Audio.play('wave'); toast('Noche ' + d.def.n + ': ' + d.def.text + ' salen de la hierba hacia el agujero.', 'warn'); });
+  on('nightWin', d => {
+    toast('Noche ' + d.level + ' superada con ' + d.lost + ' bajas. +' + fmt(d.prize) + ' de jalea. Amanece.', 'good'); Audio.play('win');
+    // celebración: más grande si cae un jefe (fin de era) o si es la noche más lejos a la que has llegado
+    const boss = d.level % 4 === 0 && d.level < Game.FINAL_NIGHT, record = d.level > topNight && G.gen > 1;
+    const next = boss ? Game.eraFor(d.level + 1) : null;
+    if (boss) Juice.celebrate('¡Jefe derrotado!', 'Noche ' + d.level + ' · nueva era: ' + next.name, 'boss');
+    else if (record) Juice.celebrate('¡Nuevo récord!', 'Noche ' + d.level + ' · nunca habías llegado tan lejos', 'record');
+    else Juice.celebrate('¡Noche ' + d.level + ' superada!', '+' + fmt(d.prize) + ' de jalea' + (d.lost ? '' : ' · sin bajas'), 'night');
+    Juice.reward(innerWidth / 2, innerHeight * 0.32, boss ? 22 : 14);
+  });
   on('nightLost', d => { toast('Amanece y los invasores se retiran. Perdiste ' + d.lost + ' hormigas. La próxima noche viene más fuerte.', 'warn'); Audio.play('retreat'); });
   on('skill', d => { const n = (d.tree === 'perm' ? Game.PERKS : Game.SKILLS)[d.id]; if (n) toast((d.tree === 'perm' ? 'Linaje: ' : 'Árbol: ') + n.name + '.', 'good'); });
   on('emergencyEgg', d => { if (G.stats.laid > 1) toast(d.paid > 0 ? `La colonia estaba vacía: la reina pone un huevo con lo que tenías (${fmt(d.paid, 0)} de comida).` : 'La colonia estaba vacía: la reina pone un huevo de sus últimas reservas.', 'good'); });
@@ -205,7 +238,7 @@ function wireGameEvents() {
     else { burst('×2', 'Cosecha doble', 'harvest', at); Audio.play('skill'); }
   });
   on('lay', d => { if (d.twin) { burst('×2', 'Gemelas', 'x2', Scene.toScreen(Scene.entityPos('egg', d.e.slot))); Audio.play('skill'); } });
-  on('evolve', d => { burst('¡Evolución!', d.name, 'shiny'); Audio.play('win'); toast('Tu especie evoluciona: ' + d.name + '.', 'good'); });
+  on('evolve', d => { Juice.celebrate('¡Evolución!', d.name, 'evolve'); Audio.play('win'); toast('Tu especie evoluciona: ' + d.name + '.', 'good'); });
   on('raid', () => { toast('¡Han caído todas! Los enemigos bajan por el túnel hacia la reina…', 'warn'); Audio.play('alarm'); });
   on('queenSurvives', () => toast('El nido fortificado resiste: la reina sobrevive esta vez.', 'good'));
   on('queenDeath', d => {
@@ -217,7 +250,8 @@ function wireGameEvents() {
   on('victory', d => {
     Audio.play('win');
     $('winText').textContent = `Los humanos han caído en la generación ${d.gen}, tras ${fmtTime(d.time)} de juego. Ya nada detiene a la colonia: las hormigas conquistan el mundo.`;
-    $('winView').hidden = false;
+    // primero la secuencia del final (la reina sale del nido y la colonia cubre el planeta); luego la pantalla de victoria
+    playEnding({ gen: d.gen, time: d.time, onDone: () => { $('winView').hidden = false; } });
   });
 }
 
@@ -267,7 +301,7 @@ async function boot() {
   render(G, D);
   requestAnimationFrame(frame);
   const qs = new URLSearchParams(location.search); // ?bot=1&speed=6 arranca el bot solo
-  if (qs.has('bot')) bot.start(qs.get('speed') || 1);
+  if (qs.has('bot')) { if (qs.get('profile')) bot.profile = qs.get('profile'); bot.start(qs.get('speed') || 1); } // &profile=promedio|activo|casual
 }
 
 boot();
@@ -280,6 +314,8 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 
 // ayuda para depurar desde la consola: __ax.G, __ax.speed = 8
 window.__ax = {
-  get G() { return G; }, set speed(v) { ui.speed = v; }, Game, Scene, bot,
+  get G() { return G; }, set speed(v) { ui.speed = v; }, Game, Scene, bot, Juice,
+  /** Prueba la secuencia final sin ganar: __ax.ending() */
+  ending: () => playEnding({ gen: G.gen, time: G.total || 0, onDone: () => { $('winView').hidden = false; } }),
   get free() { return Game.debug.free; }, set free(v) { Game.debug.free = !!v; }
 };

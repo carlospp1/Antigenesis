@@ -348,8 +348,29 @@ function build(rows) {
 /** Lo que le falta a un nodo para poder comprarse aunque esté conectado (lista de ids). */
 export const missingNeeds = (nodes, owned, id) => nodes[id].needs.filter(n => !owned[n]);
 
-export const SKILLS = build([...S.map(r => [r[0], r[1] + OX, r[2] + OY, ...r.slice(3)]), ...S2]);
-export const PERKS = build(P);
+/*
+ * Racha de toques (rules.comboTap): cada toque seguido rinde más. Aquí se mejora.
+ *   comboStep  suma al extra por toque (de serie +2,5% por toque de la racha)
+ *   comboCap   toques de racha más (de serie 20)
+ *   comboGap   segundos más entre toques sin perder la racha (de serie 0,8)
+ *   comboX     multiplica todo el extra de la racha
+ */
+const S3 = chain('tap', 't2a', [[5, 13], [4, 13], [3, 13], [3, 14], [2, 14]], [
+  ['cb1', 'bolt', 'Ritmo I', 'Cada toque de la racha rinde +1% más', 10, { comboStep: 0.01 }],
+  ['cb2', 'bolt', 'Racha larga', 'La racha llega a 10 toques más', 11, { comboCap: 10 }],
+  ['cb3', 'hand', 'Dedos ligeros', 'Medio segundo más entre toques sin perder la racha', 11, { comboGap: 0.5 }],
+  ['cbK', 'bolt', 'Frenesí', 'El extra de la racha ×2', { bio: 80 }, { comboX: 2 }, 1],
+  ['cb4', 'bolt', 'Ritmo II', 'Cada toque de la racha rinde +1,5% más', 12, { comboStep: 0.015 }]
+]);
+// en el linaje (permanentes): junto a la mano fantasma
+const P3 = [
+  ['pcb1', 1, 6, 'tap', 'bolt', 'Ritmo heredado', 'Cada toque de la racha rinde +1% más, en todas las colonias', { adn: 6 }, { comboStep: 0.01 }, ['pgh2']],
+  ['pcb2', 0, 6, 'tap', 'bolt', 'Racha ancestral', 'La racha llega a 10 toques más', { adn: 10 }, { comboCap: 10 }, ['pcb1']],
+  ['pcb3', 0, 5, 'tap', 'hand', 'Pulso de la estirpe', 'Cuatro décimas más entre toques sin perder la racha', { adn: 14 }, { comboGap: 0.4 }, ['pcb2']]
+];
+
+export const SKILLS = build([...S.map(r => [r[0], r[1] + OX, r[2] + OY, ...r.slice(3)]), ...S2, ...S3]);
+export const PERKS = build([...P, ...P3]);
 
 /** Suma los efectos de los nodos comprados: X multiplica, el resto suma. */
 export function treeFx(nodes, owned) {

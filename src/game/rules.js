@@ -55,6 +55,11 @@ export function calc(G) {
   D.tapQ = D.click * (1 + add('tapQ'));
   D.tapB = D.click * (1 + add('tapB'));
   D.tapFoe = 1 + add('tapFoe');
+  // racha de toques: mejoras del árbol y del linaje (ver comboTap)
+  D.comboGap = BAL.comboGap + add('comboGap');
+  D.comboStep = BAL.comboStep + add('comboStep');
+  D.comboCap = BAL.comboCap + add('comboCap');
+  D.comboX = mul('comboX');
   D.dmg = BAL.dmg * (1 + add('dmg')) * mul('dmgX') * D.blood * (D.evoDmg || 1);
   D.hp = BAL.hp * (1 + add('hp')) * mul('hpX') * D.blood * (D.evoHp || 1);
   D.reserve = BAL.reserve * (1 + add('reserve'));
@@ -83,7 +88,9 @@ export function calc(G) {
 
 export function nightDef(n) {
   const era = eraFor(n), final = n >= FINAL_NIGHT && era.final;
-  const d = { n, era, count: final ? 0 : BAL.foeCount0 + Math.ceil(n * BAL.foeCountK), hpEach: BAL.foeHp0 * Math.pow(BAL.foeHpG, n - 1), dpsEach: BAL.foeDps0 * Math.pow(BAL.foeDpsG, n - 1), boss: null };
+  // cada era aprieta más que la anterior: además de crecer noche a noche, ×eraHard por era
+  const hard = Math.pow(BAL.eraHard, Math.floor((Math.min(n, FINAL_NIGHT) - 1) / 4));
+  const d = { n, era, count: final ? 0 : BAL.foeCount0 + Math.ceil(n * BAL.foeCountK), hpEach: BAL.foeHp0 * Math.pow(BAL.foeHpG, n - 1) * hard, dpsEach: BAL.foeDps0 * Math.pow(BAL.foeDpsG, n - 1) * hard, boss: null };
   d.time = final ? NIGHT_FINAL : NIGHT;
   if (final) d.boss = { type: era.boss, name: era.bossName, hp: d.hpEach * BAL.humanHp, dps: d.dpsEach * BAL.humanDps, final: true };
   else if (n % 4 === 0) d.boss = { type: era.boss, name: era.bossName, hp: d.hpEach * BAL.bossHp, dps: d.dpsEach * BAL.bossDps };
@@ -148,21 +155,31 @@ export function feed(G, amount, dest) {
   digest(G);
 }
 
+/** Racha de toques: cuenta el toque y devuelve el multiplicador (cada toque seguido rinde algo más). */
+export function comboTap(G, D = calc(G)) {
+  const t = G.total || 0;
+  G.combo = t - (G.comboT ?? -1e9) <= D.comboGap ? (G.combo || 0) + 1 : 1;
+  G.comboT = t;
+  return comboMult(G, D);
+}
+/** Multiplicador de la racha actual: 1 sin racha; cada toque seguido suma comboStep (×comboX), hasta comboCap toques. */
+export const comboMult = (G, D = calc(G)) => 1 + Math.min(Math.max(0, (G.combo || 1) - 1), D.comboCap) * D.comboStep * D.comboX;
+
 export function click(G, kind, id) {
   if (G.phase === 'dead') return {};
-  const D = calc(G);
+  const D = calc(G), m = comboTap(G, D);
   G.stats.clicks++;
   if (kind === 'queen') {
-    const crit = Math.random() < D.tapCrit, f = BAL.tapFood * D.tapQ * (crit ? D.critX : 1), before = G.stats.laid;
+    const crit = Math.random() < D.tapCrit, f = BAL.tapFood * D.tapQ * (crit ? D.critX : 1) * m, before = G.stats.laid;
     G.lay += f;
     if (D.gold) G.jelly += f * 0.5;
     digest(G);
-    return { laid: G.stats.laid > before, food: f, crit: crit ? D.critX : 0 };
+    return { laid: G.stats.laid > before, food: f, crit: crit ? D.critX : 0, combo: G.combo, mult: m };
   }
   const e = (kind === 'egg' ? G.eggs : G.larvae).find(x => x.id === id);
-  const crit = Math.random() < D.tapCrit, k = crit ? D.critX : 1;
+  const crit = Math.random() < D.tapCrit, k = (crit ? D.critX : 1) * m;
   if (e) e.p += BAL.tapBrood * D.tapB * k;
-  return { pct: Math.round(100 * BAL.tapBrood * D.tapB * k), crit: crit ? D.critX : 0 };
+  return { pct: Math.round(100 * BAL.tapBrood * D.tapB * k), crit: crit ? D.critX : 0, combo: G.combo, mult: m };
 }
 
 /** Las doradas rinden más (ver shinyFood, shinyDmg y shinySpeed en calc). */
@@ -396,7 +413,7 @@ export const anyBuyable = (G, tree) => Object.keys(tree === 'perm' ? PERKS : SKI
 export function hit(G, D) {
   const f = G.foes;
   if (!f || f.arrive > 0) return 0;
-  const a = Math.max(1, D.dmg * 2 * D.tapFoe);
+  const a = Math.max(1, D.dmg * 2 * D.tapFoe) * comboTap(G, D);
   if (f.count > 0) f.cur -= Math.min(a, f.cur - 0.01);
   else f.boss = Math.max(0.01, f.boss - a);
   return a;

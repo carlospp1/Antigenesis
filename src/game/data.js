@@ -58,6 +58,7 @@ export const BAL = {
   foeCount0: 1, foeCountK: 0.6,
   foeHp0: 30, foeHpG: 1.36,
   foeDps0: 2, foeDpsG: 1.30,
+  eraHard: 1.1,                // cada era (4 noches) los enemigos tienen ×eraHard de vida y daño sobre la anterior
   bossHp: 5, bossDps: 3,       // jefe de cada era (cuarta noche), en múltiplos de un enemigo normal
   humanHp: 40, humanDps: 9,     // la noche final
   prize0: 15, prizeG: 1.4,
@@ -67,10 +68,13 @@ export const BAL = {
   bioOwnG: 1.1,                // cada rombo comprado encarece un 10% los siguientes rombos
   stageFood: 1.25,             // cada etapa de la reina multiplica la comida por viaje
   // ADN al morir o fundar: crece con las noches superadas
-  adnK: 1.0, adnP: 1.35,
+  adnK: 0.8, adnP: 1.35,       // ajustado con tools/sim.mjs: unas 4 h jugando para una persona media
   evoCostK: 2.6,                // multiplica el precio en ADN de las evoluciones
   foundAfter: 3,               // superada esta noche ya se puede fundar (y ganar ADN) aunque no caiga ningún jefe
-  blood: 0.03                  // «Sangre antigua»: +3% de comida, daño y vida por cada ADN ganado en total
+  // racha de toques: cada toque seguido (menos de comboGap s de juego desde el anterior) rinde comboStep más,
+  // hasta comboCap toques (×1,5 con estos valores). Vale para la reina, la cría y los enemigos.
+  comboGap: 0.8, comboStep: 0.025, comboCap: 20,
+  blood: 0.015                 // «Sangre antigua»: +1,5% de comida, daño y vida por cada ADN ganado en total
 };
 
 export const STAGES = [

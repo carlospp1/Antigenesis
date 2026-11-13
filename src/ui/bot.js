@@ -3,6 +3,9 @@
 //   · compra en el árbol, evoluciona, gasta el linaje y funda colonias (mismo cerebro que tools/sim.mjs)
 //   · todo va en tiempo de juego: con la velocidad ×2, ×6, ×20… también toca y decide más rápido
 //   · registra cada acción y evento; al terminar da un resumen por colonia (prestigio) y del juego entero
+//   · al ganar guarda la partida y empieza otra desde cero (así se miden varias seguidas)
+//   · perfiles: promedio, activo o casual (cuánto toca, cada cuánto mira el árbol, cuánto pelea)
+//   · para muchas partidas a la vez y sin gráficos: node tools/sim.mjs (mismos perfiles, en paralelo)
 //
 // Activar: botón «Bot» en Ajustes, tecla B, o abrir el juego con ?bot=1 (y &speed=6 para ir a ×6).
 // Consola: __ax.bot.start(), .stop(), .summary(), .download('csv' | 'json')
@@ -14,9 +17,16 @@ import { fmtTime } from '../core/format.js';
 
 const $ = id => document.getElementById(id);
 const VISUAL_PER_SEC = 8;   // toques con animación y sonido por segundo real (el resto solo cuenta)
-const BUY_EVERY = 3;        // segundos de juego entre vistazos al árbol
-const FOE_SHARE = 0.4;      // de noche, parte de los toques que van a los enemigos
 const SPEEDS = [1, 2, 4, 6, 10, 20];
+/**
+ * Perfiles (como los de tools/bot.mjs): cpsK multiplica los toques por segundo de una persona media,
+ * buyEvery son los segundos de juego entre vistazos al árbol y foe la parte de los toques nocturnos que van a los enemigos.
+ */
+export const BOT_PROFILES = {
+  promedio: { name: 'Promedio', cpsK: 1, buyEvery: 3, foe: 0.4 },
+  activo: { name: 'Activo', cpsK: 1.35, buyEvery: 2, foe: 0.6 },
+  casual: { name: 'Casual', cpsK: 0.5, buyEvery: 12, foe: 0.15 }
+};
 
 /**
  * api (la pone main.js): getG(), tap(hit, visual), buy(tree, id) → bool, leave() → bool, found() → bool,
@@ -24,11 +34,12 @@ const SPEEDS = [1, 2, 4, 6, 10, 20];
  */
 export function createBot(api) {
   const bot = {
-    on: false, log: [], colonies: [], cur: null, done: null,
-    cps: 0, clicks: 0, buys: 0, t0: 0,
+    on: false, log: [], colonies: [], cur: null, done: null, runs: [], run0: { game: 0, real: 0 },
+    profile: 'promedio', cps: 0, clicks: 0, buys: 0, t0: 0,
     start, stop, toggle, step, update, summary, download, panel: togglePanel
   };
-  let clickAcc = 0, buyT = 0, cpsT = 0, visualTokens = VISUAL_PER_SEC, deadReal = 0, lastWait = null, panelOn = false, panelT = 0;
+  const tapper = Brain.makeTapper(); // ráfagas cortas y pausas, como una persona
+  let aim = 'queen', aimId = null, pending = 0, buyT = 0, cpsT = 0, visualTokens = VISUAL_PER_SEC, deadReal = 0, lastWait = null, panelOn = false, panelT = 0;
 
   const realS = () => (performance.now() - bot.t0) / 1000;
   function rec(act, target = '', detail = '') {
@@ -66,13 +77,25 @@ export function createBot(api) {
     rec('evento', 'victoria', `generación ${d.gen}, ${fmtTime(d.time)} de juego`);
     closeColony('ganó');
     bot.done = { gameS: d.time, realS: realS(), gen: d.gen };
-    setTimeout(() => { if ($('winView')) $('winView').hidden = true; finish(); }, 1500);
+    // partida terminada: se apunta y se empieza otra desde cero con el mismo perfil
+    bot.runs.push({ n: bot.runs.length + 1, profile: bot.profile, gameS: d.time, realS: realS() - bot.run0.real, gens: d.gen, colonies: bot.colonies.length });
+    console.info(summary().text);
+    persist();
+    setTimeout(() => {
+      if (!bot.on) return;
+      api.newGame();
+      bot.colonies = []; bot.cur = null; bot.done = null; bot.run0 = { game: 0, real: realS() };
+      openColony();
+      rec('bot', 'nueva_partida', 'partida ' + (bot.runs.length + 1) + ' · perfil ' + bot.profile);
+      renderPanel(true);
+    }, 1500);
   });
 
   /* ---------- control ---------- */
   function start(speed) {
     if (bot.on) return;
     bot.on = true; bot.log = []; bot.colonies = []; bot.done = null; bot.clicks = 0; bot.buys = 0; bot.t0 = performance.now();
+    bot.runs = []; bot.run0 = { game: 0, real: 0 };
     if (speed) api.setSpeed(+speed);
     if ($('intro') && !$('intro').hidden) $('start').click();
     openColony();
@@ -87,14 +110,6 @@ export function createBot(api) {
   }
   function toggle() { bot.on ? stop() : start(); }
 
-  function finish() {
-    stop('juego superado');
-    const s = summary();
-    console.info(s.text); console.table(s.colonies);
-    download('csv'); download('json');
-    renderPanel(true);
-  }
-
   /* ---------- un paso de juego (se llama en cada tick, también con ×N) ---------- */
   function step(dt) {
     if (!bot.on || dt <= 0) return;
@@ -103,24 +118,33 @@ export function createBot(api) {
     if (!bot.cur) openColony();
     const colT = (G.total || 0) - bot.cur.gameStart;
 
-    if ((cpsT -= dt) <= 0) { cpsT = 5; bot.cps = Brain.cpsFor(G, colT); }
-    clickAcc += bot.cps * dt;
-    while (clickAcc >= 1) { clickAcc--; tapOnce(G); if (G.phase === 'dead') return; }
+    const P = BOT_PROFILES[bot.profile] || BOT_PROFILES.promedio;
+    if ((cpsT -= dt) <= 0) { cpsT = 5; bot.cps = Brain.cpsFor(G, colT) * P.cpsK; }
+    // ráfagas sobre una misma cosa y pausas (brain.makeTapper); un toque por paso como mucho: nunca varios a la vez
+    pending = Math.min(3, pending + tapper.step(dt, bot.cps));
+    if (tapper.fresh) {
+      aim = G.foes && G.foes.arrive <= 0 && Math.random() < P.foe ? 'enemy' : (G.larvae[0] || G.eggs[0]) && Math.random() < 0.5 ? 'brood' : 'queen';
+      aimId = aim === 'brood' ? (G.larvae[0] || G.eggs[0]).id : null; // toda la ráfaga sobre el mismo huevo o larva
+    }
+    if (pending >= 1) { pending--; tapOnce(G, aim); if (G.phase === 'dead') return; }
 
-    if ((buyT += dt) >= BUY_EVERY) { buyT = 0; think(G); }
+    if ((buyT += dt) >= P.buyEvery) { buyT = 0; think(G); }
   }
 
-  function tapOnce(G) {
+  /** Un toque al objetivo de la ráfaga actual: 'enemy', 'brood' (la cría más avanzada) o 'queen'. */
+  function tapOnce(G, aim) {
     const visual = visualTokens >= 1;
     if (visual) visualTokens--;
     bot.clicks++; bot.cur.clicks++;
-    if (G.foes && G.foes.arrive <= 0 && Math.random() < FOE_SHARE) {
+    if (aim === 'enemy' && G.foes && G.foes.arrive <= 0) {
       api.tap({ kind: 'enemy', pos: Scene.entityPos('enemy') }, visual);
       rec('toque', 'enemigo'); return;
     }
-    const target = G.larvae[0] || G.eggs[0];
-    if (target && Math.random() < 0.5) {
-      const kind = G.larvae[0] ? 'larva' : 'egg';
+    // el de la ráfaga; si ya nació, el siguiente más avanzado
+    let target = aimId != null && (G.larvae.find(e => e.id === aimId) || G.eggs.find(e => e.id === aimId));
+    if (!target) { target = G.larvae[0] || G.eggs[0]; aimId = target ? target.id : null; }
+    if (aim === 'brood' && target) {
+      const kind = G.larvae.includes(target) ? 'larva' : 'egg';
       api.tap({ kind, id: target.id, slot: target.slot, pos: Scene.entityPos(kind, target.slot) }, visual);
       rec('toque', kind === 'egg' ? 'huevo' : 'larva', `${Math.round(target.p * 100)}%`);
     } else {
@@ -182,11 +206,12 @@ export function createBot(api) {
     const lines = [
       `ANTIGENESIS · resumen del bot`,
       bot.done ? `Juego superado en la generación ${bot.done.gen}: ${fmtTime(gameS)} de juego, ${fmtTime(rs)} reales.` : `Sin terminar: generación ${G.gen}, noche ${G.level}, ${fmtTime(gameS)} de juego, ${fmtTime(rs)} reales.`,
-      `Toques: ${bot.clicks} · compras: ${bot.buys} · colonias: ${bot.colonies.length}`,
+      `Toques: ${bot.clicks} · compras: ${bot.buys} · colonias: ${bot.colonies.length} · perfil: ${bot.profile}`,
+      ...(bot.runs.length ? ['', 'Partidas completadas:', ...bot.runs.map(r => '  ' + r.n + '. ' + r.profile + ': ' + fmtTime(r.gameS) + ' de juego, ' + fmtTime(r.realS) + ' reales, ' + r.gens + ' generaciones')] : []),
       '', 'gen  resultado  noche  tiempo de juego  tiempo real  ADN',
       ...bot.colonies.map(c => `${String(c.gen).padStart(3)}  ${c.cause.padEnd(9)}  ${String(c.night).padStart(5)}  ${fmtTime(c.gameS).padStart(15)}  ${fmtTime(c.realS).padStart(11)}  +${c.adn}`)
     ];
-    return { done: !!bot.done, gameS, realS: rs, clicks: bot.clicks, buys: bot.buys, colonies: cols, text: lines.join('\n') };
+    return { done: !!bot.done, profile: bot.profile, runs: bot.runs, gameS, realS: rs, clicks: bot.clicks, buys: bot.buys, colonies: cols, text: lines.join('\n') };
   }
 
   function download(kind = 'csv') {
@@ -222,6 +247,7 @@ export function createBot(api) {
         const a = b.dataset.bot;
         if (a === 'toggle') toggle();
         else if (a === 'speed') api.setSpeed(+b.dataset.v);
+        else if (a === 'profile') bot.profile = b.dataset.v;
         else if (a === 'close') togglePanel(false);
         else download(a);
         renderPanel(true);
@@ -242,6 +268,8 @@ export function createBot(api) {
     const html = `<div class="bp-head"><b>Bot</b><span class="${bot.on ? 'on' : ''}">${bot.on ? '● jugando' : bot.done ? '✔ terminado' : '○ parado'}</span><button data-bot="close" aria-label="Cerrar">×</button></div>
       <div class="bp-row"><button class="btn-plain${bot.on ? ' on' : ''}" data-bot="toggle">${bot.on ? 'Parar' : 'Empezar'}</button>
         ${SPEEDS.map(v => `<button class="btn-plain sm${sp === v ? ' on' : ''}" data-bot="speed" data-v="${v}">×${v}</button>`).join('')}</div>
+      <div class="bp-row">${Object.entries(BOT_PROFILES).map(([k, p]) => '<button class="btn-plain sm' + (bot.profile === k ? ' on' : '') + '" data-bot="profile" data-v="' + k + '">' + p.name + '</button>').join('')}</div>
+      ${bot.runs.length ? '<div class="bp-stats">Partidas: ' + bot.runs.map(r => r.n + ') ' + fmtTime(r.gameS)).join(' · ') + '</div>' : ''}
       <div class="bp-stats">${bot.cps.toFixed(1)} toques/s · ${s.clicks} toques · ${s.buys} compras<br>
         Colonia ${G.gen}: noche ${G.level} · ${fmtTime(colGame)}<br>Total: ${fmtTime(s.gameS)} de juego · ${fmtTime(s.realS)} reales</div>
       ${rows ? `<table><tr><th>gen</th><th></th><th>noche</th><th>juego</th><th>real</th></tr>${rows}</table>` : ''}

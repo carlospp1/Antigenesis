@@ -449,3 +449,132 @@ button, .tab, .node, .evo { touch-action: manipulation; }   /* sin el retardo de
   #tvTip { bottom: 44px; width: 300px; padding: 8px 10px; } #tvTip h4 { font-size: 14px; } #tvTip p { font-size: 12px; margin-bottom: 4px; }
   #botPanel { top: 50px; left: 80px; width: 260px; font-size: 12px; max-height: calc(100% - 60px); overflow: auto; }
 }
+
+/* ---------- efectos de recompensa (src/ui/juice.js) ---------- */
+/* combo de toques: a la izquierda del centro, crece y cambia de color con la racha */
+#combo { position: absolute; left: 24%; top: 34%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; z-index: 6;
+  color: #fff6dc; -webkit-text-stroke: 1px rgba(40, 20, 8, .75); text-shadow: 0 3px 6px rgba(40, 20, 8, .7); transition: opacity .3s; }
+#combo small { display: block; font: 800 13px Nunito, sans-serif; letter-spacing: .25em; opacity: .85; }
+#combo b { display: block; font: 900 46px Nunito, sans-serif; line-height: 1; }
+#combo.t1 b { color: #b8f07a; } #combo.t2 b { color: #ffd76a; font-size: 54px; } #combo.t3 b { color: #ff9a4a; font-size: 62px; text-shadow: 0 0 18px rgba(255, 140, 40, .8), 0 3px 6px rgba(40, 20, 8, .7); }
+#combo em { display: block; font: 900 15px Nunito, sans-serif; font-style: normal; color: #b8f07a; letter-spacing: .04em; }
+#combo.pop { animation: comboPop .22s ease-out; } #combo.out { opacity: 0; }
+@keyframes comboPop { 0% { transform: translate(-50%, -50%) scale(1.35) rotate(-4deg); } 100% { transform: translate(-50%, -50%) scale(1); } }
+
+/* iconos que vuelan al contador y el contador que late al recibirlos */
+.reward { position: fixed; z-index: 30; width: 22px; height: 22px; margin: -11px 0 0 -11px; pointer-events: none; color: #b8f07a;
+  filter: drop-shadow(0 2px 3px rgba(40, 20, 8, .7)); animation: rewardFly .85s cubic-bezier(.5, -0.2, .7, 1) both; }
+.reward svg { width: 100%; height: 100%; }
+@keyframes rewardFly {
+  0% { transform: translate(0, 0) scale(.3); opacity: 0; }
+  25% { transform: translate(var(--sx), var(--sy)) scale(1.25); opacity: 1; }
+  100% { transform: translate(var(--tx), var(--ty)) scale(.6); opacity: .9; }
+}
+.pill.gain { animation: pillGain .35s ease-out; }
+@keyframes pillGain { 0% { transform: scale(1); } 35% { transform: scale(1.18); box-shadow: 0 0 0 3px rgba(184, 240, 122, .55), 0 0 18px rgba(184, 240, 122, .6); } 100% { transform: scale(1); } }
+
+/* cartel de celebración con cinta */
+.celebrate { position: absolute; left: 50%; top: 26%; transform: translateX(-50%); z-index: 8; pointer-events: none; animation: celIn .45s cubic-bezier(.2, 1.6, .4, 1) both; }
+.celebrate.out { animation: celOut .5s ease-in both; }
+.celebrate .ribbon { padding: 12px 34px 14px; text-align: center; border-radius: 14px; color: #fff6dc;
+  background: linear-gradient(180deg, #6a3a1c, #3a1f0e); border: 2px solid #ffd76a; box-shadow: 0 10px 30px rgba(0, 0, 0, .45), 0 0 30px rgba(255, 210, 90, .35); }
+.celebrate b { display: block; font: 700 34px Cinzel, Georgia, serif; color: #ffd76a; letter-spacing: .03em; text-shadow: 0 2px 0 #3a1f0e, 0 0 16px rgba(255, 210, 90, .6); white-space: nowrap; }
+.celebrate span { display: block; font: 800 15px Nunito, sans-serif; margin-top: 2px; opacity: .9; }
+.celebrate.boss .ribbon { border-color: #ff8a5a; } .celebrate.boss b { color: #ffb08a; }
+.celebrate.evolve .ribbon, .celebrate.win .ribbon { border-color: #c99bff; box-shadow: 0 10px 30px rgba(0, 0, 0, .45), 0 0 40px rgba(201, 155, 255, .45); }
+.celebrate.evolve b { color: #e2c8ff; } .celebrate.win b { font-size: 40px; }
+.celebrate.combo .ribbon { padding: 8px 22px 10px; } .celebrate.combo b { font-size: 26px; }
+@keyframes celIn { 0% { transform: translateX(-50%) scale(.4) rotate(-6deg); opacity: 0; } 100% { transform: translateX(-50%) scale(1); opacity: 1; } }
+@keyframes celOut { to { transform: translateX(-50%) translateY(-30px) scale(.9); opacity: 0; } }
+
+/* confeti */
+.confetti { position: absolute; top: 34%; z-index: 7; border-radius: 2px; pointer-events: none; animation: confetti 2.1s cubic-bezier(.2, .7, .4, 1) both; }
+@keyframes confetti {
+  0% { transform: translate(0, 0) rotate(0); opacity: 1; }
+  45% { transform: translate(calc(var(--dx) * .6), var(--dy)) rotate(calc(var(--r) * .5)); opacity: 1; }
+  100% { transform: translate(var(--dx), 70vh) rotate(var(--r)); opacity: 0; }
+}
+
+@media (max-width: 720px) {
+  #combo { left: 50%; top: 30%; } #combo b { font-size: 36px; } #combo.t2 b { font-size: 42px; } #combo.t3 b { font-size: 48px; }
+  .celebrate { top: 22%; } .celebrate .ribbon { padding: 9px 18px 11px; } .celebrate b { font-size: 24px; white-space: normal; } .celebrate.win b { font-size: 28px; } .celebrate span { font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) { .celebrate, #combo.pop, .pill.gain { animation: none; } }
+
+/* ---------- previsión de la noche como chip (todas las pantallas) ---------- */
+.card .note { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.card .note .chip { padding: 2px 10px; border-radius: 999px; font-size: 12px; letter-spacing: .02em; color: var(--ink);
+  background: rgba(155, 224, 92, .16); border: 1px solid rgba(155, 224, 92, .5); }
+.card .note.warn .chip { background: rgba(240, 138, 108, .16); border-color: rgba(240, 138, 108, .55); }
+
+/* ---------- ajustes: nombre a la izquierda, controles a la derecha; pruebas aparte y plegadas ---------- */
+.settings .line { display: grid; grid-template-columns: 8.5em minmax(0, 1fr); align-items: center; gap: 10px; }
+.settings .line > span { min-width: 0; }
+.settings .ctl { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
+.settings .ctl small { flex-basis: 100%; color: var(--dim); font-size: 12px; font-weight: 600; }
+.dev-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 0 2px; border-top: 1px solid var(--line);
+  color: var(--dim); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; text-align: left; }
+.dev-head::after { content: "▸"; font-size: 14px; transition: transform .2s; } .dev-head.open::after { transform: rotate(90deg); }
+.dev { display: grid; gap: 12px; }
+
+/* el aviso «Powered by Netlify» que inyecta el alojamiento: tapa la esquina del juego */
+#nl-badge-frame { display: none !important; }
+
+/* ---------- teléfono en vertical ---------- */
+@media (max-width: 720px) {
+  /* arriba: una fila de cabecera (hormiga y nivel · iconos) y una fila de recursos que se desliza si no cabe */
+  .brand .brand-name, .brand .sep { display: none; }
+  .brand { padding: 9px 12px 7px; }
+  .pills { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+  .pills::-webkit-scrollbar { display: none; }
+  .pill { flex: none; }
+  .pill em#vRate { display: none; }
+  .pill.clock em { display: none; }
+  .pill.clock .meter { display: block; width: 36px; height: 5px; margin-left: 2px; }
+  /* objetivo: una línea con su barra, sin la etiqueta */
+  #quest { top: calc(98px + env(safe-area-inset-top)); padding: 5px 10px; gap: 8px; }
+  #quest b { display: none; }
+  #quest p { margin: 0 0 3px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #quest .meter { height: 4px; }
+  #alarm { top: calc(98px + env(safe-area-inset-top)); }
+  #toasts { top: calc(140px + env(safe-area-inset-top)); }
+  /* abajo: barra de navegación fija y, justo encima, las tarjetas en carrusel */
+  #side { left: 0; right: 0; bottom: 0; top: auto; transform: none; margin: 0; border-radius: 0; gap: 4px; flex-direction: row;
+    padding: 6px max(8px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    background: var(--panel); border-top: 1px solid var(--line); }
+  .tab { height: 48px; background: none; border: 1px solid transparent; box-shadow: none; border-radius: 12px; }
+  .tab.on { background: var(--panel-hi); border: 1px solid var(--line-hi); box-shadow: none; }
+  .tab.hot::after { transform: translate(18px, -16px); }
+  #dock { left: 0; right: 0; bottom: calc(62px + env(safe-area-inset-bottom)); padding: 0 10px; gap: 8px; scroll-padding-inline: 10px; }
+  .card { flex: 0 0 84%; height: 100px; max-height: none; grid-template-columns: 40px 1fr; gap: 2px 10px; padding: 8px 12px; }
+  .card .fx.stats, .card .note .why { display: none; }
+  .card .note { margin: 0; }
+  #botPanel { bottom: calc(176px + env(safe-area-inset-bottom)); }
+  /* árboles: pestañas cortas en una línea */
+  #tvTabs .long { display: none; }
+  #tvTabs button { white-space: nowrap; }
+  /* recursos: el reloj del día va antes que «Fundar» (que es una acción, al final de la fila) */
+  .pill.found { order: 9; }
+  /* pie de los árboles: una sola fila compacta, del color de los paneles; la ayuda queda encima */
+  .tv-foot { flex-wrap: nowrap; gap: 14px; padding: 8px max(12px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    background: var(--panel); border-top: 1px solid var(--line); }
+  .tv-foot .link { font-size: 15px; white-space: nowrap; } .tv-foot .link small, .tv-foot .long { display: none; }
+  #tvClose kbd { display: none; }
+  #tvTip { left: 10px; right: 10px; width: auto; bottom: calc(52px + env(safe-area-inset-bottom)); padding: 10px 14px; }
+  #tvTip p { font-size: 14px; }
+}
+
+/* ---------- final del juego: el planeta (src/ui/ending.js) ---------- */
+#endingView { position: fixed; inset: 0; z-index: 40; background: radial-gradient(ellipse at 50% 40%, #1b1430 0%, #07050c 70%);
+  animation: evIn 1.2s ease-out both; cursor: pointer; }
+#endingView canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+#endingView .ev-text { position: absolute; left: 0; right: 0; bottom: calc(7vh + env(safe-area-inset-bottom)); display: grid; justify-items: center; gap: 6px;
+  padding-inline: max(16px, env(safe-area-inset-left)); text-align: center; }
+#endingView h1 { margin: 0; font: 700 clamp(26px, 4.4vw, 46px) Cinzel, Georgia, serif; color: var(--honey); letter-spacing: .03em; text-wrap: balance;
+  text-shadow: 0 0 24px rgba(240, 184, 76, .45); animation: evIn 1.4s .6s ease-out both; }
+#endingView .ev-sub { margin: 0; color: var(--dim); font-size: 15px; animation: evIn 1.4s 1s ease-out both; }
+#endingView .ev-pct { margin: 4px 0 6px; color: var(--ink); font-size: 16px; }
+#endingView .ev-pct b { font-size: 30px; color: #ffd76a; font-variant-numeric: tabular-nums; }
+#endingView .ev-skip { position: absolute; right: max(16px, env(safe-area-inset-right)); top: calc(14px + env(safe-area-inset-top)); color: var(--dim); font-size: 12px; opacity: .7; }
+@keyframes evIn { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { #endingView, #endingView h1, #endingView .ev-sub { animation: none; } }
