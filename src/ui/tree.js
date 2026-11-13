@@ -192,12 +192,15 @@ export function wireTree(getGame) {
       if (Math.hypot(dx, dy) > 6) moved = true;
       if (moved) { tv.x = drag.tx + dx; tv.y = drag.ty + dy; applyView(); }
     }
+    // pasar por encima solo existe con ratón: con el dedo dejaría «colgado» un nodo que tapa al seleccionado
+    if (e.pointerType !== 'mouse') return;
     const n = e.target.closest && e.target.closest('[data-node]');
     const h = n ? n.dataset.node : null;
     if (h !== tv.hover) { tv.hover = h; renderTree(getGame()); }
   });
   window.addEventListener('pointerup', e => {
     if (!tv.open || !drag) return;
+    if (e.pointerType !== 'mouse') tv.hover = null;
     const was = drag; drag = null;
     if (moved) return;
     const n = e.target.closest && e.target.closest('[data-node]');
