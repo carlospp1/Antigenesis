@@ -328,7 +328,7 @@ const NEEDS = {
 };
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI'];
 
-function build(rows, dna) {
+function build(rows) {
   const N = {}, byName = {};
   // al crecer, las coordenadas pueden salir negativas: todo se desplaza para empezar en 0
   const mx = Math.min(...rows.map(r => r[1])), my = Math.min(...rows.map(r => r[2]));
@@ -347,8 +347,7 @@ function build(rows, dna) {
     const i = ROMAN.indexOf(m[2]), prev = byName[m[1] + ' ' + ROMAN[i - 1]] || (i === 1 ? byName[m[1]] : null);
     if (prev && !N[id].needs.includes(prev)) N[id].needs.push(prev);
   }
-  if (dna) tidyDna(N); // linaje: hélice horizontal; el árbol de la colonia se queda en cruz desde el centro
-  else freeCollisions(N);
+  freeCollisions(N); // los dos árboles se quedan en el sitio en el que crecieron (centro + ramas)
   return N;
 }
 
@@ -368,77 +367,6 @@ function freeCollisions(N) {
       }
     }
   }
-}
-
-/**
- * Linaje en doble hélice horizontal. La raíz queda en la punta izquierda; el resto crece a la derecha.
- * Las dos hebras se cruzan y, cuando se separan, un travesaño las une.
- */
-function tidyDna(N) {
-  const dist = {}, q = ['root'];
-  dist.root = 0;
-  while (q.length) {
-    const id = q.shift();
-    for (const a of N[id].adj) if (dist[a] == null) { dist[a] = dist[id] + 1; q.push(a); }
-  }
-  const cat = { root: -1, brood: 0, food: 1, tap: 2, war: 3 };
-  const parent = {};
-  for (const id in N) {
-    if (id === 'root') { parent[id] = ''; continue; }
-    let best = null, bd = 1e9;
-    for (const a of N[id].adj) {
-      const d = dist[a] ?? 1e9;
-      if (d < bd || (d === bd && (best == null || a < best))) { bd = d; best = a; }
-    }
-    parent[id] = best || '';
-  }
-  // nivel a nivel desde la raíz; dentro de cada nivel, en el orden de sus padres para que los enlaces no se crucen tanto
-  const levels = [];
-  for (const id in N) (levels[dist[id] ?? levels.length + 99] ||= []).push(id);
-  const slots = helixSlots(Object.keys(N).length), pos = {};
-  let si = 0;
-  for (const lv of levels.filter(Boolean)) {
-    lv.sort((a, b) => {
-      const pa = pos[parent[a]] || { a: 0, c: 0 }, pb = pos[parent[b]] || { a: 0, c: 0 };
-      return (pa.a - pb.a) || (pa.c - pb.c) || (cat[N[a].cat] ?? 9) - (cat[N[b].cat] ?? 9) || N[a].name.localeCompare(N[b].name, 'es');
-    });
-    for (const id of lv) {
-      const s = slots[si++];
-      pos[id] = s;
-      N[id].x = s.a; // a lo largo → horizontal
-      N[id].y = s.c;
-    }
-  }
-}
-
-/**
- * Forma de la hélice, en celdas. «a» va a lo largo (filas); «c» de lado a lado.
- * Hebra A: c = amp·(1 + sen) · Hebra B: c = amp·(1 − sen). La fila 0 es un cruce: ahí va la raíz.
- */
-export const HELIX = { amp: 3, period: 14, row: 0.9, rungEvery: 2 };
-export const helixAt = (a, strand) => {
-  const s = Math.sin((2 * Math.PI * (a / HELIX.row)) / HELIX.period);
-  return HELIX.amp * (1 + (strand ? -s : s));
-};
-
-/** Sitios de la hélice, desde la punta: los dos hilos y, cada rungEvery filas, los peldaños entre ellos. */
-function helixSlots(need) {
-  const out = [];
-  for (let t = 0; out.length < need; t++) {
-    const a = t * HELIX.row, cA = helixAt(a, 0), cB = helixAt(a, 1), span = Math.abs(cA - cB);
-    const row = [];
-    if (span < 0.8) row.push((cA + cB) / 2); // cruce: un solo nodo
-    else {
-      row.push(cA, cB);
-      if (t % HELIX.rungEvery === 0) {
-        const n = Math.floor(span / 0.85) - 1, lo = Math.min(cA, cB);
-        for (let i = 1; i <= n; i++) row.push(lo + (span * i) / (n + 1));
-      }
-    }
-    row.sort((x, y) => x - y);
-    for (const c of row) out.push({ a, c, t });
-  }
-  return out;
 }
 
 /** Lo que le falta a un nodo para poder comprarse aunque esté conectado (lista de ids). */
@@ -560,8 +488,8 @@ const S4 = [
   ['mh4', 0, 0, 'tap', 'ghost', 'Cuarta mano', 'Otra mano fantasma: un toque cada 3 s', { bio: 28 }, { ghost: 1 / 3 }, ['mh3'], 1, { reqPerk: 'pgh6' }],
   ['mh5', 0, 0, 'tap', 'ghost', 'Quinta mano', 'Otra mano fantasma: un toque cada 2 s', { bio: 40 }, { ghost: 0.5 }, ['mh4'], 1, { reqPerk: 'pgh7' }]
 ];
-export const SKILLS = build([...grow(SKILL_ROWS, SKILL_ROWS.length * 2, 'skills', 7), ...S4], false);
-// añadidos tras crecer, para no cambiar los ids de los generados (partidas guardadas). El linaje lo ordena tidyDna()
+export const SKILLS = build([...grow(SKILL_ROWS, SKILL_ROWS.length * 2, 'skills', 7), ...S4]);
+// añadidos tras crecer, para no cambiar los ids de los generados (partidas guardadas)
 const P4 = [
   ['ptc', 4, -1, 'brood', 'hand', 'Toque menguante', 'Tocar a la reina rebaja la comida que pide el huevo (una cantidad fija, que arrastra el siguiente). Al llegar al mínimo, el toque vuelve a alimentarla', { adn: 80 }, { tapCut: 1 }, ['pse']],
   ['ptc2', 4, -2, 'brood', 'hand', 'Toque menguante II', 'Los toques pueden rebajar los huevos hasta un 35%', { adn: 60 }, { cutMax: 0.1 }, ['ptc']],
@@ -601,7 +529,7 @@ const P4 = [
   ['pls1', 0, 0, 'brood', 'sparkle', 'Brillo heredado', '+4% de hormigas doradas. «Linaje dorado» se desbloquea en el árbol', { adn: 28 }, { shiny: 0.04 }, ['psh2'], 0, { unlock: ['shK'] }],
   ['pls2', 0, 0, 'brood', 'sparkle', 'Élite heredada', '+4% de hormigas doradas. «Doradas de élite» se desbloquea en el árbol', { adn: 64 }, { shiny: 0.04 }, ['pls1'], 0, { unlock: ['sh3'] }]
 ];
-export const PERKS = build([...grow(PERK_ROWS, PERK_ROWS.length * 2, 'perm', 11), ...P4], true);
+export const PERKS = build([...grow(PERK_ROWS, PERK_ROWS.length * 2, 'perm', 11), ...P4]);
 
 /** Suma los efectos de los nodos comprados: X multiplica, el resto suma. */
 export function treeFx(nodes, owned) {

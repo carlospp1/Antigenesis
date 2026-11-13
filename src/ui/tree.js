@@ -62,23 +62,21 @@ export function renderTree(game, force) {
   if (!force && key === lastKey) return;
   lastKey = key;
 
-  // enlaces: dorados entre comprados, tenues si llevan a algo visible. En el linaje, la hélice hace de esqueleto.
-  let lines = '', maxX = 0, maxY = 0, reach = 0;
-  const drawn = new Set(), vis = s => s !== 'hidden', dna = tv.tree === 'perm';
+  // enlaces: dorados entre comprados, tenues si llevan a algo visible
+  let lines = '', maxX = 0, maxY = 0;
+  const drawn = new Set(), vis = s => s !== 'hidden';
   for (const id in nodes) {
     const n = nodes[id]; maxX = Math.max(maxX, n.x); maxY = Math.max(maxY, n.y);
-    if (vis(st[id])) reach = Math.max(reach, n.x);
     for (const a of n.adj) {
       const k = id < a ? id + a : a + id;
       if (drawn.has(k) || !vis(st[id]) || !vis(st[a])) continue;
       drawn.add(k);
       const m = nodes[a], cls = st[id] === 'owned' && st[a] === 'owned' ? 'on' : (st[id] === 'owned' || st[a] === 'owned') ? 'half' : 'off';
-      if (dna && cls !== 'half') continue; // en el ADN el resto lo dibuja la hélice
       lines += `<line class="${cls}" x1="${(n.x + 0.5) * CELL}" y1="${(n.y + 0.5) * CELL}" x2="${(m.x + 0.5) * CELL}" y2="${(m.y + 0.5) * CELL}"/>`;
     }
   }
   const W = (maxX + 1) * CELL, H = (maxY + 1) * CELL;
-  let html = `<svg class="tv-lines" width="${W}" height="${H}">${dna ? helixSVG(reach + 1.5) : ''}${lines}</svg>`;
+  let html = `<svg class="tv-lines" width="${W}" height="${H}">${lines}</svg>`;
   for (const id in nodes) {
     const n = nodes[id], s = st[id];
     if (s === 'hidden') continue;
@@ -91,20 +89,6 @@ export function renderTree(game, force) {
   world.style.width = W + 'px'; world.style.height = H + 'px';
   world.innerHTML = html;
   renderTip(st);
-}
-
-/** Esqueleto de la doble hélice del linaje (horizontal) hasta `len` celdas. */
-function helixSVG(len) {
-  const H = Game.HELIX, P = (a, c) => `${(a + 0.5) * CELL},${(c + 0.5) * CELL}`;
-  const strand = s => { let d = ''; for (let a = 0; a <= len; a += 0.1) d += (d ? ' L' : 'M') + P(a, Game.helixAt(a, s)); return d; };
-  let rungs = '';
-  for (let t = 0; t * H.row <= len; t += H.rungEvery) {
-    const a = t * H.row, cA = Game.helixAt(a, 0), cB = Game.helixAt(a, 1);
-    if (Math.abs(cA - cB) < 0.8) continue;
-    const [x1, y1] = P(a, cA).split(','), [x2, y2] = P(a, cB).split(',');
-    rungs += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
-  }
-  return `<g class="dna"><g class="rung">${rungs}</g><path class="s0" d="${strand(0)}"/><path class="s1" d="${strand(1)}"/></g>`;
 }
 
 function renderHead() {
