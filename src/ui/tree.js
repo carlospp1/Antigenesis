@@ -178,11 +178,12 @@ const STAT = {
   ghost, ghostX: ghost,
   extraEgg: ['Huevo extra', D => pct(D.extraEgg)], freeEgg: ['Huevo sin precio', D => pct(D.freeEgg)],
   instaHatch: ['Eclosión precoz', D => pct(D.instaHatch)], dodge: ['Esquivar un golpe mortal', D => pct(D.dodge)],
-  comboStep: ['Extra por toque de racha', D => '+' + pct(D.comboStep * D.comboX)], comboCap: ['Toques de racha', D => fmt(D.comboCap)],
+  comboStep: ['Extra por toque de racha', D => '+' + pct(D.comboStep * Math.sqrt(D.comboX))], comboCap: ['Toques de racha', D => fmt(D.comboCap)],
   comboGap: ['Margen entre toques', D => secs(D.comboGap)], comboX: ['Extra de la racha', D => '×' + fmt(D.comboX, 1)],
   farm: ['Granjas', D => D.farm > 0 ? fmt(D.farm * Game.nightPrize(G, D) / 60, 1) + ' de jalea/s' : 'no tienes'],
   lives: ['Asaltos que resiste la reina', D => fmt(D.lives)],
   discount: ['Descuento del árbol', D => pct(D.discount)], cutMax: ['Rebaja máxima de los huevos', D => pct(D.cutMax)],
+  autoBuy: ['Mayordomo', D => D.autoBuy > 0 ? 'compra sola ×' + D.autoBuy : 'apagado'],
   startAnts: ['Hormigas al empezar', D => fmt(D.P.startAnts || 0)], startJelly: ['Jalea al empezar', D => fmt(D.P.startJelly || 0)],
   startBio: ['Biomasa al empezar', D => fmt(D.P.startBio || 0)], startEggs: ['Huevos al empezar', D => fmt(D.P.startEggs || 0)],
   keepJelly: ['Jalea heredada', D => pct(D.P.keepJelly || 0)]
@@ -194,7 +195,7 @@ function ownedNote(id) {
 }
 function linajeHTML(n) {
   const line = (ids, tail) => (ids || []).map(id => `«${Game.SKILLS[id].name}» ${tail}`);
-  const bits = [...line(n.own, 'es tuya en el árbol, para siempre'), ...line(n.unlock, 'se desbloquea en el árbol')];
+  const bits = [...line(n.own, 'es tuya en el árbol (ya mejorada, sin pagar biomasa)'), ...line(n.unlock, 'se desbloquea en el árbol')];
   return bits.length ? `<p class="good">${bits.join('. ')}.</p>` : '';
 }
 function statHTML(n) {

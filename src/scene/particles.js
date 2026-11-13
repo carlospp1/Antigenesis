@@ -6,30 +6,18 @@ import { ctx, rnd } from './context.js';
 import { MAT } from './geometry.js';
 import { W } from './world.js';
 import { PXW } from './layout.js';
+import { makeFoodSprite, setFoodSprite } from './foodArt.js';
 
 const parts = [], drops = [], snacks = [];
-const SNACK = {};
+const SNACK_KINDS = { leaf: 1, berry: 1, seed: 1, gold: 1 };
 let pi = 0;
 
-/** Trozos de comida para dar de comer a la reina con un toque. */
+/** Trozos de comida en sprite 2D (vuelo a la boca). */
 function buildSnacks() {
-  SNACK.geo = {
-    leaf: new THREE.IcosahedronGeometry(0.5, 1).scale(1.5, 0.22, 1).rotateZ(0.4),
-    berry: new THREE.SphereGeometry(0.5, 16, 12).scale(1, 1.15, 1),
-    seed: new THREE.SphereGeometry(0.5, 14, 10).scale(1.5, 0.75, 0.8),
-    gold: new THREE.IcosahedronGeometry(0.5, 1).scale(1.6, 0.3, 1.05).rotateZ(0.4)
-  };
-  SNACK.mat = {
-    leaf: new THREE.MeshStandardMaterial({ color: '#7cc443', roughness: 0.5 }),
-    berry: new THREE.MeshStandardMaterial({ color: '#e0383e', roughness: 0.25 }),
-    seed: new THREE.MeshStandardMaterial({ color: '#e2bf78', roughness: 0.45 }),
-    gold: new THREE.MeshStandardMaterial({ color: '#ffcf4a', emissive: '#c88a10', emissiveIntensity: 0.9, metalness: 0.6, roughness: 0.2 })
-  };
-  // la comida que vuela a la reina se dibuja por delante de todo (no la tapa ni la reina ni el terreno)
-  for (const k in SNACK.mat) { SNACK.mat[k].depthTest = false; SNACK.mat[k].depthWrite = false; }
   for (let i = 0; i < 32; i++) {
-    const m = new THREE.Mesh(SNACK.geo.leaf, SNACK.mat.leaf); m.visible = false; m.renderOrder = 60; ctx.scene.add(m);
-    snacks.push({ m, t: 1, a: new THREE.Vector3(), c: new THREE.Vector3(), b: null, size: 1, k: 1, spin: new THREE.Vector3(), done: null });
+    const m = makeFoodSprite('leaf', true);
+    ctx.scene.add(m);
+    snacks.push({ m, t: 1, a: new THREE.Vector3(), c: new THREE.Vector3(), b: null, size: 1, k: 1, spin: 0, done: null });
   }
 }
 let si = 0;
@@ -41,8 +29,8 @@ const ease = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
  * front: sale por delante de todo, entre la cámara y la reina, en la línea del dedo (al tocar a la reina).
  */
 export function feedFly(fromX, fromY, target, onArrive, type, size, front) {
-  const s = snacks[si++ % snacks.length], types = ['leaf', 'berry', 'seed'], k = SNACK.geo[type] ? type : types[Math.floor(Math.random() * 3)];
-  s.m.geometry = SNACK.geo[k]; s.m.material = SNACK.mat[k];
+  const s = snacks[si++ % snacks.length], types = ['leaf', 'berry', 'seed'], k = SNACK_KINDS[type] ? type : types[Math.floor(Math.random() * 3)];
+  setFoodSprite(s.m, k, true);
   W(fromX, fromY, s.a); s.k = PXW; s.a.y += 20 * s.k;
   if (front) { // en la línea del dedo, a algo más de la mitad del camino entre la cámara y la boca
     const cam = ctx.camera.position, d = cam.distanceTo(target());
@@ -50,8 +38,8 @@ export function feedFly(fromX, fromY, target, onArrive, type, size, front) {
   }
   s.front = !!front;
   s.b = target; s.t = 0; s.size = size || rnd(28, 34); s.done = onArrive;
-  s.spin.set(rnd(-6, 6), rnd(-6, 6), rnd(-6, 6));
-  s.m.visible = true; s.m.position.copy(s.a); s.m.scale.setScalar(0.01);
+  s.spin = rnd(-4, 4);
+  s.m.visible = true; s.m.position.copy(s.a); s.m.scale.set(0.01, 0.01, 1);
 }
 
 /** «Festín»: una lluvia de comida, desde arriba, que cae en la boca durante un par de segundos. */
@@ -71,11 +59,12 @@ function updateSnacks(dt) {
     s.c.copy(s.a).add(b).multiplyScalar(0.5); s.c.y += (s.front ? 30 : 70) * s.k + s.a.distanceTo(b) * 0.15;
     const u = 1 - e;
     s.m.position.set(u * u * s.a.x + 2 * u * e * s.c.x + e * e * b.x, u * u * s.a.y + 2 * u * e * s.c.y + e * e * b.y, u * u * s.a.z + 2 * u * e * s.c.z + e * e * b.z);
-    s.m.rotation.x += s.spin.x * dt; s.m.rotation.y += s.spin.y * dt; s.m.rotation.z += s.spin.z * dt;
+    if (s.m.material) s.m.material.rotation += s.spin * dt;
     const pop = Math.min(1, s.t / 0.15), shrink = s.t > 0.8 ? 1 - (s.t - 0.8) / 0.2 * 0.75 : 1;
     // la que sale por delante (cerca de la cámara) se ve del tamaño que tendrá en la boca, no gigante
     const near = s.front ? ctx.camera.position.distanceTo(s.m.position) / Math.max(1e-4, ctx.camera.position.distanceTo(b)) : 1;
-    s.m.scale.setScalar(s.size * s.k * near * pop * (1 + Math.sin(Math.min(1, s.t / 0.15) * Math.PI) * 0.25) * shrink);
+    const sc = s.size * s.k * near * pop * (1 + Math.sin(Math.min(1, s.t / 0.15) * Math.PI) * 0.25) * shrink;
+    s.m.scale.set(sc, sc, 1);
     if (s.t >= 1) { s.m.visible = false; if (s.done) s.done(); }
   }
 }

@@ -23,7 +23,8 @@ function act(a, id, btn) {
   if (a === 'openTree') { openTree(G, id); sfx = 'click'; }
   else if (a === 'prestige') { leave(); return; }
   else if (a === 'close') { openSheet(G, null); sfx = 'click'; }
-  else if (a === 'mute') { Audio.start(); Audio.set('mute', !Audio.vol.mute); G.mute = Audio.vol.mute; sfx = 'click'; }
+  else if (a === 'muteMusic') { Audio.start(); Audio.set('muteMusic', !Audio.vol.muteMusic); Audio.savePrefs(G); sfx = 'click'; }
+  else if (a === 'muteSfx') { Audio.start(); Audio.set('muteSfx', !Audio.vol.muteSfx); Audio.savePrefs(G); sfx = 'click'; }
   else if (a === 'tour') { openSheet(G, null); setTimeout(startTour, 250); sfx = 'click'; }
   else if (a === 'dev') { ui.devOpen = !ui.devOpen; sfx = 'click'; }
   else if (a === 'pause') { ui.paused = !ui.paused; sfx = 'click'; }
@@ -32,7 +33,14 @@ function act(a, id, btn) {
   else if (a === 'speed') { ui.speed = +id; sfx = 'click'; }
   else if (a === 'bot') { bot.panel(); openSheet(G, null); sfx = 'click'; }
   else if (a === 'debug') { ui.debug = Scene.toggleDebug(); sfx = 'click'; }
-  else if (a === 'free') { Game.debug.free = !Game.debug.free; toast(Game.debug.free ? 'Debug: todo desbloqueado. Jalea, biomasa y ADN infinitos.' : 'Debug apagado.'); sfx = 'click'; }
+  else if (a === 'liveMap') {
+    const live = Scene.setLiveMap(!Scene.isLiveMap());
+    toast(live ? 'Nido 3D en vivo.' : 'Nido en foto fija.');
+    sfx = 'click';
+  }
+  else if (a === 'free') { Game.debug.free = !Game.debug.free; toast(Game.debug.free ? 'Debug: jalea, biomasa y ADN infinitos. Maxea árbol/linaje con los botones.' : 'Debug apagado.'); sfx = 'click'; }
+  else if (a === 'debugSkills') { Game.debugMaxTree(G, 'skills'); toast('Árbol de la colonia al máximo.', 'good'); if (tv.open) renderTree(G, true); sfx = 'skill'; }
+  else if (a === 'debugPerm') { Game.debugMaxTree(G, 'perm'); toast('Linaje al máximo.', 'good'); if (tv.open) renderTree(G, true); sfx = 'skill'; }
   else if (a === 'reset') {
     if (Date.now() - resetArmed < 4000) {
       cancelEnding(); Game.wipe(); Scene.reset(); G = Game.newGame(); D = Game.calc(G); resetArmed = 0;
@@ -91,23 +99,31 @@ const bot = createBot({
 });
 
 function clickScene(hit) {
-  if (G.phase === 'dead' || ui.paused) return; // en pausa (o con el tutorial abierto) los toques no juegan
+  // árbol abierto: el tiempo (G.total) no avanza → sin esto la racha no caduca por comboGap
+  if (G.phase === 'dead' || ui.paused || tv.open) return;
   if (!hit) return;
   if (hit.kind === 'enemy') {
-    const d = Game.hit(G, D);
-    if (d > 0) { Scene.enemyHit(); float('−' + fmt(d, 0), hit.pos, 'hit'); Audio.play('hit'); Juice.tap(G.combo, Game.comboMult(G, D), D.comboCap + 1); }
+    const d = Game.hit(G, D), m = Game.comboMult(G, D);
+    if (d > 0) {
+      Scene.enemyHit(hit.pos || hit.click);
+      const streak = m >= 2 ? '×' + (Math.round(m * 10) / 10).toString().replace('.', ',') + ' ' : '';
+      float(streak + '−' + fmt(d, 0), hit.pos, m >= 2 ? 'lucky' : 'hit');
+      Audio.play('hit');
+      Juice.tap(G.combo, m, D.comboCap + 1);
+    }
     return;
   }
   const r = Game.click(G, hit.kind, hit.id);
   Scene.bump(hit);
   Audio.play('click');
   Juice.tap(r.combo, r.mult, D.comboCap + 1); // racha de toques seguidos (rinden más)
+  const streak = r.mult >= 2 ? '×' + (Math.round(r.mult * 10) / 10).toString().replace('.', ',') + ' ' : '';
   if (hit.kind === 'queen') { // la comida vuela hasta su boca y el número sale al tragarla
     if (r.crit) { float('¡×' + r.crit + '!', hit.click, 'lucky'); burst('×' + r.crit, 'Toque de suerte', r.crit >= 5 ? 'x5' : 'x2', Scene.toScreen(hit.click)); Audio.play('skill'); }
-    Scene.feedQueen(hit.click, at => { float(r.laid ? '+huevo' : (r.cut ? '−' : '+') + fmt(r.food), at, r.laid ? 'good' : r.crit ? 'lucky' : 'crit'); Audio.play('deposit'); });
+    Scene.feedQueen(hit.click, at => { float(r.laid ? '+huevo' : streak + (r.cut ? '−' : '+') + fmt(r.food), at, r.laid ? 'good' : r.crit || r.mult >= 2 ? 'lucky' : 'crit'); Audio.play('deposit'); });
     return;
   }
-  float((r.crit ? '¡×' + r.crit + '! ' : '') + '+' + r.pct + '%', Scene.entityPos(hit.kind, hit.slot), r.crit ? 'lucky' : '');
+  float(streak + (r.crit ? '¡×' + r.crit + '! ' : '') + '+' + r.pct + '%', Scene.entityPos(hit.kind, hit.slot), r.crit || r.mult >= 2 ? 'lucky' : '');
   if (r.crit) { burst('×' + r.crit, 'Cría acelerada', r.crit >= 5 ? 'x5' : 'x2', Scene.toScreen(Scene.entityPos(hit.kind, hit.slot))); Audio.play('skill'); }
 }
 
@@ -117,6 +133,14 @@ function wireButtons() {
   for (const ev of ['pointerup', 'pointercancel']) window.addEventListener(ev, () => setTimeout(() => { ui.holding = false; }, 0));
   $('app').addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && !b.disabled) act(b.dataset.act, b.dataset.id, b); });
   $('sheet').addEventListener('click', e => { if (e.target.id === 'sheet') openSheet(G, null); });
+  // volumen: mientras arrastras no se re-renderiza el panel (ui.holding)
+  $('sheet').addEventListener('input', e => {
+    const el = e.target.closest('[data-vol]');
+    if (!el) return;
+    Audio.start();
+    Audio.set(el.dataset.vol, (+el.value || 0) / 100);
+    Audio.savePrefs(G);
+  });
 
   for (const b of document.querySelectorAll('#side .tab')) b.onclick = () => {
     const t = b.dataset.tab;
@@ -152,7 +176,7 @@ function wireButtons() {
 
   $('start').onclick = () => {
     if (tourPending() && !bot.on) setTimeout(startTour, 700); // primera partida: el tutorial
-    $('intro').hidden = true; Audio.start(); Audio.set('mute', !!G.mute);
+    $('intro').hidden = true; Audio.start(); Audio.loadPrefs(G);
     if (G.phase === 'dead' && G.leaving) setTimeout(() => openTree(G, 'perm'), 0); // se cerró a mitad de fundar: vuelve al Linaje
   };
   window.addEventListener('keydown', e => {
@@ -177,11 +201,11 @@ function wireButtons() {
     const el = document.documentElement;
     if (!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen({ navigationUI: 'hide' }).then(() => screen.orientation?.lock?.('landscape')).catch(() => {});
   }, { once: true });
-  document.addEventListener('visibilitychange', () => { if (document.hidden) Game.save(G); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { Audio.savePrefs(G); Game.save(G); } });
   // ni selección de texto, ni menú contextual, ni arrastrar imágenes al tocar el juego (salvo en campos de texto)
   const typing = e => e.target.closest && e.target.closest('input,textarea');
   for (const ev of ['selectstart', 'contextmenu', 'dragstart']) document.addEventListener(ev, e => { if (!typing(e)) e.preventDefault(); });
-  window.addEventListener('pagehide', () => Game.save(G));
+  window.addEventListener('pagehide', () => { Audio.savePrefs(G); Game.save(G); });
 }
 
 let lastFly = 0, topNight = 0; // efectos: último icono volando a la jalea; noche más lejana al empezar la de ahora
@@ -237,8 +261,9 @@ function wireGameEvents() {
     ghostHand(sp.x, sp.y);
     if ((r.n || 1) > 1) ghostHand(sp.x + 28, sp.y - 18);
     if (r.crit) burst('×' + r.crit, 'Mano fantasma', r.crit >= 5 ? 'x5' : 'x2', sp);
-    const label = r.laid ? '+huevo' : (r.cut ? '−' : '+') + fmt(r.food);
-    setTimeout(() => Scene.feedQueen(from, at => float(label, at, r.laid ? 'good' : r.crit ? 'lucky' : 'crit')), 250);
+    const streak = r.mult >= 2 ? '×' + (Math.round(r.mult * 10) / 10).toString().replace('.', ',') + ' ' : '';
+    const label = r.laid ? '+huevo' : streak + (r.cut ? '−' : '+') + fmt(r.food);
+    setTimeout(() => Scene.feedQueen(from, at => float(label, at, r.laid ? 'good' : r.crit || r.mult >= 2 ? 'lucky' : 'crit')), 250);
   });
   on('harvestLuck', d => {
     const at = Scene.toScreen(d);
@@ -280,13 +305,14 @@ function frame(t) {
   placeLabels();
   if (tv.open) renderTree(G);
   uiT += dt; if (uiT > 0.25) { uiT = 0; render(G, D); }
-  saveT += dt; if (saveT > 10) { saveT = 0; Game.save(G); }
+  saveT += dt; if (saveT > 10) { saveT = 0; Audio.savePrefs(G); Game.save(G); }
 }
 
 async function boot() {
   hydrateIcons();
   const saved = Game.load();
   G = saved || Game.newGame(); D = Game.calc(G);
+  Audio.loadPrefs(G); // volúmenes y mute (aunque el contexto aún no esté abierto)
   const start = $('start'), status = $('loadStatus');
   start.disabled = true;
   try {
@@ -320,5 +346,11 @@ window.__ax = {
   get G() { return G; }, set speed(v) { ui.speed = v; }, Game, Scene, bot, Juice,
   /** Prueba la secuencia final sin ganar: __ax.ending() */
   ending: () => playEnding({ gen: G.gen, time: G.total || 0, onDone: () => { $('winView').hidden = false; } }),
-  get free() { return Game.debug.free; }, set free(v) { Game.debug.free = !!v; }
+  get free() { return Game.debug.free; }, set free(v) { Game.debug.free = !!v; },
+  maxSkills: () => Game.debugMaxTree(G, 'skills'),
+  maxPerm: () => Game.debugMaxTree(G, 'perm'),
+  /** Nido 3D en vivo (true) o foto fija (false). El GLB sigue cargado. */
+  get liveMap() { return Scene.isLiveMap(); }, set liveMap(v) { Scene.setLiveMap(!!v); },
+  /** Tope de hormigas dibujadas y FPS estimado: __ax.perf */
+  get perf() { return Scene.perfInfo(); }
 };

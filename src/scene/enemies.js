@@ -124,7 +124,7 @@ export function updateEnemies(dt) {
     leave -= dt;
     // al llegar al borde de la hierba desaparecen (más allá no hay suelo)
     for (const o of allFoes()) if (o.alive && o.root.visible) {
-      o.x += dt * 260; o.phase += dt * 22; lookAt2D(o, 1, 0); o.step(true, 0.05, dt, 'walk'); placeActor(o, dt);
+      o.x += dt * 260; o.phase += dt * 22; lookAt2D(o, 1, 0); o.step(true, 0.05, dt, 'walk'); placeActor(o, dt); applyHurt(o, dt);
       if (o.x >= FOE_LINE.spawnX) o.root.visible = false;
     }
     if (shoe && shoe.g.visible) { shoe.g.position.y += dt * 1.4; shoe.sh.material.opacity *= 0.9; }
@@ -152,7 +152,7 @@ export function updateEnemies(dt) {
       o.tun = j >= 1 && j < DOWN.length; // bajando por la raíz
       const tx = a.x + (b.x - a.x) * t + (end ? (i % 4 - 1.5) * 34 : (i % 3 - 1) * 10), ty = a.y + (b.y - a.y) * t + (end ? (i % 2) * 18 : 0);
       lookAt2D(o, tx - o.x || -1, ty - o.y); o.x += (tx - o.x) * Math.min(1, dt * 6); o.y += (ty - o.y) * Math.min(1, dt * 6);
-      o.phase += dt * 16; o.step(true, 0.05, dt, k >= route.length - 1.2 ? 'attack' : o.tun ? 'climb' : 'walk'); placeActor(o, dt);
+      o.phase += dt * 16; o.step(true, 0.05, dt, k >= route.length - 1.2 ? 'attack' : o.tun ? 'climb' : 'walk'); placeActor(o, dt); applyHurt(o, dt);
     });
     return;
   }
@@ -168,7 +168,18 @@ export function updateEnemies(dt) {
     o.x = FOE_LINE.spawnX + (tx - FOE_LINE.spawnX) * ease; o.y = o.by;
     o.phase += dt * 14; o.step(true, o.big ? 0.09 : 0.04, dt, brawl ? 'attack' : 'walk');
     lookAt2D(o, -1, 0.05); placeActor(o, dt);
+    applyHurt(o, dt); // golpe del jugador: se encoge y se echa atrás
   });
+}
+
+/** Sacudida visual tras un toque de daño (hurt va de 1 → 0). */
+function applyHurt(o, dt) {
+  if (!(o.hurt > 0)) { if (o.g) o.g.position.y = 0; return; }
+  o.hurt = Math.max(0, o.hurt - dt * 6);
+  const k = Math.sin(o.hurt * Math.PI);
+  o.orient.scale.multiplyScalar(1 - k * 0.18);
+  o.orient.position.x += k * 0.14; // empujón hacia la hierba
+  if (o.g) o.g.position.y = k * 0.1;
 }
 
 /** Objetivos clicables. */
@@ -178,5 +189,26 @@ export function aliveFoes() {
   if (shoe && shoe.g.visible) l.push({ x: shoe.x, y: shoe.y - 60, big: true });
   return l;
 }
-export const enemyHit = () => puff(FOE_LINE.x + rnd(0, 120), FOE_LINE.y - 10, 'red', 4, 80);
+
+/** Toque de daño: partículas en el bicho más cercano y animación de golpe. */
+export function enemyHit(at) {
+  const ax = at?.x ?? FOE_LINE.x + 60, ay = at?.y ?? FOE_LINE.y;
+  let best = null, bd = Infinity;
+  for (const o of allFoes()) {
+    if (!o.alive || !o.root?.visible) continue;
+    const d = (o.x - ax) ** 2 + (o.y - (ay + 20)) ** 2;
+    if (d < bd) { bd = d; best = o; }
+  }
+  if (best) {
+    best.hurt = 1;
+    puff(best.x + rnd(-18, 18), best.y - 22 + rnd(-10, 10), 'red', 8, 110);
+    puff(best.x, best.y - 16, 'dust', 3, 50);
+    ctx.shake = Math.max(ctx.shake || 0, 0.35);
+  } else if (shoe && shoe.g.visible) {
+    puff(shoe.x + rnd(-30, 30), shoe.y - 80 + rnd(-20, 20), 'red', 10, 140);
+    ctx.shake = Math.max(ctx.shake || 0, 0.45);
+  } else {
+    puff(ax + rnd(-20, 20), ay, 'red', 5, 90);
+  }
+}
 export const enemyPos = () => ({ x: FOE_LINE.x + 60, y: FOE_LINE.y, up: 30 });

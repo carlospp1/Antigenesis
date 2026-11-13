@@ -69,8 +69,8 @@ export const BOSS_POS = { at: [0.6, 0.21, 0.28] };
 /** Tamaño de una unidad de modelo, en «píxeles» (× PXW = unidades del mundo). Las hormigas miden ≈1 unidad. */
 export const SIZE = { ants: 100, termite: 96, spider: 112, beetle: 108, egg: 190, larva: 140 };
 
-/** Cuántas hormigas se dibujan como máximo (la simulación cuenta todas). */
-export const CAP = { ants: 28 };
+/** Cuántas hormigas se dibujan como máximo (la simulación cuenta todas). Lo ajusta perf.js. */
+export const CAP = { ants: 24 };
 
 /** Píxeles de imagen por unidad de velocidad de la simulación. */
 export const PX = 80;

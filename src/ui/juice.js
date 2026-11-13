@@ -1,6 +1,6 @@
 // Efectos de recompensa («juice»): que cada logro se note y apetezca seguir.
-//   combo      la racha de toques (rules.comboTap: cada toque seguido rinde más, hasta +50%) se ve en un contador
-//              con la bonificación y un sonido cada vez más agudo; a los 10 toques y al llegar al máximo, celebración
+//   combo      la racha de toques (rules.comboTap) se ve en un contador: % de rampa o, en marca, ×valor + N clics/toque
+//              sonido más agudo con la racha; a los 10 toques, al máximo y al cruzar marcas, celebración
 //   reward     una lluvia de iconos vuela hasta el contador de jalea, que late y sube poco a poco
 //   celebrate  cartel grande con confeti: noche superada, jefe derrotado, récord, la reina crece, evolución…
 //   buzz       vibración corta en el móvil en los momentos fuertes
@@ -28,17 +28,41 @@ export function tap(n, mult, cap = 21) {
   Audio.play('combo', n);
   if (!comboEl) { comboEl = document.createElement('div'); comboEl.id = 'combo'; $('fx').appendChild(comboEl); }
   const reached = BAL.comboMarks.filter(([at]) => n >= at).length;
-  const mark = BAL.comboMarks.find(([at]) => at === n), topped = n >= cap && !reached;
+  const topped = n >= cap && !reached;
   const tier = n >= cap ? 3 : n >= 14 ? 2 : n >= 8 ? 1 : 0;
+  // ×valor (todas las marcas) vs clics/toque (solo comboClickAt)
   const xm = (Math.round(mult * 10) / 10).toString().replace('.', ',');
+  let clicks = 1;
+  for (const at of BAL.comboClickAt) if (n >= at) clicks++;
+  // clics que sumó este toque (estado previo) — con pasos >1 se puede saltar la marca exacta
+  let added = 1;
+  for (let c = 1; c <= BAL.comboClickAt.length + 1; c++) {
+    const b = n - c;
+    if (b < 0) continue;
+    let cb = 1;
+    for (const at of BAL.comboClickAt) if (b >= at) cb++;
+    if (cb === c) { added = c; break; }
+  }
+  const before = n - added;
+  const markRow = BAL.comboMarks.find(([at]) => before < at && n >= at);
+  const clickHit = BAL.comboClickAt.find(at => before < at && n >= at);
   comboEl.className = 'combo' + (reached ? ' mk' : ' t' + tier) + (n >= 1000 ? ' long' : '');
   comboEl.style.setProperty('--mk', reached);
   comboEl.style.setProperty('--hot', markColor(reached));
-  comboEl.innerHTML = `<small>RACHA</small><b>×${n}</b><em>${topped ? 'MÁX · ' : ''}${reached ? '×' + xm : '+' + Math.round((mult - 1) * 100) + '%'}</em>`;
+  // en marca de valor: ×; si también es marca de clics, se muestra aparte
+  comboEl.innerHTML = reached
+    ? `<small>RACHA · ${n}</small><b>×${xm}</b><em>${clicks > 1 ? clicks + ' clics/toque' : '+' + Math.round((mult - 1) * 100) + '%'}</em>`
+    : `<small>RACHA</small><b>×${n}</b><em>${topped ? 'MÁX · ' : ''}+${Math.round((mult - 1) * 100)}%</em>`;
   comboEl.classList.remove('pop'); void comboEl.offsetWidth; comboEl.classList.add('pop');
   clearTimeout(hideT);
   hideT = setTimeout(() => { if (comboEl) comboEl.classList.add('out'); }, 900);
-  if (mark) { celebrate('¡Racha de ' + n + '!', 'Tus toques valen ×' + xm, 'record'); buzz([30, 40, 30]); }
+  if (markRow || clickHit != null) {
+    const at = clickHit != null ? clickHit : markRow[0];
+    const mLabel = markRow ? markRow[1] : xm;
+    const extra = clickHit != null ? ' · cada toque cuenta como ' + clicks : '';
+    celebrate('¡Racha de ' + at + '!', 'Toques ×' + mLabel + extra, 'record');
+    buzz([30, 40, 30]);
+  }
   else if (narrow.matches) { if (n === 10) buzz(25); else if (n === cap) buzz([30, 40, 30]); }
   else if (n === 10) { celebrate('¡Buen ritmo!', 'Racha de 10 · tus toques rinden +' + Math.round((mult - 1) * 100) + '%', 'combo'); buzz(25); }
   else if (n === cap) { celebrate('¡Racha máxima!', 'Tus toques rinden +' + Math.round((mult - 1) * 100) + '%', 'combo'); buzz([30, 40, 30]); }

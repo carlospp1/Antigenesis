@@ -57,20 +57,23 @@ export async function loadWorld(onProgress) {
 
   bake();
   ctx.scene.add(map);
-  if (mobile()) freezeMap();
+  freezeMap(); // por defecto: foto fija (PC y móvil). El GLB sigue cargado por si se quiere el nido 3D en vivo
   return map;
 }
 
 /**
- * En el teléfono el nido no se redibuja: se fotografía una vez, más abierto que la cámara de
- * referencia, porque en vertical la pantalla mira por encima y por los lados de esa foto.
- * El plano son las cuatro esquinas de ESA foto (sin giro aparte). Se dibuja opaco y detrás
- * de todo, así las hormigas quedan encima. Donde el mapa no llega, el píxel se descarta.
+ * El nido no se redibuja: se fotografía una vez. En vertical se abre más que la cámara de
+ * referencia, porque la pantalla mira por encima y por los lados de esa foto.
+ * El plano son las cuatro esquinas de ESA foto. Se dibuja opaco y detrás de todo, así las
+ * hormigas quedan encima. Donde el mapa no llega, el píxel se descarta.
+ * El modelo 3D se oculta pero sigue en memoria (pisadas, clics, y setLiveMap(true) lo vuelve a mostrar).
  */
 function freezeMap() {
+  if (world.photo) return; // ya hecha
   const { renderer } = ctx;
   const cap = world.ref.clone();
-  cap.fov = REF.fov * 2.5; // el teléfono en vertical abre mucho más que la foto de referencia
+  // móvil en vertical necesita mucho FOV; en PC con el mapa aún ancho basta un poco más
+  cap.fov = REF.fov * (mobile() ? 2.5 : 1.4);
   cap.updateProjectionMatrix(); cap.updateMatrixWorld(true);
   const w = 2048, h = Math.round(w * IMG.h / IMG.w);
   const rt = new THREE.WebGLRenderTarget(w, h);
@@ -95,7 +98,26 @@ function freezeMap() {
   ctx.scene.add(plane);
   world.map.visible = false; // el modelo sigue en memoria: hace falta para saber dónde pisan y dónde se toca
   world.photo = plane;
+  world.liveMap = false;
 }
+
+/** true = nido 3D en vivo cada fotograma; false = la foto fija (por defecto). El GLB no se descarga otra vez. */
+export function setLiveMap(on) {
+  if (!world.map) return false;
+  if (on) {
+    if (!world.photo) freezeMap();
+    world.map.visible = true;
+    if (world.photo) world.photo.visible = false;
+    world.liveMap = true;
+  } else {
+    if (!world.photo) freezeMap();
+    world.map.visible = false;
+    if (world.photo) world.photo.visible = true;
+    world.liveMap = false;
+  }
+  return world.liveMap;
+}
+export const isLiveMap = () => !!world.liveMap;
 
 /** Pinta el mapa desde la cámara de referencia y guarda posición y normal por píxel. */
 function bake() {

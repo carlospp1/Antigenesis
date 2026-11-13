@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { ctx, rnd } from './context.js';
 import { FOOD, CAP, SIZE, PX, PXW, PANTRY, GUARD, SURF_BAND } from './layout.js';
-import { GEO, MAT, clayAnt } from './geometry.js';
+import { GEO, MAT } from './geometry.js';
 import { setJaw } from './creature.js';
 import { ANT_LOOKS } from './antRig.js';
 import { createActor, placeActor, lookAt2D, ground } from './actor.js';
@@ -12,6 +12,7 @@ import { gatherPoint } from './ending.js';
 import { queen, mouth, head, slotPos, mouthWorld, queenEats } from './brood.js';
 import { puff, feedFly, feastRain } from './particles.js';
 import { pantryTop, pantryDrop, pantryPop } from './pantry.js';
+import { makeFoodSprite, setFoodSprite } from './foodArt.js';
 import { emit } from '../core/events.js';
 
 const _p = new THREE.Vector3(), _q = new THREE.Vector3(), _n = new THREE.Vector3();
@@ -19,10 +20,6 @@ const _p = new THREE.Vector3(), _q = new THREE.Vector3(), _n = new THREE.Vector3
 export const agents = [];
 export const by = { ants: [] };
 const births = { ants: [] };
-
-// lo que llevan a cuestas: un trozo de hoja o de fresa
-const leafGeo = new THREE.IcosahedronGeometry(0.17, 0).scale(1.5, 0.22, 1.1).rotateZ(0.5);
-const berryGeo = new THREE.IcosahedronGeometry(0.12, 0).scale(1.1, 0.9, 1);
 
 // cada hormiga elige un carril propio dentro del túnel para no ir en fila india
 // (los puntos del túnel van marcados: mientras va hacia uno de ellos, la hormiga trepa por la raíz)
@@ -52,10 +49,11 @@ function tint(a) {
 function spawn(at, x, y, shiny) {
   const ev = 'evo' + Math.min(6, ctx.G.evo || 0), look = ANT_LOOKS[ev === 'evo0' ? 'ant' : ev];
   const a = createActor(shiny ? ev + ':gold' : ev, SIZE.ants * (look.size || 1)); // dorada: su mismo modelo, en oro
-  const carry = new THREE.Mesh(leafGeo, MAT.carry.leaf);
-  carry.visible = false; carry.castShadow = false;
-  if (a.mouth && a.holder) { // sujeto con la boca, justo delante de la cara
-    carry.position.set(a.mouth.x + 0.1, Math.max(a.mouth.y, 0.15), 0); // sin rozar el suelo (colmillos del soldado)
+  // comida en sprite 2D (no malla): barata de dibujar
+  const carry = makeFoodSprite('leaf');
+  carry.scale.set(0.38, 0.38, 1);
+  if (a.mouth && a.holder) {
+    carry.position.set(a.mouth.x + 0.1, Math.max(a.mouth.y, 0.15), 0);
     a.holder.add(carry);
   } else {
     carry.position.set(a.front - 0.05, Math.min(0.32, a.height) + 0.08, 0);
@@ -80,9 +78,7 @@ function removeAgent(a, dead) {
 function setCarry(a, type) {
   a.carryType = type;
   a.carry.visible = !!type;
-  if (!type) return;
-  a.carry.geometry = type === 'berry' ? berryGeo : leafGeo;
-  a.carry.material = MAT.carry[type] || MAT.carry.leaf;
+  if (type) setFoodSprite(a.carry, type);
 }
 
 /** Punto intermedio en la hierba entre dos x, para que no vayan todas por la misma línea. */
@@ -208,8 +204,13 @@ function updateAgent(a, dt) {
   // imagen hacia arriba son mucho camino hacia el fondo. Las patas siguen la distancia recorrida de verdad.
   ground(a.x, a.y, _p, _n, a.tun); ground(t.x, t.y, _q, _n, a.tun);
   const dist = _p.distanceTo(_q);
-  // red de seguridad: si lleva 1,5 s sin acercarse (atascada contra una colisión), llega de golpe
-  if (dist < a.best - 0.002) { a.best = dist; a.stuck = 0; } else if ((a.stuck += dt) > 1.5) { a.x = t.x; a.y = t.y; a.stuck = 0; }
+  // red de seguridad: si no avanza, empuja hacia el destino (sin teletransporte, que se veía como un «pop»)
+  if (dist < a.best - 0.002) { a.best = dist; a.stuck = 0; }
+  else if ((a.stuck += dt) > 1.2) {
+    const f = Math.min(0.55, 0.25 + dt * 2);
+    a.x += (t.x - a.x) * f; a.y += (t.y - a.y) * f;
+    clampToWalkable(a, a.tun); a.stuck = 0.35; a.best = Infinity;
+  }
   const sp = D.speed * PX * PXW * (a.job === 'fight' ? 1.7 : 1) * (a.shiny ? D.shinySpeed : 1) * (a.tun ? 0.75 : 1) * dt;
   let moved = sp;
   if (dist > 1e-6) (a.wdir ||= new THREE.Vector3()).subVectors(_q, _p).normalize(); // hacia dónde va, en el mundo

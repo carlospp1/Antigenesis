@@ -1,4 +1,4 @@
-// Modo de prueba: todo desbloqueado, y jalea, biomasa y ADN infinitos. Consola: __ax.free = true
+// Modo de prueba: jalea, biomasa y ADN infinitos (compras gratis). El árbol/linaje se maxean a mano. Consola: __ax.free = true
 const KEY = 'antigenesis.debug';
 let mem = false;
 try { mem = localStorage.getItem(KEY) === '1'; } catch (e) { /* sin localStorage (p. ej. Node) */ }

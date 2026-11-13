@@ -324,7 +324,8 @@ const P = [
 const NEEDS = {
   gh2: ['ghK'], gh3: ['gh2'], lkK: ['lk1'], shK: ['sh1'], sh2: ['sh1'], sh3: ['sh1'], gf2: ['gf1'], lc2: ['lc1'],
   t2a: ['gh3'], b5a: ['brK2'], t1c: ['ghK'],
-  pgh2: ['pgh1'], pgh3: ['pgh2'], pcb1: ['ptp'], pgf2: ['pgf'], psh2: ['psh'], psh3: ['psh'], pqk: ['pdx1']
+  pgh2: ['pgh1'], pgh3: ['pgh2'], pcb1: ['ptp'], pgf2: ['pgf'], psh2: ['psh'], psh3: ['psh'], pqk: ['pdx1'],
+  pab1: ['pds'], pab2: ['pab1']
 };
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI'];
 
@@ -351,22 +352,115 @@ function build(rows) {
   return N;
 }
 
-/** Si dos nodos caen en la misma celda (añadidos a (0,0)…), el de más se pega al primero libre al lado. */
+/** Si dos nodos caen en la misma celda (añadidos a (0,0)…), el de más se pega al primero libre junto a su enlace. */
 function freeCollisions(N) {
   const used = new Map();
   for (const id in N) {
     const n = N[id], k = n.x + ',' + n.y;
     if (!used.has(k)) { used.set(k, id); continue; }
-    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]];
+    const a = N[n.links[0]], ax = a ? a.x : n.x, ay = a ? a.y : n.y;
     let placed = false;
     for (let r = 1; !placed && r < 12; r++) {
-      for (const [dx, dy] of dirs) {
-        const x = n.x + dx * r, y = n.y + dy * r, kk = x + ',' + y;
-        if (used.has(kk)) continue;
-        n.x = x; n.y = y; used.set(kk, id); placed = true; break;
+      for (let dx = -r; dx <= r && !placed; dx++) {
+        for (const sy of [1, -1]) {
+          const dy = (r - Math.abs(dx)) * sy;
+          if (dy === 0 && sy < 0) continue;
+          const x = ax + dx, y = ay + dy, kk = x + ',' + y;
+          if (used.has(kk)) continue;
+          n.x = x; n.y = y; used.set(kk, id); placed = true; break;
+        }
       }
     }
   }
+}
+
+/**
+ * Coloca n junto a (ax,ay). `pinned` no se mueve.
+ * Si el anillo ortogonal está lleno, aparta a quien estorbe (salvo pinned).
+ */
+function nestAt(N, n, ax, ay, pinned = new Set()) {
+  const by = new Map();
+  for (const o of Object.values(N)) if (o !== n) by.set(o.x + ',' + o.y, o);
+  const shove = (o, fromR) => {
+    for (let rr = fromR + 1; rr < 24; rr++) {
+      for (let ddx = -rr; ddx <= rr; ddx++) {
+        for (const ssy of [1, -1]) {
+          const ddy = (rr - Math.abs(ddx)) * ssy;
+          if (ddy === 0 && ssy < 0) continue;
+          if (Math.abs(ddx) + Math.abs(ddy) !== rr) continue;
+          const xx = ax + ddx, yy = ay + ddy, kk = xx + ',' + yy;
+          if (by.has(kk) || (xx === n.x && yy === n.y)) continue;
+          by.delete(o.x + ',' + o.y); o.x = xx; o.y = yy; by.set(kk, o);
+          return;
+        }
+      }
+    }
+  };
+  const tryRing = (r, allowSwap) => {
+    for (let dx = -r; dx <= r; dx++) {
+      for (const sy of [1, -1]) {
+        const dy = (r - Math.abs(dx)) * sy;
+        if (dy === 0 && sy < 0) continue;
+        if (Math.abs(dx) + Math.abs(dy) !== r) continue;
+        const x = ax + dx, y = ay + dy, k = x + ',' + y, o = by.get(k);
+        if (!o) { n.x = x; n.y = y; return true; }
+        if (allowSwap && !pinned.has(o.id)) {
+          n.x = x; n.y = y; shove(o, r); return true;
+        }
+      }
+    }
+    return false;
+  };
+  if (tryRing(1, false) || tryRing(1, true)) return;
+  for (let r = 2; r < 16; r++) if (tryRing(r, false) || tryRing(r, true)) return;
+}
+
+/** Manos extra en cadena, pegadas al hub (aparta lo que estorbe). */
+function nestHands(N, hubId, ids) {
+  const hub = N[hubId];
+  if (!hub) return;
+  const pinned = new Set([hubId, ...ids]);
+  let ax = hub.x, ay = hub.y;
+  for (const id of ids) {
+    const n = N[id];
+    if (!n) continue;
+    nestAt(N, n, ax, ay, pinned);
+    ax = n.x; ay = n.y;
+    pinned.add(id);
+  }
+}
+
+/**
+ * Todo nodo queda a ≤1 de manhattan de su primer enlace (padre).
+ * Varias pasadas: al pegar un padre, los hijos se vuelven a pegar.
+ */
+function pullLinked(N) {
+  const order = [], seen = new Set();
+  const visit = id => {
+    if (seen.has(id) || !N[id]) return;
+    seen.add(id);
+    for (const l of N[id].links) visit(l);
+    order.push(id);
+  };
+  for (const id in N) visit(id);
+  for (let pass = 0; pass < 12; pass++) {
+    let moved = false;
+    for (const id of order) {
+      const n = N[id];
+      if (!n.links.length) continue;
+      const a = N[n.links[0]];
+      if (!a) continue;
+      if (Math.abs(n.x - a.x) + Math.abs(n.y - a.y) <= 1) continue;
+      const ox = n.x, oy = n.y;
+      // no apartar al padre ni a la raíz
+      nestAt(N, n, a.x, a.y, new Set([a.id, 'root', ...n.links]));
+      if (n.x !== ox || n.y !== oy) moved = true;
+    }
+    if (!moved) break;
+  }
+  let mx = Infinity, my = Infinity;
+  for (const o of Object.values(N)) { mx = Math.min(mx, o.x); my = Math.min(my, o.y); }
+  if (mx || my) for (const o of Object.values(N)) { o.x -= mx; o.y -= my; }
 }
 
 /** Lo que le falta a un nodo para poder comprarse aunque esté conectado (lista de ids). */
@@ -489,6 +583,10 @@ const S4 = [
   ['mh5', 0, 0, 'tap', 'ghost', 'Quinta mano', 'Otra mano fantasma: un toque cada 2 s', { bio: 40 }, { ghost: 0.5 }, ['mh4'], 1, { reqPerk: 'pgh7' }]
 ];
 export const SKILLS = build([...grow(SKILL_ROWS, SKILL_ROWS.length * 2, 'skills', 7), ...S4]);
+pullLinked(SKILLS);
+nestHands(SKILLS, 'ghK', ['mh2', 'mh3', 'mh4', 'mh5']);
+nestHands(SKILLS, 'qj1', ['qj2', 'qj3']);
+nestHands(SKILLS, 'fo11', ['fs1', 'fs2', 'fsK']);
 // añadidos tras crecer, para no cambiar los ids de los generados (partidas guardadas)
 const P4 = [
   ['ptc', 4, -1, 'brood', 'hand', 'Toque menguante', 'Tocar a la reina rebaja la comida que pide el huevo (una cantidad fija, que arrastra el siguiente). Al llegar al mínimo, el toque vuelve a alimentarla', { adn: 80 }, { tapCut: 1 }, ['pse']],
@@ -501,35 +599,52 @@ const P4 = [
   ['pfs2', 11, 3, 'food', 'goldleaf', 'Festín eterno', '+0,6% de festín', { adn: 96 }, { feast: 0.006 }, ['pfs1']],
   ['pfs3', 12, 3, 'food', 'goldleaf', 'Festín de la estirpe', '+0,8% de festín. Con todo comprado, el festín llega a su máximo: 3%', { adn: 160 }, { feast: 0.008 }, ['pfs2']],
   ['psk', 6, -1, 'war', 'moon', 'Saltar el día', 'Un botón junto al reloj hace que caiga la noche ya. Las noches con el día saltado dan la mitad de ADN', { adn: 60 }, { skipDay: 1 }, ['pbio']],
+  // mayordomo: compra sola el árbol de la colonia (jalea y biomasa)
+  ['pab1', 0, 0, 'tap', 'arrows', 'Mayordomo del nido', 'Compra sola las mejoras del árbol de la colonia cuando hay jalea o biomasa', { adn: 90 }, { autoBuy: 1 }, ['pds', 'pns']],
+  ['pab2', 0, 0, 'tap', 'arrows', 'Mayordomo II', 'El mayordomo compra el doble de rápido', { adn: 160 }, { autoBuy: 1 }, ['pab1']],
   // manos fantasma: cada una es tuya en el árbol en cuanto la compras aquí
   ['pgh4', 0, 0, 'tap', 'ghost', 'Segunda mano', 'Otra mano fantasma en todas las colonias: un toque cada 5 s. En el árbol es tuya para siempre', { adn: 20 }, {}, ['pgh1'], 0, { own: ['mh2'] }],
   ['pgh5', 0, 0, 'tap', 'ghost', 'Tercera mano', 'Otra mano fantasma: un toque cada 4 s, para siempre', { adn: 44 }, {}, ['pgh4'], 0, { own: ['mh3'] }],
   ['pgh6', 0, 0, 'tap', 'ghost', 'Cuarta mano', 'Otra mano fantasma: un toque cada 3 s, para siempre', { adn: 80 }, {}, ['pgh5'], 0, { own: ['mh4'] }],
   ['pgh7', 0, 0, 'tap', 'ghost', 'Quinta mano', 'Otra mano fantasma: un toque cada 2 s, para siempre', { adn: 140 }, {}, ['pgh6'], 0, { own: ['mh5'] }],
-  // lo que cuesta biomasa: aquí se mejora en % o ×, y el rombo queda desbloqueado en el árbol
-  ['plb1', 0, 0, 'brood', 'flame', 'Nodrizas del linaje', '+15% de velocidad de cría. «Nodrizas» se desbloquea en el árbol', { adn: 16 }, { growth: 0.15 }, ['pe2'], 0, { unlock: ['brK1'] }],
+  // rombos de biomasa: al comprarlos aquí, en el árbol son tuyos (efecto activo, sin pagar bio)
+  ['plb1', 0, 0, 'brood', 'flame', 'Nodrizas del linaje', '+15% de velocidad de cría. «Nodrizas» es tuya en el árbol', { adn: 16 }, { growth: 0.15 }, ['pe2'], 0, { own: ['brK1'] }],
   ['plb2', 0, 0, 'brood', 'egg', 'Puesta barata', 'Cada huevo cuesta un 8% menos de comida', { adn: 28 }, { eggCostX: 0.92 }, ['plb1']],
   ['plb3', 0, 0, 'brood', 'flame', 'Cría veloz', 'La cría ×1,3', { adn: 48 }, { growthX: 1.3 }, ['plb2']],
-  ['plb4', 0, 0, 'brood', 'eggs2', 'Gemelas del linaje', 'Un 6% más de huevos traen gemelas. «Puesta doble» se desbloquea en el árbol', { adn: 64 }, { twin: 0.06 }, ['plb3'], 0, { unlock: ['brK2'] }],
-  ['plb5', 0, 0, 'brood', 'egg', 'Huevo heredado', 'Un 6% de los huevos no encarecen el siguiente. «Puesta sin precio» se desbloquea en el árbol', { adn: 96 }, { freeEgg: 0.06 }, ['plb4'], 0, { unlock: ['brK5'] }],
-  ['plf1', 0, 0, 'food', 'leaf', 'Rastro heredado', '+20% de comida. «Rastro de feromonas» se desbloquea en el árbol', { adn: 16 }, { food: 0.2 }, ['pf4'], 0, { unlock: ['foK1'] }],
+  ['plb4', 0, 0, 'brood', 'eggs2', 'Gemelas del linaje', 'Un 6% más de huevos traen gemelas. «Puesta doble» es tuya en el árbol', { adn: 64 }, { twin: 0.06 }, ['plb3'], 0, { own: ['brK2'] }],
+  ['plb5', 0, 0, 'brood', 'egg', 'Huevo heredado', 'Un 6% de los huevos no encarecen el siguiente. «Puesta sin precio» es tuya en el árbol', { adn: 96 }, { freeEgg: 0.06 }, ['plb4'], 0, { own: ['brK5'] }],
+  ['plf1', 0, 0, 'food', 'leaf', 'Rastro heredado', '+20% de comida. «Rastro de feromonas» es tuya en el árbol', { adn: 16 }, { food: 0.2 }, ['pf4'], 0, { own: ['foK1'] }],
   ['plf2', 0, 0, 'food', 'leaf', 'Buche del linaje', '+25% de comida', { adn: 32 }, { food: 0.25 }, ['plf1']],
   ['plf3', 0, 0, 'food', 'leaf', 'Carga ancestral', 'Comida ×1,4', { adn: 56 }, { foodX: 1.4 }, ['plf2']],
-  ['plf4', 0, 0, 'food', 'moon', 'Noche heredada', '+15% de comida. «Rutas nocturnas» se desbloquea en el árbol', { adn: 72 }, { food: 0.15 }, ['plf3'], 0, { unlock: ['foK3'] }],
-  ['plw1', 0, 0, 'war', 'sword', 'Mandíbulas del linaje', '+20% de daño. «Mandíbulas afiladas» se desbloquea en el árbol', { adn: 16 }, { dmg: 0.2 }, ['pd4'], 0, { unlock: ['waK1'] }],
-  ['plw2', 0, 0, 'war', 'shield', 'Quitina del linaje', '+20% de vida. «Quitina gruesa» se desbloquea en el árbol', { adn: 24 }, { hp: 0.2 }, ['plw1'], 0, { unlock: ['waK2'] }],
+  ['plf4', 0, 0, 'food', 'moon', 'Noche heredada', '+15% de comida. «Rutas nocturnas» es tuya en el árbol', { adn: 72 }, { food: 0.15 }, ['plf3'], 0, { own: ['foK3'] }],
+  ['plw1', 0, 0, 'war', 'sword', 'Mandíbulas del linaje', '+20% de daño. «Mandíbulas afiladas» es tuya en el árbol', { adn: 16 }, { dmg: 0.2 }, ['pd4'], 0, { own: ['waK1'] }],
+  ['plw2', 0, 0, 'war', 'shield', 'Quitina del linaje', '+20% de vida. «Quitina gruesa» es tuya en el árbol', { adn: 24 }, { hp: 0.2 }, ['plw1'], 0, { own: ['waK2'] }],
   ['plw3', 0, 0, 'war', 'fist', 'Furia del linaje', 'Daño ×1,35', { adn: 48 }, { dmgX: 1.35 }, ['plw2']],
   ['plw4', 0, 0, 'war', 'shield', 'Coraza del linaje', 'Vida ×1,35', { adn: 48 }, { hpX: 1.35 }, ['plw3']],
-  ['plw5', 0, 0, 'war', 'fist', 'Mandíbula enorme', '+25% de daño. «Mandíbula reforzada» se desbloquea en el árbol', { adn: 100 }, { dmg: 0.25 }, ['plw4'], 0, { unlock: ['waK3'] }],
-  ['plt1', 0, 0, 'tap', 'hand', 'Manos heredadas', '+25% de efecto de tus toques. «Manos de reina» se desbloquea en el árbol', { adn: 20 }, { click: 0.25 }, ['pl2'], 0, { unlock: ['taK1'] }],
+  ['plw5', 0, 0, 'war', 'fist', 'Mandíbula enorme', '+25% de daño. «Mandíbula reforzada» es tuya en el árbol', { adn: 100 }, { dmg: 0.25 }, ['plw4'], 0, { own: ['waK3'] }],
+  ['plt1', 0, 0, 'tap', 'hand', 'Manos heredadas', '+25% de efecto de tus toques. «Manos de reina» es tuya en el árbol', { adn: 20 }, { click: 0.25 }, ['pl2'], 0, { own: ['taK1'] }],
   ['plt2', 0, 0, 'tap', 'hand', 'Caricia del linaje', '+35% de efecto de tus toques', { adn: 36 }, { click: 0.35 }, ['plt1']],
   ['plt3', 0, 0, 'tap', 'hand', 'Toque ancestral', 'Tus toques ×1,4', { adn: 64 }, { clickX: 1.4 }, ['plt2']],
-  ['plt4', 0, 0, 'tap', 'coin', 'Dedos de oro', '+15% de efecto de tus toques. «Toque dorado» se desbloquea en el árbol', { adn: 48 }, { click: 0.15 }, ['plt3'], 0, { unlock: ['taK2'] }],
-  ['plt5', 0, 0, 'tap', 'star', 'Fortuna del linaje', '+6% de toques de suerte. «Golpe de fortuna» se desbloquea en el árbol', { adn: 80 }, { tapCrit: 0.06 }, ['plt4'], 0, { unlock: ['lkK'] }],
-  ['pls1', 0, 0, 'brood', 'sparkle', 'Brillo heredado', '+4% de hormigas doradas. «Linaje dorado» se desbloquea en el árbol', { adn: 28 }, { shiny: 0.04 }, ['psh2'], 0, { unlock: ['shK'] }],
-  ['pls2', 0, 0, 'brood', 'sparkle', 'Élite heredada', '+4% de hormigas doradas. «Doradas de élite» se desbloquea en el árbol', { adn: 64 }, { shiny: 0.04 }, ['pls1'], 0, { unlock: ['sh3'] }]
+  ['plt4', 0, 0, 'tap', 'coin', 'Dedos de oro', '+15% de efecto de tus toques. «Toque dorado» es tuya en el árbol', { adn: 48 }, { click: 0.15 }, ['plt3'], 0, { own: ['taK2'] }],
+  ['plt5', 0, 0, 'tap', 'star', 'Fortuna del linaje', '+6% de toques de suerte. «Golpe de fortuna» es tuya en el árbol', { adn: 80 }, { tapCrit: 0.06 }, ['plt4'], 0, { own: ['lkK'] }],
+  ['pls1', 0, 0, 'brood', 'sparkle', 'Brillo heredado', '+4% de hormigas doradas. «Linaje dorado» es tuya en el árbol', { adn: 28 }, { shiny: 0.04 }, ['psh2'], 0, { own: ['shK'] }],
+  ['pls2', 0, 0, 'brood', 'sparkle', 'Élite heredada', '+4% de hormigas doradas. «Doradas de élite» es tuya en el árbol', { adn: 64 }, { shiny: 0.04 }, ['pls1'], 0, { own: ['sh3'] }]
 ];
 export const PERKS = build([...grow(PERK_ROWS, PERK_ROWS.length * 2, 'perm', 11), ...P4]);
+pullLinked(PERKS);
+// cadenas a mano al final (si luego se hace pullLinked, se dispersan otra vez)
+nestHands(PERKS, 'pgh1', ['pgh4', 'pgh5', 'pgh6', 'pgh7']);
+nestHands(PERKS, 'pgh2', ['pcb1', 'pcb2', 'pcb3']);
+nestHands(PERKS, 'pe2', ['plb1', 'plb2', 'plb3', 'plb4', 'plb5']);
+nestHands(PERKS, 'pf4', ['plf1', 'plf2', 'plf3', 'plf4']);
+nestHands(PERKS, 'pd4', ['plw1', 'plw2', 'plw3', 'plw4', 'plw5']);
+nestHands(PERKS, 'pl2', ['plt1', 'plt2', 'plt3', 'plt4', 'plt5']);
+nestHands(PERKS, 'psh2', ['pls1', 'pls2']);
+nestHands(PERKS, 'pse', ['ptc', 'ptc2', 'ptc3']);
+nestHands(PERKS, 'ppz', ['pqj1', 'pqj2', 'pqj3']);
+nestHands(PERKS, 'pf4', ['pfs1', 'pfs2', 'pfs3']); // festín: mismo ancla que plf; se pega al hueco libre
+nestHands(PERKS, 'pbio', ['psk']);
+nestHands(PERKS, 'pds', ['pab1', 'pab2']);
 
 /** Suma los efectos de los nodos comprados: X multiplica, el resto suma. */
 export function treeFx(nodes, owned) {
@@ -547,7 +662,7 @@ export function treeFx(nodes, owned) {
  * 0 owned (comprado) · 1 open (se puede comprar) · 2 seen (se ve) · 3 fog («?») · más lejos hidden.
  */
 const NAMES = ['owned', 'open', 'seen', 'fog'];
-/** Lo que el linaje deja ya puesto en el árbol: own = es tuyo; unlock = se puede comprar con biomasa desde el principio. */
+/** Lo que el linaje deja ya puesto en el árbol: own = comprado de verdad (efecto activo, sin pagar bio). */
 export function linajeSkills(perm) {
   const own = {}, unlock = {};
   if (!perm) return { own, unlock };
@@ -556,7 +671,7 @@ export function linajeSkills(perm) {
     const n = PERKS[id];
     if (!n) continue;
     for (const s of n.own || []) own[s] = true;
-    for (const s of n.unlock || []) unlock[s] = true;
+    for (const s of n.unlock || []) unlock[s] = true; // legado: por si queda algún unlock
   }
   return { own, unlock };
 }

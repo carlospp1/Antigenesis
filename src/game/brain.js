@@ -55,7 +55,7 @@ export function makeTapper(rnd = Math.random) {
 function utility(G, D, cps, warW) {
   const g = G.ants >= 3 ? G : { ...G, ants: 3 };
   // racha media de una ráfaga de makeTapper (3–14 toques: unos 4 toques de racha de media)
-  const combo = D.combo ? 1 + Math.min(4, D.comboCap) * D.comboStep * D.comboX : 1; // sin «Racha» no hay racha
+  const combo = D.combo ? 1 + Math.min(4, D.comboCap) * D.comboStep * Math.sqrt(D.comboX) : 1; // sin «Racha» no hay racha
   const tap = cps * BAL.tapFood * D.tapQ * (1 + D.tapCrit * (D.critX - 1)) * combo;
   // las granjas dan jalea sola (fracción del premio de una noche por minuto)
   const inc = R.forageRate(g, D) + D.reserve + tap + D.ghost * BAL.tapFood * D.tapQ + D.farm * R.nightPrize(G, D) / 60;

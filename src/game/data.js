@@ -190,31 +190,28 @@ export const BAL = {
     adnP: 1.35, // noche 4 ~10 ADN, noche 12 ~50, noche 24 ~130: da para el linaje y para la evolución de esa era
     evoCostK: 1.5, // la evolución de una era cabe en el ADN de esa era, sin vaciar el linaje
     foundAfter: 3, // superada esta noche ya se puede fundar (y ganar ADN) aunque no caiga ningún jefe
-    // racha de toques: cada toque seguido (menos de comboGap s de juego desde el anterior) rinde comboStep más,
-    // hasta comboCap toques (×1,5 con estos valores). Vale para la reina, la cría y los enemigos.
-    // comboMarks: al llegar a la marca, los toques pasan a valer ese multiplicador (no se suma al de antes).
-    // 200 ×2, 500 ×3, 1000 ×4, 3000 ×6 y, siguiendo el hueco, hasta 10000 ×10. De ahí en adelante se queda en ×10.
+    // racha: cada toque seguido (≤ comboGap s) suma comboStep al ×, hasta comboCap (rampa suave).
+    // comboMarks: [toques, ×valor] — sube la jalea/comida/daño en cada marca.
+    // comboClickAt: solo en estas marcas cada toque cuenta como +1 clic más (2, 3, 4…).
     comboGap: 0.8,
-    comboStep: 0.025,
+    comboStep: 0.012, // antes 0,025: con el árbol a tope la rampa se iba a ×4–5
     comboCap: 20,
     comboMarks: [
-        [200, 2],
-        [300, 2.5],
-        [500, 3],
-        [750, 3.5],
-        [1000, 4],
-        [1250, 4.5],
-        [1500, 5],
-        [2000, 5.5],
-        [3000, 6],
-        [5000, 7],
-        [7500, 8],
-        [10000, 10],
-        [100000, 10],
-        [300000, 10],
-        [500000, 10],
-        [1000000, 10],
+      [200, 2],
+      [300, 2.5],
+      [500, 3],
+      [750, 3.5],
+      [1000, 4],
+      [1250, 4.5],
+      [1500, 5],
+      [2000, 5.5],
+      [2500, 6],
+      [3000, 6.5],
+      [5000, 7],
+      [7500, 7.5],
+      [10000, 8],
     ],
+    comboClickAt: [200, 500, 1000, 1500, 2500, 5000, 10000],
     evoAll: 1.45, // cada evolución: comida, daño y vida ×evoAll (y +5% de velocidad)
     treeK: 0.6,
     permK: 0.75, // rebaja de las estadísticas del árbol y del linaje (la evolución ya sube todo)

@@ -3,7 +3,7 @@
 import * as Game from '../game/index.js';
 import * as Audio from '../audio/audio.js';
 import { fmt, fmtTime } from '../core/format.js';
-import { toScreen, anchors, broodBars } from '../scene/index.js';
+import { toScreen, anchors, broodBars, isLiveMap } from '../scene/index.js';
 import { icon } from './icons.js';
 
 const $ = id => document.getElementById(id);
@@ -148,8 +148,11 @@ function renderSheet(G) {
     const row = (name, ctl, note = '') => `<div class="line"><span>${name}</span><div class="ctl">${ctl}${note ? `<small>${note}</small>` : ''}</div></div>`;
     const btn = (on, act, label, id = '') => `<button class="btn-plain${on ? ' on' : ''}" data-act="${act}"${id ? ` data-id="${id}"` : ''}>${label}</button>`;
     let code = false; try { code = localStorage.getItem('antigenesis.antModel') === 'code'; } catch (e) { /* nada */ }
+    const pct = v => Math.round(v * 100);
+    const slide = (key, val) => `<input class="vol" type="range" min="0" max="100" step="1" value="${pct(val)}" data-vol="${key}" aria-label="${key}">`;
     h = `<h2>Ajustes</h2><div class="settings">
-      ${row('Sonido', btn(!Audio.vol.mute, 'mute', icon(Audio.vol.mute ? 'mute' : 'sound') + (Audio.vol.mute ? ' Apagado' : ' Encendido')))}
+      ${row('Música', btn(!Audio.vol.muteMusic, 'muteMusic', icon(Audio.vol.muteMusic ? 'mute' : 'music') + (Audio.vol.muteMusic ? ' Silenciada' : ' Encendida')) + slide('music', Audio.vol.music), 'incluye ambiente (viento y pájaros)')}
+      ${row('Efectos', btn(!Audio.vol.muteSfx, 'muteSfx', icon(Audio.vol.muteSfx ? 'mute' : 'sound') + (Audio.vol.muteSfx ? ' Silenciados' : ' Encendidos')) + slide('sfx', Audio.vol.sfx))}
       ${row('Juego', btn(ui.paused, 'pause', ui.paused ? 'Reanudar' : 'Pausar'))}
       ${row('Partida', '<button class="btn-plain" data-act="reset" id="bReset">Reiniciar</button>')}
       ${row('Versión', `<b>${VERSION}</b>`)}
@@ -159,7 +162,9 @@ function renderSheet(G) {
         ${row('Bot', btn(false, 'bot', 'Abrir panel'), 'tecla B · juega solo y registra cada acción')}
         ${row('Hormigas', btn(!code, 'antModel', 'Ilustradas', 'glb') + btn(code, 'antModel', 'En código', 'code'), 'se aplica al recargar')}
         ${row('Colisiones', btn(ui.debug, 'debug', ui.debug ? 'Visibles' : 'Ocultas'), 'tecla C')}
-        ${row('Modo debug', btn(Game.debug.free, 'free', Game.debug.free ? 'Activado' : 'Apagado'), 'desbloquea todo al momento · jalea, biomasa y ADN ∞')}
+        ${row('Nido', btn(isLiveMap(), 'liveMap', isLiveMap() ? '3D en vivo' : 'Foto fija'), 'la foto es más ligera; el 3D sigue ahí si lo quieres')}
+        ${row('Modo debug', btn(Game.debug.free, 'free', Game.debug.free ? 'Activado' : 'Apagado'), 'jalea, biomasa y ADN ∞ · compras gratis')}
+        ${Game.debug.free ? row('Maxear', btn(false, 'debugSkills', 'Árbol') + btn(false, 'debugPerm', 'Linaje'), 'sube de golpe todas las habilidades o el linaje') : ''}
       </div>` : ''}</div>`;
   }
   if (h !== lastSheet) { lastSheet = h; $('sheetBody').innerHTML = h; }

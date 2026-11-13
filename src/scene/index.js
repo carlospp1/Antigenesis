@@ -7,7 +7,8 @@ import { buildProcedural } from './geometry.js';
 import { glossEnvironment } from './antRig.js';
 import { loadGlbAnts } from './glbAnt.js';
 import { loadModels } from './assets.js';
-import { loadWorld, buildRoot, buildBackdrop, world, toImage } from './world.js';
+import { loadWorld, buildRoot, buildBackdrop, world, toImage, setLiveMap, isLiveMap } from './world.js';
+import { initPerf, tickPerf, perfInfo } from './perf.js';
 import { buildParticles, puff, updateParticles, feedFly } from './particles.js';
 import { buildPantry, updatePantry, pantryAnchor } from './pantry.js';
 import { buildBrood, updateBrood, refreshQueen, resetQueenPose, queen, brood, slotPos, queenPos, mouthWorld, broodBars, queenEats } from './brood.js';
@@ -23,7 +24,7 @@ export { startEnding, stopEnding };
 import { on } from '../core/events.js';
 import { EGG_PILE, LARVA_PILE } from './layout.js';
 
-export { zoomBy, panBy, resetView, focus, enemyHit, toggleDebug, imageToScreen };
+export { zoomBy, panBy, resetView, focus, enemyHit, toggleDebug, imageToScreen, setLiveMap, isLiveMap, perfInfo };
 
 const PI = Math.PI;
 let hemi, sun, fire, nest, nightK = 0, syncT = 0;
@@ -33,6 +34,7 @@ const clearDay = new THREE.Color('#2a160c'), clearNight = new THREE.Color('#0c0a
 
 export async function init(el, onProgress) {
   ctx.host = el;
+  initPerf(); // tope de hormigas visibles según el aparato (luego tickPerf lo afina con el FPS)
   // en móvil: algo menos de resolución y sin antialias (la pantalla ya es densa y así no se calienta)
   const mobile = matchMedia('(pointer: coarse)').matches;
   const renderer = (ctx.renderer = new THREE.WebGLRenderer({ antialias: !mobile, alpha: false, powerPreference: 'high-performance' }));
@@ -117,10 +119,12 @@ export function pick(px, py) {
     const d = Math.hypot((p.x - x) / rx, (p.y - y) / ry);
     if (d < bd) { bd = d; best = res; res.pos = { x, y: y - 20 }; }
   };
-  test(QUEEN.x - 40, QUEEN.y - 25, 155 * queen.s, 72 * queen.s, { kind: 'queen' });
+  // collider generoso: si se falla el pick, el toque se convierte en drag de cámara
+  test(QUEEN.x - 20, QUEEN.y - 40, 240 * queen.s, 140 * queen.s, { kind: 'queen' });
   for (const e of G.eggs) { const s = slotPos('egg', e.slot); test(s.x, s.y - 12, 26, 24, { kind: 'egg', id: e.id, slot: e.slot }); }
   for (const e of G.larvae) { const s = slotPos('larva', e.slot); test(s.x, s.y - 12, 38, 26, { kind: 'larva', id: e.id, slot: e.slot }); }
-  for (const o of aliveFoes()) test(o.x, o.y - 20, o.big ? 120 : 45, o.big ? 70 : 32, { kind: 'enemy' });
+  // radios amplios: en combate es más fácil acertar (sobre todo en móvil)
+  for (const o of aliveFoes()) test(o.x, o.y - 24, o.big ? 190 : 78, o.big ? 120 : 58, { kind: 'enemy' });
   if (best) best.click = p;
   return best;
 }
@@ -157,6 +161,8 @@ export function update(game, derived, dt, realDt, skipDraw) {
   if (syncT <= 0) { syncT = 1; syncAgents(false); }
   updateEnemies(dt); updateAgents(dt); updateBrood(dt); updateEnding(dt); updatePantry(dt); updateParticles(dt);
   if (skipDraw) return;
+  // si el FPS baja, se dibujan menos hormigas (la colonia real no cambia)
+  if (tickPerf(realDt)) { syncAgents(false); syncT = 1; }
 
   // día, atardecer y noche: se oscurece el mapa y se enfría la luz; el nido brilla
   const G = game, target = G.phase === 'night' ? 1 : G.t < 10 ? 1 - G.t / 10 : 0;

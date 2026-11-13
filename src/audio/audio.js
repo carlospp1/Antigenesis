@@ -1,7 +1,14 @@
 // Audio procedural con Web Audio: música generativa, viento, pájaros y efectos. Sin archivos.
 let ctx = null, master, started = false, tension = false, tensionGain, noiseBuf;
 const bus = {}, last = {};
-export const vol = { music: 0.5, sfx: 0.6, amb: 0.5, mute: false };
+/** Volúmenes 0–1 y mute por canal (ambience va con la música). */
+export const vol = { music: 0.5, sfx: 0.6, amb: 0.5, muteMusic: false, muteSfx: false };
+/** Compat: mute = los dos apagados. */
+Object.defineProperty(vol, 'mute', {
+  get() { return vol.muteMusic && vol.muteSfx; },
+  set(v) { vol.muteMusic = vol.muteSfx = !!v; },
+  enumerable: true
+});
 
 function env(g, t, a, peak, d) {
   g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(0.0001, t);
@@ -70,13 +77,41 @@ export function start() {
 export function apply() {
   if (!ctx) return;
   const t = ctx.currentTime;
-  master.gain.setTargetAtTime(vol.mute ? 0 : 0.9, t, 0.05);
-  bus.music.gain.setTargetAtTime(vol.music * 0.55, t, 0.05);
-  bus.sfx.gain.setTargetAtTime(vol.sfx * 0.8, t, 0.05);
-  bus.amb.gain.setTargetAtTime(vol.amb * 0.7, t, 0.05);
+  master.gain.setTargetAtTime(0.9, t, 0.05);
+  bus.music.gain.setTargetAtTime(vol.muteMusic ? 0 : vol.music * 0.55, t, 0.05);
+  bus.sfx.gain.setTargetAtTime(vol.muteSfx ? 0 : vol.sfx * 0.8, t, 0.05);
+  // viento y pájaros con la música
+  bus.amb.gain.setTargetAtTime(vol.muteMusic ? 0 : vol.amb * vol.music * 0.7, t, 0.05);
 }
 
-export function set(k, v) { vol[k] = v; apply(); }
+export function set(k, v) {
+  if (k === 'mute') { vol.mute = !!v; }
+  else if (k === 'music' || k === 'sfx' || k === 'amb') vol[k] = Math.max(0, Math.min(1, +v || 0));
+  else if (k === 'muteMusic' || k === 'muteSfx') vol[k] = !!v;
+  else vol[k] = v;
+  apply();
+}
+
+/** Aplica lo guardado en la partida (y migra el mute antiguo). */
+export function loadPrefs(G) {
+  const a = (G && G.audio) || {};
+  if (G && G.mute && a.muteMusic == null && a.muteSfx == null) {
+    vol.muteMusic = true; vol.muteSfx = true;
+  } else {
+    vol.muteMusic = !!a.muteMusic; vol.muteSfx = !!a.muteSfx;
+  }
+  if (a.music != null) vol.music = Math.max(0, Math.min(1, a.music));
+  if (a.sfx != null) vol.sfx = Math.max(0, Math.min(1, a.sfx));
+  if (a.amb != null) vol.amb = Math.max(0, Math.min(1, a.amb));
+  apply();
+}
+
+/** Escribe los ajustes actuales en G para el guardado. */
+export function savePrefs(G) {
+  if (!G) return;
+  G.audio = { music: vol.music, sfx: vol.sfx, amb: vol.amb, muteMusic: vol.muteMusic, muteSfx: vol.muteSfx };
+  G.mute = vol.mute;
+}
 
 export function setTension(onOff) {
   if (!ctx || tension === onOff) return;
@@ -161,7 +196,7 @@ const S = {
 const GAP = { death: 0.15, click: 0.03, deposit: 0.35, hit: 0.12, hatch: 0.12, pupate: 0.12, born: 0.2, lay: 0.15, poof: 0.1, buy: 0.05, combo: 0.02, coin: 0.03, fanfare: 0.8 };
 
 export function play(id, arg) {
-  if (!live() || vol.mute || document.hidden || !S[id]) return;
+  if (!live() || vol.muteSfx || document.hidden || !S[id]) return;
   const t = ctx.currentTime;
   if (last[id] && t - last[id] < (GAP[id] || 0)) return;
   last[id] = t;
