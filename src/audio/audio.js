@@ -21,13 +21,24 @@ function noise(dest, freq, q, a, d, peak, t0) {
   s.connect(f); f.connect(g); g.connect(dest); s.start(t, Math.random() * 1.5); s.stop(t + a + d + 0.05);
 }
 
+/**
+ * ¿Suena de verdad? En el móvil el contexto se suspende o se interrumpe (pestaña de fondo, llamadas, avisos)
+ * y su reloj se para: lo que se programe mientras tanto no acaba nunca, se acumula (el juego va a tirones
+ * y no responde) y al volver suena todo de golpe. Mientras no esté «running» no se crea ningún sonido.
+ */
+const live = () => !!ctx && ctx.state === 'running';
+function resume() { if (ctx && ctx.state !== 'running' && ctx.state !== 'closed' && !document.hidden) ctx.resume().catch(() => {}); }
+
 /** Debe llamarse desde un gesto del usuario (clic) por las políticas de autoplay. */
 export function start() {
-  if (started) { if (ctx && ctx.state === 'suspended') ctx.resume(); return; }
+  if (started) { resume(); return; }
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
   try { ctx = new AC(); } catch (e) { return; }
   started = true;
+  // el móvil solo deja reanudar desde un gesto: cualquier toque sirve; al irse la pestaña se suspende
+  addEventListener('pointerdown', resume, true);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) ctx.suspend().catch(() => {}); else resume(); });
   master = ctx.createGain(); master.connect(ctx.destination);
   for (const k of ['music', 'sfx', 'amb']) { bus[k] = ctx.createGain(); bus[k].connect(master); }
   noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
@@ -80,6 +91,7 @@ let bar = 0;
 
 function schedule() {
   if (!ctx) return;
+  if (!live()) { setTimeout(schedule, 1000); return; } // sin reloj: se espera, sin acumular acordes
   const t = ctx.currentTime + 0.1, ch = CH[bar % 4], len = 9;
   for (let i = 0; i < 3; i++) {
     const o = ctx.createOscillator(), g = ctx.createGain(), f = ctx.createBiquadFilter();
@@ -103,7 +115,7 @@ function schedule() {
 
 function birds() {
   if (!ctx) return;
-  if (!document.hidden) {
+  if (live() && !document.hidden) {
     const t = ctx.currentTime + 0.05, n = 2 + Math.floor(Math.random() * 4), base = 2200 + Math.random() * 1600;
     for (let i = 0; i < n; i++) tone(bus.amb, 'sine', base * (1 + Math.random() * 0.15), base * (0.8 + Math.random() * 0.5), 0.02, 0.09 + Math.random() * 0.06, 0.035, t + i * (0.11 + Math.random() * 0.05));
   }
@@ -149,7 +161,7 @@ const S = {
 const GAP = { death: 0.15, click: 0.03, deposit: 0.35, hit: 0.12, hatch: 0.12, pupate: 0.12, born: 0.2, lay: 0.15, poof: 0.1, buy: 0.05, combo: 0.02, coin: 0.03, fanfare: 0.8 };
 
 export function play(id, arg) {
-  if (!ctx || vol.mute || document.hidden || !S[id]) return;
+  if (!live() || vol.mute || document.hidden || !S[id]) return;
   const t = ctx.currentTime;
   if (last[id] && t - last[id] < (GAP[id] || 0)) return;
   last[id] = t;

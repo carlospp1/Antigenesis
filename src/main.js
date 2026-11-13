@@ -119,7 +119,8 @@ function clickScene(hit) {
 
 function wireButtons() {
   $('app').addEventListener('pointerdown', e => { if (e.target.closest('#dock,#sheet')) ui.holding = true; });
-  window.addEventListener('pointerup', () => setTimeout(() => { ui.holding = false; }, 0));
+  // en el móvil, deslizar el panel termina en pointercancel (no pointerup): si no, el panel se queda congelado
+  for (const ev of ['pointerup', 'pointercancel']) window.addEventListener(ev, () => setTimeout(() => { ui.holding = false; }, 0));
   $('app').addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && !b.disabled) act(b.dataset.act, b.dataset.id, b); });
   $('sheet').addEventListener('click', e => { if (e.target.id === 'sheet') openSheet(G, null); });
 
