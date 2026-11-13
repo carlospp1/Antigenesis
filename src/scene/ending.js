@@ -6,7 +6,7 @@ import { ctx } from './context.js';
 import { QUEEN } from './layout.js';
 import { UP } from './colliders.js';
 import { toImage } from './world.js';
-import { queen } from './brood.js';
+import { queen, resetQueenPose } from './brood.js';
 import { ground, placeActor, lookAt2D } from './actor.js';
 import { playCinematic } from './camera.js';
 
@@ -46,10 +46,11 @@ export function startEnding() {
 }
 
 export function stopEnding() {
-  if (!ctx.ending) return;
+  // aunque no haya final activo, hay que poner a la reina en su sitio (colonia nueva tras una muerte normal)
+  const was = !!ctx.ending;
   ctx.ending = null; path = null;
-  playCinematic(null);
-  if (queen) { queen.tun = false; if (queen.yawBias0 != null) queen.yawBias = queen.yawBias0; queen.x = QUEEN.x; queen.y = QUEEN.y; }
+  if (was) playCinematic(null);
+  resetQueenPose();
 }
 
 /** Cada fotograma, después de colocar a la reina en su sitio de siempre (brood.js): la mueve por el recorrido. */

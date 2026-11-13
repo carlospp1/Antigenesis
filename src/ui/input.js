@@ -9,10 +9,14 @@ export function wireStageInput(stage, onPick) {
   const spread = () => { const a = [...pts.values()]; return Math.hypot(a[0].clientX - a[1].clientX, a[0].clientY - a[1].clientY); };
 
   stage.addEventListener('pointerdown', e => {
+    // el dedo o el ratón se quedan con la escena: si aparece encima un panel (p. ej. al morir la reina),
+    // el soltar sigue llegando aquí y no queda un puntero «colgado» que convierta el siguiente toque en pellizco
+    try { stage.setPointerCapture(e.pointerId); } catch (err) { /* nada */ }
     pts.set(e.pointerId, e); down = [e.clientX, e.clientY]; drag = false;
     if (pts.size === 2) { pinch = spread(); drag = true; }
   });
   stage.addEventListener('pointermove', e => {
+    if (pts.has(e.pointerId) && e.pointerType === 'mouse' && !e.buttons) forget(e); // se soltó fuera sin avisar
     if (!pts.has(e.pointerId)) { // solo pasar por encima: resaltar
       const p = local(e), h = Scene.pick(p[0], p[1]);
       Scene.hover(h); stage.style.cursor = h ? 'pointer' : 'grab';
@@ -30,6 +34,11 @@ export function wireStageInput(stage, onPick) {
     if (!drag && down) { const p = local(e); onPick(Scene.pick(p[0], p[1])); }
     if (!pts.size) down = null;
   });
-  stage.addEventListener('pointercancel', e => pts.delete(e.pointerId));
+  // soltar o cancelar en cualquier otro sitio también cuenta (sin tocar nada de la escena)
+  function forget(e) { pts.delete(e.pointerId); if (pts.size < 2) pinch = 0; if (!pts.size) { down = null; drag = false; } }
+  stage.addEventListener('pointercancel', forget);
+  stage.addEventListener('lostpointercapture', forget);
+  window.addEventListener('pointerup', e => { if (pts.has(e.pointerId) && e.target !== stage && !stage.contains(e.target)) forget(e); });
+  window.addEventListener('pointercancel', forget);
   stage.addEventListener('wheel', e => { e.preventDefault(); Scene.zoomBy(e.deltaY > 0 ? 1.12 : 0.89); }, { passive: false });
 }

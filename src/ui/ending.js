@@ -131,5 +131,5 @@ function drawGlobe(g, globe, cx, cy, R, t, dpr) {
     else { col = `rgba(240,184,76,${shade})`; r = 2; }
     g.fillStyle = col; g.beginPath(); g.arc(sx, sy, r * dpr, 0, 6.3); g.fill();
   }
-  return won / globe.land;
+  return globe.land ? won / globe.land : 1;
 }

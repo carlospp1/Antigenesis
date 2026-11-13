@@ -10,7 +10,7 @@ import { loadModels } from './assets.js';
 import { loadWorld, buildRoot, buildBackdrop, world, toImage } from './world.js';
 import { buildParticles, puff, updateParticles, feedFly } from './particles.js';
 import { buildPantry, updatePantry, pantryAnchor } from './pantry.js';
-import { buildBrood, updateBrood, refreshQueen, queen, brood, slotPos, queenPos, mouthWorld, broodBars, queenEats } from './brood.js';
+import { buildBrood, updateBrood, refreshQueen, resetQueenPose, queen, brood, slotPos, queenPos, mouthWorld, broodBars, queenEats } from './brood.js';
 export { broodBars };
 /** Para depurar desde la consola (__ax.Scene.agents): las hormigas que se dibujan. */
 export { agents } from './colony.js';
@@ -87,7 +87,7 @@ export function resize() {
   if (ctx.camera) updateCamera(1);
 }
 
-export function reset() { stopEnding(); clearAgents(); ctx.G = null; resetEnemies(); }
+export function reset() { stopEnding(); resetQueenPose(); clearAgents(); ctx.G = null; resetEnemies(); }
 
 /** Posición de pantalla de un punto de la imagen (`up`: píxeles de imagen por encima del terreno). */
 export const toScreen = p => imageToScreen(p.x, p.y, p.up || 0);

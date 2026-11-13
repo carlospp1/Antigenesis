@@ -186,10 +186,11 @@ export function comboTap(G, D = calc(G)) {
 /** Multiplicador de la racha actual: 1 sin racha; cada toque seguido suma comboStep (×comboX), hasta comboCap toques. */
 export const comboMult = (G, D = calc(G)) => 1 + Math.min(Math.max(0, (G.combo || 1) - 1), D.comboCap) * D.comboStep * D.comboX;
 
-export function click(G, kind, id) {
+/** ghost: toque de la mano fantasma (no cuenta como toque tuyo ni alarga tu racha). */
+export function click(G, kind, id, ghost) {
   if (G.phase === 'dead') return {};
-  const D = calc(G), m = comboTap(G, D);
-  G.stats.clicks++;
+  const D = calc(G), m = ghost ? 1 : comboTap(G, D);
+  if (!ghost) G.stats.clicks++;
   if (kind === 'queen') {
     const crit = Math.random() < D.tapCrit, f = BAL.tapFood * D.tapQ * (crit ? D.critX : 1) * m, before = G.stats.laid;
     G.lay += f;
@@ -290,7 +291,8 @@ function tickNight(G, D, dt) {
 function queenDies(G) {
   const gain = adnFor(G.level - 1, G.stage);
   // el ADN se cobra ya, para poder gastarlo en el Linaje antes de fundar la colonia nueva
-  G.phase = 'dead'; G.pendingAdn = gain; G.adn += gain; G.adnTotal = (G.adnTotal || 0) + gain;
+  // se limpian los enemigos: si no, el asalto sigue y la escena parece «desplazada»
+  G.phase = 'dead'; G.foes = null; G.pendingAdn = gain; G.adn += gain; G.adnTotal = (G.adnTotal || 0) + gain;
   G.best = Math.max(G.best, G.level - 1);
   emit('queenDeath', { gain, level: G.level, gen: G.gen });
 }
@@ -310,7 +312,7 @@ export function tick(G, dt) {
   // mano fantasma: toca a la reina sola cada cierto tiempo
   if (D.ghost > 0) {
     G.ghostT = (G.ghostT || 0) + dt * D.ghost;
-    while (G.ghostT >= 1) { G.ghostT -= 1; emit('ghost', click(G, 'queen')); }
+    while (G.ghostT >= 1) { G.ghostT -= 1; emit('ghost', click(G, 'queen', null, true)); }
   }
   if (emptyColony(G)) digest(G);
   if (G.phase === 'night' && D.nightWork && G.ants > 0) feed(G, forageRate(G, D) * 0.5 * dt);

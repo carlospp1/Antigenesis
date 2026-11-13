@@ -61,6 +61,15 @@ export function buildBrood() {
   ctx.scene.add(queen.root);
 }
 
+/** Vuelve a su sitio y pone derecha la malla (muerte, final o colonia nueva). */
+export function resetQueenPose() {
+  if (!queen) return;
+  queen.dead = 0; queen.tun = false; queen.x = QUEEN.x; queen.y = QUEEN.y;
+  if (queen.yawBias0 != null) { queen.yawBias = queen.yawBias0; delete queen.yawBias0; }
+  queen.g.rotation.set(0, 0, 0); queen.g.position.set(0, 0, 0);
+  if (queen.ant && queen.ant.setDeadEyes) queen.ant.setDeadEyes(false);
+}
+
 /** La reina cambia con la colonia: venomax desde la 4.ª forma y la final en la titán. */
 export function refreshQueen() {
   if (!queen || !ctx.G) return;
@@ -70,8 +79,10 @@ export function refreshQueen() {
   const prev = queen;
   ctx.scene.remove(prev.root);
   queen = createActor(form, QUEEN.size, { shadow: 1.1 });
-  for (const k of ['x', 'y', 'dx', 'dy', 'yawBias', 'squash', 'gulp', 'hover', 's', 'dead', 'phase']) if (prev[k] != null) queen[k] = prev[k];
+  // no se copia «dead»: la malla nueva no hereda el tumbo de la muerte
+  for (const k of ['x', 'y', 'dx', 'dy', 'yawBias', 'squash', 'gulp', 'hover', 's', 'phase']) if (prev[k] != null) queen[k] = prev[k];
   ctx.scene.add(queen.root);
+  resetQueenPose();
   placeActor(queen, 1);
 }
 
@@ -135,19 +146,23 @@ export function updateBrood(dt) {
   // la reina respira, traga y se aplasta al poner un huevo
   queen.s += (qGrow() - queen.s) * Math.min(1, dt * 1.5);
   queen.size = QUEEN.size * queen.s;
-  queen.phase += dt * 2.2; queen.step(false, 0.05, dt);
+  // durante el final la mueve y la anima ending.js (si no, se animaría dos veces por fotograma)
+  if (!ctx.ending) { queen.phase += dt * 2.2; queen.step(false, 0.05, dt); }
   queen.squash = Math.max(0, queen.squash - dt * 3); queen.gulp = Math.max(0, queen.gulp - dt * 2.5); queen.hover = Math.max(0, queen.hover - dt * 4);
-  placeActor(queen, dt);
+  if (!ctx.ending) placeActor(queen, dt);
   // la reina muerta: rueda de lado y se queda patas arriba, apoyada en el lomo (sin atravesar el suelo)
-  queen.dead = G.phase === 'dead' && !G.leaving ? Math.min(1, (queen.dead || 0) + dt * 0.8) : 0;
+  const dying = G.phase === 'dead' && !G.leaving;
+  queen.dead = dying ? Math.min(1, (queen.dead || 0) + dt * 0.8) : 0;
   if (queen.ant && queen.ant.setDeadEyes) queen.ant.setDeadEyes(queen.dead > 0.15);
   if (queen.dead) {
     const d = queen.dead, ang = d * d * (3 - 2 * d) * Math.PI, H = (queen.ant && queen.ant.height) || 0.5;
     queen.g.rotation.x = ang;
     // girando sobre los pies el cuerpo bajaría bajo el suelo: se sube su alto (boca arriba) y medio ancho (de lado)
     queen.g.position.y = H * (1 - Math.cos(ang)) / 2 + Math.sin(ang) * H * 0.55;
+  } else if (queen.g.rotation.x || queen.g.position.y) {
+    // al fundar o al revivir: siempre se limpia el tumbo (antes solo si rotation.x ≠ 0 y podía quedar el desfase en Y)
+    queen.g.rotation.set(0, 0, 0); queen.g.position.set(0, 0, 0);
   }
-  else if (queen.g.rotation.x) { queen.g.rotation.x = 0; queen.g.position.y = 0; }
   const sq = Math.sin(queen.squash * Math.PI), gp = Math.sin(queen.gulp * Math.PI), fill = Math.min(1, G.lay / D.eggCost);
   const k = queen.orient.scale.x;
   queen.orient.scale.set(k * (1 + sq * 0.06 + gp * 0.03), k * (1 - sq * 0.04), k * (1 + fill * 0.05 + Math.sin(time * 1.6) * 0.012));

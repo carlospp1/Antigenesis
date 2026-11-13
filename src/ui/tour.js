@@ -30,6 +30,8 @@ export function tourPending() { try { return !localStorage.getItem(KEY); } catch
 
 export function startTour() {
   if (run) return;
+  // se marca como visto nada más salir: aunque se recargue o se cierre a medias, no vuelve a salir solo
+  try { localStorage.setItem(KEY, '1'); } catch (e) { /* nada */ }
   const el = document.createElement('div');
   el.id = 'tour';
   el.innerHTML = `<div class="tour-hole"></div>
@@ -58,7 +60,6 @@ function next() {
 
 function finish() {
   if (!run) return;
-  try { localStorage.setItem(KEY, '1'); } catch (e) { /* nada */ }
   cancelAnimationFrame(run.raf); removeEventListener('keydown', run.key);
   ui.paused = run.paused;
   const el = run.el; run = null;

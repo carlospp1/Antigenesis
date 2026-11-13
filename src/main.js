@@ -97,7 +97,7 @@ function runAutoBuy() {
 }
 
 function clickScene(hit) {
-  if (G.phase === 'dead') return;
+  if (G.phase === 'dead' || ui.paused) return; // en pausa (o con el tutorial abierto) los toques no juegan
   if (!hit) return;
   if (hit.kind === 'enemy') {
     const d = Game.hit(G, D);
@@ -163,6 +163,7 @@ function wireButtons() {
   };
   window.addEventListener('keydown', e => {
     if (e.target.closest && e.target.closest('input,textarea')) return;
+    if ($('tour')) return; // el tutorial tiene sus propias teclas
     if (e.key === 'b' || e.key === 'B') bot.panel();
     else if (e.key === 'c' || e.key === 'C') { ui.debug = Scene.toggleDebug(); toast(ui.debug ? 'Colisiones visibles (tecla C para ocultar).' : 'Colisiones ocultas.'); }
     else if (e.key === ' ' && $('intro').hidden) { e.preventDefault(); ui.paused = !ui.paused; toast(ui.paused ? 'Pausa.' : 'Seguimos.'); }
