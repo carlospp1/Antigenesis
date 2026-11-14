@@ -12,10 +12,14 @@ const DIORAMA = 7.5;   // segundos en el diorama antes de pasar al planeta
 const SPREAD = 7;      // segundos que tarda la conquista en cubrir el planeta
 let run = null;
 
+/** ¿Está en marcha la secuencia del final? (mientras dura, la partida no avanza) */
+export const endingRunning = () => !!run;
+
 /** Arranca la secuencia; onDone se llama al acabar o al saltarla. */
 export function playEnding({ gen, time, onDone }) {
   cancelEnding();
   Scene.startEnding();
+  document.body.classList.add('ending');
   run = { onDone, timer: setTimeout(() => showPlanet(gen, time), DIORAMA * 1000), raf: 0, el: null };
   // saltar: un toque en la escena (con un pequeño margen para no saltarlo sin querer al ganar tocando)
   run.skip = () => finish();
@@ -29,6 +33,7 @@ export function cancelEnding() {
   $('stage').removeEventListener('pointerdown', run.skip);
   if (run.resize) removeEventListener('resize', run.resize);
   if (run.el) run.el.remove();
+  document.body.classList.remove('ending');
   Scene.stopEnding();
   run = null;
 }

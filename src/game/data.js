@@ -1,4 +1,5 @@
 // Datos de diseño: duración del día, etapas de la reina, objetivos y equilibrio.
+import { SKILLS } from './trees.js';
 
 export const DAY = 60,
     NIGHT = 42,
@@ -161,6 +162,7 @@ export const BAL = {
     hp: 9, // de cada hormiga
     tapFood: 1, // comida que da a mano un toque a la reina (sube con las mejoras de toques)
     tapBrood: 0.12, // un toque adelanta un 12% un huevo o una larva
+    tapRateK: 1, // «Toque nutritivo»: dial del % de la recolección por segundo que suma cada toque
     // enemigos de la noche n: cantidad, vida y daño crecen cada noche
     foeCount0: 1,
     foeCountK: 0.6,
@@ -171,8 +173,11 @@ export const BAL = {
     eraHard: 1.1, // cada era (4 noches) los enemigos tienen ×eraHard de vida y daño sobre la anterior
     bossHp: 5,
     bossDps: 3, // jefe de cada era (cuarta noche), en múltiplos de un enemigo normal
-    humanHp: 40,
-    humanDps: 9, // la noche final
+    // la noche final: el humano no pega poco a poco, pisa (rules.tickHuman)
+    humanHp: 20, // vida del humano, en múltiplos de un enemigo de esa noche
+    stompFirst: 3, // segundos desde que llega hasta el primer pisotón
+    stompEvery: 8, // segundos entre pisotones
+    stompHits: 4, // pisotones que aguantan las hormigas titán (el linaje suma más)
     prize0: 15,
     prizeG: 1.4,
     skill0: 18,
@@ -222,12 +227,12 @@ export const STAGES = [
     { name: 'Reina joven', at: 0 },
     { name: 'Reina fértil', at: 600 },
     { name: 'Gran madre', at: 12000 },
-    { name: 'Matriarca', at: 200000 },
-    { name: 'Reina primordial', at: 3000000 },
-    { name: 'Reina ancestral', at: 10000000 },
-    { name: 'Reina eterna', at: 30000000 },
-    { name: 'Emperatriz', at: 100000000 },
-    { name: 'Soberana', at: 300000000 },
+    { name: 'Matriarca', at: 600000 },
+    { name: 'Reina primordial', at: 1000000 },
+    { name: 'Reina ancestral', at: 5000000 },
+    { name: 'Reina eterna', at: 10000000 },
+    { name: 'Emperatriz', at: 50000000 },
+    { name: 'Soberana', at: 200000000 },
     { name: 'Reina absoluta', at: 1000000000 },
     { name: 'Madre origen', at: 3000000000 },
     { name: 'La primera', at: 10000000000 },
@@ -268,7 +273,7 @@ export const OBJ = [
     ],
     [
         'Consigue biomasa y compra un nodo clave (rombo)',
-        (G) => Object.keys(G.skills).some((k) => k.includes('K')),
+        (G) => Object.keys(G.skills).some((k) => SKILLS[k]?.key),
         150,
     ],
     [

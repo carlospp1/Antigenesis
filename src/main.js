@@ -11,7 +11,7 @@ import { hydrateIcons } from './ui/icons.js';
 import { burst, ghostHand } from './ui/fx.js';
 import { tv, openTree, closeTree, renderTree, wireTree } from './ui/tree.js';
 import * as Juice from './ui/juice.js';
-import { playEnding, cancelEnding } from './ui/ending.js';
+import { playEnding, cancelEnding, endingRunning } from './ui/ending.js';
 import { startTour, tourPending } from './ui/tour.js';
 import { createBot } from './ui/bot.js';
 
@@ -30,7 +30,9 @@ function act(a, id, btn) {
   else if (a === 'pause') { ui.paused = !ui.paused; sfx = 'click'; }
   else if (a === 'skipDay') { ok = Game.skipDay(G); sfx = 'click'; }
   else if (a === 'antModel') { try { localStorage.setItem('antigenesis.antModel', id); } catch (e) { /* nada */ } Game.save(G); location.reload(); return; }
-  else if (a === 'speed') { ui.speed = +id; sfx = 'click'; }
+  else if (a === 'devSpeed') { ui.devSpeed = +id; sfx = 'click'; }
+  else if (a === 'gameSpeed') { ui.speed = G.speed = ui.speed % 3 + 1; sfx = 'click'; }
+  else if (a === 'ending') { openSheet(G, null); runEnding(); sfx = 'click'; }
   else if (a === 'bot') { bot.panel(); openSheet(G, null); sfx = 'click'; }
   else if (a === 'debug') { ui.debug = Scene.toggleDebug(); sfx = 'click'; }
   else if (a === 'liveMap') {
@@ -43,7 +45,7 @@ function act(a, id, btn) {
   else if (a === 'debugPerm') { Game.debugMaxTree(G, 'perm'); toast('Linaje al máximo.', 'good'); if (tv.open) renderTree(G, true); sfx = 'skill'; }
   else if (a === 'reset') {
     if (Date.now() - resetArmed < 4000) {
-      cancelEnding(); Game.wipe(); Scene.reset(); G = Game.newGame(); D = Game.calc(G); resetArmed = 0;
+      cancelEnding(); Game.wipe(); Scene.reset(); G = Game.newGame(); D = Game.calc(G); resetArmed = 0; ui.speed = 1;
       openSheet(G, null); toast('Partida nueva.'); sfx = 'click';
     } else { resetArmed = Date.now(); if (btn) btn.textContent = '¿Seguro? Pulsa otra vez'; sfx = 'deny'; Audio.play(sfx); return; }
   }
@@ -87,8 +89,8 @@ const bot = createBot({
   buy: (tree, id) => buyNode(tree, id),
   leave: () => leave(),
   found: () => found(),
-  getSpeed: () => ui.speed,
-  setSpeed: v => { ui.speed = v; },
+  getSpeed: () => ui.devSpeed,
+  setSpeed: v => { ui.devSpeed = v; },
   /** Partida nueva desde cero (el bot la usa al ganar para seguir jugando). */
   newGame() {
     cancelEnding(); Game.wipe(); Scene.reset(); G = Game.newGame(); D = Game.calc(G);
@@ -102,6 +104,7 @@ function clickScene(hit) {
   // árbol abierto: el tiempo (G.total) no avanza → sin esto la racha no caduca por comboGap
   if (G.phase === 'dead' || ui.paused || tv.open) return;
   if (!hit) return;
+  const prev = G.combo || 0, early = D.comboEarly;
   if (hit.kind === 'enemy') {
     const d = Game.hit(G, D), m = Game.comboMult(G, D);
     if (d > 0) {
@@ -109,14 +112,14 @@ function clickScene(hit) {
       const streak = m >= 2 ? '×' + (Math.round(m * 10) / 10).toString().replace('.', ',') + ' ' : '';
       float(streak + '−' + fmt(d, 0), hit.pos, m >= 2 ? 'lucky' : 'hit');
       Audio.play('hit');
-      Juice.tap(G.combo, m, D.comboCap + 1);
+      Juice.tap(G.combo, m, D.comboCap + 1, { prev, early });
     }
     return;
   }
   const r = Game.click(G, hit.kind, hit.id);
   Scene.bump(hit);
   Audio.play('click');
-  Juice.tap(r.combo, r.mult, D.comboCap + 1); // racha de toques seguidos (rinden más)
+  Juice.tap(r.combo, r.mult, D.comboCap + 1, { prev, early }); // racha de toques seguidos (rinden más)
   const streak = r.mult >= 2 ? '×' + (Math.round(r.mult * 10) / 10).toString().replace('.', ',') + ' ' : '';
   if (hit.kind === 'queen') { // la comida vuela hasta su boca y el número sale al tragarla
     if (r.crit) { float('¡×' + r.crit + '!', hit.click, 'lucky'); burst('×' + r.crit, 'Toque de suerte', r.crit >= 5 ? 'x5' : 'x2', Scene.toScreen(hit.click)); Audio.play('skill'); }
@@ -154,9 +157,16 @@ function wireButtons() {
   tv.onClose = () => { closeTree(); Audio.play('click'); };
   tv.onFound = () => { if (found()) Audio.play('win'); };
   let treeArmed = 0;
+  const resetLabel = 'Reiniciar<span class="long"> árbol</span> <small>(devuelve todo)</small>';
   tv.onReset = btn => {
-    if (Date.now() - treeArmed < 3000) { treeArmed = 0; Game.resetSkills(G) ? Audio.play('buy') : Audio.play('deny'); D = Game.calc(G); btn.innerHTML = 'Reiniciar árbol <small>(devuelve todo)</small>'; renderTree(G, true); }
-    else { treeArmed = Date.now(); btn.innerHTML = '¿Seguro? <small>pulsa otra vez</small>'; setTimeout(() => { btn.innerHTML = 'Reiniciar árbol <small>(devuelve todo)</small>'; }, 3000); }
+    if (Date.now() - treeArmed < 3000) { treeArmed = 0; Game.resetSkills(G) ? Audio.play('buy') : Audio.play('deny'); D = Game.calc(G); btn.innerHTML = resetLabel; renderTree(G, true); }
+    else { treeArmed = Date.now(); btn.innerHTML = '¿Seguro? <small>pulsa otra vez</small>'; setTimeout(() => { btn.innerHTML = resetLabel; }, 3000); }
+  };
+  // interruptor del mayordomo (se desbloquea en el linaje)
+  tv.onAuto = () => {
+    G.butler = !G.butler; Audio.play('click'); Game.save(G);
+    toast(G.butler ? 'Mayordomo encendido: compra solo cuando cierres el árbol.' : 'Mayordomo apagado.', G.butler ? 'good' : '');
+    renderTree(G, true);
   };
   wireTree(() => G);
   let foundArmed = 0;
@@ -177,6 +187,7 @@ function wireButtons() {
   $('start').onclick = () => {
     if (tourPending() && !bot.on) setTimeout(startTour, 700); // primera partida: el tutorial
     $('intro').hidden = true; Audio.start(); Audio.loadPrefs(G);
+    if (G.refundNote) { G.refundNote = false; Game.save(G); setTimeout(() => toast('El Árbol y el Linaje se han reorganizado: te hemos devuelto todo para que lo repartas de nuevo.', 'good'), 900); }
     if (G.phase === 'dead' && G.leaving) setTimeout(() => openTree(G, 'perm'), 0); // se cerró a mitad de fundar: vuelve al Linaje
   };
   window.addEventListener('keydown', e => {
@@ -229,6 +240,15 @@ function wireGameEvents() {
   on('born', d => { Audio.play('born'); float(d.shiny ? '✦ +1 dorada' : '+1', Scene.entityPos('larva', d.slot), d.shiny ? 'lucky' : 'good'); if (d.shiny) { Audio.play('win'); burst('¡Dorada!', 'Hormiga dorada', 'shiny', Scene.toScreen(Scene.entityPos('larva', d.slot))); } });
   on('dodge', () => float('¡esquiva!', Scene.entityPos('front'), 'good'));
   on('death', d => { Audio.play('death'); float('−1', Scene.entityPos('front'), 'hit'); });
+  // noche final: los pisotones del humano
+  on('stomp', d => {
+    Audio.play('stomp');
+    if (d.queen) toast('¡El pie va a por el nido!', 'warn');
+    else if (d.wipe) toast(Game.immuneBoss(G, D.night) ? 'Un solo pisotón y no queda ninguna. Hace falta la Hormiga titán.' : '¡El pisotón las aplasta a todas!', 'warn');
+    else if (d.left === 1) toast('Aguantan… pero el próximo pisotón será el último.', 'warn');
+  });
+  on('massDeath', d => { Audio.play('death'); float('−' + fmt(d.n), Scene.entityPos('front'), 'hit'); });
+  on('comboEnd', () => Juice.comboEnd());
   on('foeDeath', () => Audio.play('poof'));
   on('goal', d => {
     Audio.play('objective');
@@ -261,6 +281,8 @@ function wireGameEvents() {
     ghostHand(sp.x, sp.y);
     if ((r.n || 1) > 1) ghostHand(sp.x + 28, sp.y - 18);
     if (r.crit) burst('×' + r.crit, 'Mano fantasma', r.crit >= 5 ? 'x5' : 'x2', sp);
+    // con la racha viva, la mano también la sube: el contador lo enseña (sin sonar)
+    if (r.combo > r.comboBefore) Juice.tap(r.combo, r.mult, D.comboCap + 1, { prev: r.comboBefore, quiet: true, early: D.comboEarly });
     const streak = r.mult >= 2 ? '×' + (Math.round(r.mult * 10) / 10).toString().replace('.', ',') + ' ' : '';
     const label = r.laid ? '+huevo' : streak + (r.cut ? '−' : '+') + fmt(r.food);
     setTimeout(() => Scene.feedQueen(from, at => float(label, at, r.laid ? 'good' : r.crit || r.mult >= 2 ? 'lucky' : 'crit')), 250);
@@ -283,10 +305,18 @@ function wireGameEvents() {
   });
   on('victory', d => {
     Audio.play('win');
-    $('winText').textContent = `Los humanos han caído en la generación ${d.gen}, tras ${fmtTime(d.time)} de juego. Ya nada detiene a la colonia: las hormigas conquistan el mundo.`;
-    // primero la secuencia del final (la reina sale del nido y la colonia cubre el planeta); luego la pantalla de victoria
-    playEnding({ gen: d.gen, time: d.time, onDone: () => { $('winView').hidden = false; } });
+    runEnding(d);
   });
+}
+
+/**
+ * Secuencia del final (la reina sale del nido y la colonia cubre el planeta) y después la pantalla de victoria.
+ * Sin d (botón de depuración «Ver cinemática» o __ax.ending()) usa los datos de la partida actual.
+ */
+function runEnding(d = { gen: G.gen, time: G.total || 0 }) {
+  closeTree(); Scene.resetView();
+  $('winText').textContent = `Los humanos han caído en la generación ${d.gen}, tras ${fmtTime(d.time)} de juego. Ya nada detiene a la colonia: las hormigas conquistan el mundo.`;
+  playEnding({ gen: d.gen, time: d.time, onDone: () => { $('winView').hidden = false; } });
 }
 
 let lastT = 0, lastWall = Date.now(), uiT = 0, saveT = 0;
@@ -297,9 +327,10 @@ function frame(t) {
   let dt = Math.min(0.2, (t - lastT) / 1000 || 0);
   lastT = t;
   if (gap > 5) dt = 0; // la pestaña estuvo dormida: sin conexión no se gana nada
-  const n = ui.paused || tv.open ? 0 : ui.speed; // con el árbol abierto el tiempo se detiene
+  // con el árbol abierto o durante el final el tiempo se detiene. La velocidad de depuración manda sobre la del jugador
+  const n = ui.paused || tv.open || endingRunning() ? 0 : (ui.devSpeed > 1 ? ui.devSpeed : ui.speed);
   D = Game.calc(G);
-  for (let i = 0; i < n; i++) { bot.step(dt); D = Game.tick(G, dt); Scene.update(G, D, dt, dt, i < n - 1); }
+  for (let i = 0; i < n; i++) { bot.step(dt); D = Game.tick(G, dt, dt / n); Scene.update(G, D, dt, dt, i < n - 1); }
   bot.update(dt);
   if (!n) Scene.update(G, D, 0, dt);
   placeLabels();
@@ -311,7 +342,7 @@ function frame(t) {
 async function boot() {
   hydrateIcons();
   const saved = Game.load();
-  G = saved || Game.newGame(); D = Game.calc(G);
+  G = saved || Game.newGame(); D = Game.calc(G); ui.speed = G.speed || 1;
   Audio.loadPrefs(G); // volúmenes y mute (aunque el contexto aún no esté abierto)
   const start = $('start'), status = $('loadStatus');
   start.disabled = true;
@@ -343,9 +374,9 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 
 // ayuda para depurar desde la consola: __ax.G, __ax.speed = 8
 window.__ax = {
-  get G() { return G; }, set speed(v) { ui.speed = v; }, Game, Scene, bot, Juice,
-  /** Prueba la secuencia final sin ganar: __ax.ending() */
-  ending: () => playEnding({ gen: G.gen, time: G.total || 0, onDone: () => { $('winView').hidden = false; } }),
+  get G() { return G; }, set speed(v) { ui.devSpeed = v; }, Game, Scene, bot, Juice,
+  /** Prueba la secuencia final sin ganar: __ax.ending() (también en Ajustes → Pruebas y depuración) */
+  ending: () => runEnding(),
   get free() { return Game.debug.free; }, set free(v) { Game.debug.free = !!v; },
   maxSkills: () => Game.debugMaxTree(G, 'skills'),
   maxPerm: () => Game.debugMaxTree(G, 'perm'),

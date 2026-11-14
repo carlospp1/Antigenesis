@@ -4,14 +4,24 @@
 // En horizontal la ventana cubre la pantalla (como antes, con zoom y arrastre limitados a los bordes, así que
 // nunca se ve el borde del diorama). En vertical (teléfono) se ve la parte central del ancho (PORTRAIT_W) con
 // toda la altura; por encima y por debajo queda el fondo (world.buildBackdrop: follaje arriba, tierra abajo).
-// Lo único automático es el temblor de los pisotones de la noche final, que vuelve solo a su sitio,
+// Lo único automático es un rebote vertical muy suave al pisar (nudge), que vuelve solo a su sitio,
 // y la secuencia del final del juego (playCinematic), que mueve la cámara mientras dura.
 import * as THREE from 'three';
 import { ctx } from './context.js';
-import { IMG, REF } from './layout.js';
+import { IMG, REF, PXW } from './layout.js';
 import { world, lifted, toImage, pickWorld, fitBackdrop } from './world.js';
 
 const view = { cx: IMG.w / 2, cy: IMG.h * 0.5, zoom: 1, gcx: IMG.w / 2, gcy: IMG.h * 0.5, gzoom: 1, w: 1, h: 1 };
+
+/* ---------- rebote al pisar ---------- */
+// un único rebote vertical amortiguado (no un temblor al azar): a: píxeles de imagen, t: segundos desde el golpe
+let bump = null;
+const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+/** Rebote de la cámara de `px` píxeles de imagen. Si ya hay uno más fuerte en marcha, se queda ese. */
+export function nudge(px) {
+  if (still) return;
+  if (!bump || px >= bump.a * Math.exp(-bump.t * 12)) bump = { a: px, t: 0 };
+}
 
 export function createCamera() { return new THREE.PerspectiveCamera(REF.fov, 1, 0.01, 60); }
 export function fitCamera(w, h) { view.w = w; view.h = h; }
@@ -74,10 +84,12 @@ export function updateCamera(dt) {
   camera.position.fromArray(REF.pos);
   _d.set(c.x / IMG.w * 2 - 1, 1 - c.y / IMG.h * 2, 0.5).unproject(world.ref).sub(camera.position).normalize();
   _look.copy(camera.position).add(_d);
-  // temblor (pisotones): se desvanece solo
-  if (ctx.shake > 0) {
-    camera.position.x += (Math.random() - 0.5) * ctx.shake * 0.02; camera.position.y += (Math.random() - 0.5) * ctx.shake * 0.02;
-    ctx.shake = Math.max(0, ctx.shake - dt * 2.5);
+  // rebote al pisar: baja y vuelve, amortiguado
+  if (bump) {
+    bump.t += dt;
+    const k = bump.a * Math.exp(-bump.t * 12);
+    if (k < 0.02) bump = null;
+    else { const off = k * PXW * Math.cos(bump.t * 40); camera.position.y -= off; _look.y -= off; } // se mueve todo, sin inclinar
   }
   camera.up.set(0, 1, 0);
   camera.lookAt(_look);

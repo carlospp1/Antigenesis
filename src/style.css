@@ -320,7 +320,8 @@ kbd { font: 700 13px Nunito, sans-serif; border: 2px solid var(--ink); border-ra
 @keyframes bspark { 0% { transform: translate(0, 0) scale(1.4); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; } }
 @keyframes shine { to { background-position: 300% 0; } }
 body.shake #stage { animation: shk .4s linear; }
-@keyframes shk { 20% { transform: translate(-6px, 3px); } 40% { transform: translate(5px, -4px); } 60% { transform: translate(-4px, -2px); } 80% { transform: translate(3px, 3px); } }
+/* muy sutil: el escenario apenas se mueve (como el rebote de los pisotones, scene/camera.nudge) */
+@keyframes shk { 25% { transform: translate(0, 1.5px); } 60% { transform: translate(0, -0.8px); } }
 
 .ghosthand { position: absolute; width: 64px; height: 64px; margin: -32px 0 0 -32px; color: #cfe8ff;
   filter: drop-shadow(0 0 10px rgba(170, 220, 255, .9)); animation: ghost 1s ease-in-out forwards; }
@@ -358,6 +359,16 @@ body.shake #stage { animation: shk .4s linear; }
 .pill.found:hover { border-color: #e6c6f5; transform: translateY(-1px); }
 .pill.skip { cursor: pointer; color: var(--night); } .pill.skip b { color: var(--night); font-size: 13px; }
 .pill.skip:hover { border-color: var(--night); transform: translateY(-1px); }
+/* velocidad del juego (×1 → ×2 → ×3) */
+.pill.speed { cursor: pointer; } .pill.speed b { font-size: 13px; }
+.pill.speed:hover { border-color: var(--honey); transform: translateY(-1px); }
+.pill.speed.on { border-color: var(--honey); } .pill.speed.on b { color: var(--honey); }
+/* interruptor del mayordomo, en el pie del árbol */
+.pill.auto { cursor: pointer; font: 800 13px Nunito, sans-serif; color: var(--dim); white-space: nowrap; }
+.pill.auto.on { color: var(--honey); border-color: var(--honey); }
+/* final del juego: solo la escena (ui/ending.js pone body.ending) */
+body.ending #top, body.ending #side, body.ending #dock, body.ending #labels, body.ending #floats,
+body.ending #quest, body.ending #alarm, body.ending #toasts, body.ending #combo { display: none; }
 @keyframes foundGlow { 50% { box-shadow: 0 0 0 2px rgba(215, 168, 232, .25), 0 0 18px rgba(215, 168, 232, .45); } }
 
 /* estallidos locales: más pequeños, en el sitio donde pasó */
@@ -569,6 +580,7 @@ button, .tab, .node, .evo { touch-action: manipulation; }   /* sin el retardo de
   /* recursos: el reloj del día va antes que «Fundar» (que es una acción, al final de la fila) */
   .pill.found { order: 9; }
   .pill.skip { order: 8; }
+  .pill.speed { order: 8; }
   /* pie de los árboles: una sola fila compacta, del color de los paneles; la ayuda queda encima */
   .tv-foot { flex-wrap: nowrap; gap: 14px; padding: 8px max(12px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
     background: var(--panel); border-top: 1px solid var(--line); }

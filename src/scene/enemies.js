@@ -1,7 +1,9 @@
 // Enemigos por eras (hormigas rivales → bachacos → termitas → cucarachas → arañas → escarabajos → humanos).
 // Salen de la hierba por la derecha, pelean junto al agujero y se retiran al amanecer.
 // Si no queda ninguna hormiga bajan por el túnel hasta la reina.
-// La noche final no hay bichos: un pie humano gigante baja del cielo y pisa la línea de combate.
+// La noche final no hay bichos: un pie humano gigante baja del cielo y pisa la línea de combate
+// (el ritmo de los pisotones lo marcan las reglas: G.foes.stompT, ver rules.tickHuman).
+// Los toques del jugador sobre un enemigo los da un zapato pequeño: uno solo, que encadena los golpes en cola.
 import * as THREE from 'three';
 import { ctx, rnd } from './context.js';
 import { FOE_LINE, BOSS_POS, SIZE, QUEEN, PXW } from './layout.js';
@@ -10,10 +12,13 @@ import { createActor, placeActor, lookAt2D } from './actor.js';
 import { createCreature } from './creature.js';
 import { DOWN } from './colliders.js';
 import { puff } from './particles.js';
-import { emit } from '../core/events.js';
-import { RAID } from '../game/data.js';
+import { emit, on } from '../core/events.js';
+import { RAID, BAL } from '../game/data.js';
+import { nudge } from './camera.js';
 
 const MAX_MINIONS = 12;
+/** Rebote de cámara (píxeles de imagen) del pisotón humano y de cada golpe del zapato pequeño: muy sutiles. */
+const NUDGE_STOMP = 2.5, NUDGE_TAP = 0.5;
 
 /** Cómo se dibuja cada tipo: modelo y tamaño en píxeles por unidad de modelo. */
 const KINDS = {
@@ -32,7 +37,7 @@ const KINDS = {
 };
 
 const pools = {};                 // tipo → actores ya creados (se reutilizan entre noches)
-let minions = [], boss = null, shoe = null, leave = 0, shown = false, hitT = 0, stomp = 0;
+let minions = [], boss = null, shoe = null, leave = 0, shown = false, hitT = 0;
 
 function take(kind, i) {
   const list = pools[kind] || (pools[kind] = []);
@@ -58,14 +63,84 @@ function buildShoe() {
   sh.rotation.x = -Math.PI / 2; sh.scale.set(1, 0.45, 1);
   const shadowG = new THREE.Group(); shadowG.add(sh);
   ctx.scene.add(g, shadowG);
-  return { g, c, sh, shadowG, x: FOE_LINE.x + 40, y: FOE_LINE.y + 10, lastT: 0 };
+  return { g, c, sh, shadowG, x: FOE_LINE.x + 40, y: FOE_LINE.y + 10, off: 0 };
 }
+
+/** Coloca un zapato (el gigante o el pequeño) en (x, y) de la imagen, a h píxeles del suelo, de largo L. */
+function placeShoe(s, h, L, top) {
+  W(s.x, s.y, s.shadowG.position);
+  s.g.position.copy(s.shadowG.position); s.g.position.y += h * PXW;
+  s.g.scale.setScalar(L * PXW);
+  s.g.rotation.set(0, Math.PI, 0); // de perfil, punta hacia el nido
+  const k = Math.max(0, 1 - h / top);
+  s.shadowG.position.y += 0.004; s.shadowG.scale.setScalar(L * PXW * 0.5 * (0.6 + 0.4 * k));
+  s.sh.material.opacity = 0.15 + 0.45 * k;
+}
+
+/* ---------- el zapato pequeño de los toques ---------- */
+// Un solo zapato: cada toque a un enemigo se apunta en la cola y el zapato los va dando seguidos.
+// El daño y el número salen al instante (main.clickScene); aquí solo va la animación.
+const TAP_L = 60, TAP_UP = 70, TAP_QUEUE = 8;
+let tapShoe = null;
+const tapQ = [];
+
+function updateTapShoe(dt) {
+  const s = tapShoe;
+  if (!s || (!s.cur && !tapQ.length && !s.g.visible)) return;
+  if (!s.cur) {
+    if (!tapQ.length) { // sin más golpes: espera un momento arriba y se va
+      if ((s.idle += dt) > 0.25) s.g.visible = s.shadowG.visible = false;
+      else placeShoe(s, TAP_UP, TAP_L, TAP_UP);
+      return;
+    }
+    s.cur = tapQ.shift(); s.t = 0; s.landed = false; s.idle = 0;
+    if (!s.g.visible) { s.x = s.cur.x; s.y = s.cur.y; } // el primero cae recto
+    s.x0 = s.x; s.y0 = s.y;
+    s.g.visible = s.shadowG.visible = true;
+  }
+  // con golpes acumulados va más deprisa para no quedarse atrás
+  const fast = tapQ.length > 3, down = fast ? 0.03 : 0.05, hold = fast ? 0.02 : 0.04, up = fast ? 0.05 : 0.07;
+  s.t += dt;
+  let h;
+  if (s.t < down) { // baja y, de paso, se mueve hasta el siguiente objetivo
+    const k = s.t / down;
+    s.x = s.x0 + (s.cur.x - s.x0) * k; s.y = s.y0 + (s.cur.y - s.y0) * k;
+    h = TAP_UP * (1 - k * k);
+  } else {
+    if (!s.landed) { s.landed = true; s.x = s.cur.x; s.y = s.cur.y; landTap(s.cur); }
+    if (s.t < down + hold) h = 0;
+    else if (s.t < down + hold + up) h = TAP_UP * (s.t - down - hold) / up;
+    else { h = TAP_UP; s.cur = null; }
+  }
+  placeShoe(s, h, TAP_L, TAP_UP);
+}
+
+/** El zapato pequeño toca el suelo: el bicho se encoge y salta un poco de sangre. */
+function landTap(p) {
+  const o = p.foe;
+  if (o && o.alive && o.root?.visible) {
+    o.hurt = 1;
+    puff(o.x + rnd(-18, 18), o.y - 22 + rnd(-10, 10), 'red', 8, 110);
+    puff(o.x, o.y - 16, 'dust', 3, 50);
+  } else puff(p.x + rnd(-12, 12), p.y - 10, 'red', 6, 100);
+  nudge(NUDGE_TAP);
+}
+
+/* ---------- pisotón humano: el polvo y el rebote salen del evento de las reglas (el sonido, en main.js) ---------- */
+on('stomp', () => {
+  if (!shoe || !shoe.g.visible) return;
+  puff(shoe.x, shoe.y, 'dust', 26, 260, 60);
+  nudge(NUDGE_STOMP);
+  shoe.off = rnd(-40, 160); // a dónde apunta el siguiente
+});
 
 const allFoes = () => (boss ? [...minions, boss] : minions);
 
 export function hideFoes() {
   for (const k in pools) for (const o of pools[k]) { o.root.visible = false; o.alive = false; }
   if (shoe) { shoe.g.visible = false; shoe.shadowG.visible = false; }
+  tapQ.length = 0;
+  if (tapShoe) { tapShoe.cur = null; tapShoe.g.visible = tapShoe.shadowG.visible = false; }
   minions = []; boss = null; shown = false;
   for (const k in pools) for (const o of pools[k]) o.tun = false;
 }
@@ -84,7 +159,7 @@ function setupNight(f, def) {
   boss = null;
   if (def.boss && def.boss.final) {
     if (!shoe) shoe = buildShoe();
-    shoe.g.visible = shoe.shadowG.visible = true; stomp = 0;
+    shoe.g.visible = shoe.shadowG.visible = true; shoe.off = rnd(-40, 160);
   } else if (def.boss) {
     boss = take(def.boss.type, 0);
     Object.assign(boss, { bx: BOSS_POS.x, by: BOSS_POS.y, alive: f.boss > 0 });
@@ -92,33 +167,30 @@ function setupNight(f, def) {
   }
 }
 
-/** Ciclo del pisotón: baja amenazante, cae de golpe, se queda apoyado y vuelve a subir. */
+/**
+ * El pie sigue el reloj de las reglas (tau: segundos hasta el próximo pisotón): flota alto apuntando a la
+ * línea de combate (o al nido si no quedan hormigas), se cierne, cae de golpe justo en el pisotón, se queda
+ * apoyado medio segundo y vuelve a subir.
+ */
 function updateShoe(dt) {
-  const s = shoe, period = 2.6;
-  const before = Math.floor(stomp / period);
-  stomp += dt;
-  if (Math.floor(stomp / period) !== before) s.x = ctx.G.foes && ctx.G.foes.raid > 0 ? DOWN[0].x + 60 : FOE_LINE.x - 60 + rnd(-40, 160); // nuevo objetivo (sin hormigas: el nido)
-  const t = (stomp % period) / period;
+  const s = shoe, f = ctx.G.foes, tau = f.stompT ?? BAL.stompFirst, since = BAL.stompEvery - tau;
   let h; // altura sobre el suelo, en píxeles de imagen
-  if (t < 0.45) h = 900 - t / 0.45 * 380;
-  else if (t < 0.55) h = 520 * (1 - (t - 0.45) / 0.1);
-  else if (t < 0.75) h = 0;
-  else h = (t - 0.75) / 0.25 * 900;
-  if (t >= 0.55 && s.lastT < 0.55) { ctx.shake = 1.2; puff(s.x, s.y, 'dust', 26, 260, 60); emit('sfx', { id: 'stomp' }); }
-  s.lastT = t;
-  const L = 420; // largo de la zapatilla, en píxeles de imagen
-  W(s.x, s.y, s.shadowG.position);
-  const px = PXW;
-  s.g.position.copy(s.shadowG.position); s.g.position.y += h * px;
-  s.g.scale.setScalar(L * px);
-  s.g.rotation.set(0, Math.PI, 0); // de perfil, punta hacia el nido
-  const k = Math.max(0, 1 - h / 900);
-  s.shadowG.position.y += 0.004; s.shadowG.scale.setScalar(L * px * 0.5 * (0.6 + 0.4 * k));
-  s.sh.material.opacity = 0.15 + 0.45 * k;
+  if (since < 0.5) h = 0;
+  else if (since < 1.3) h = (since - 0.5) / 0.8 * 900;
+  else if (tau > 1.2) h = 520 + 380 * Math.min(1, (tau - 1.2) / 2);
+  else if (tau > 0.25) h = 520;
+  else h = 520 * tau / 0.25;
+  if (h >= 520) { // en el aire: apunta al siguiente sitio
+    const out = ctx.G.ants > 0, tx = out ? FOE_LINE.x - 60 + s.off : DOWN[0].x + 60, ty = out ? FOE_LINE.y + 10 : DOWN[0].y;
+    s.x += (tx - s.x) * Math.min(1, dt * 3); s.y += (ty - s.y) * Math.min(1, dt * 3);
+  }
+  placeShoe(s, h, 420, 900); // 420: largo de la zapatilla, en píxeles de imagen
 }
 
 export function updateEnemies(dt) {
   const { G, D, time } = ctx, f = G.foes;
+  if (ctx.ending) { if (shown || leave) { hideFoes(); leave = 0; } return; } // el final: solo la reina
+  updateTapShoe(dt);
   ctx.fighting = !!f && f.arrive <= 0 && G.ants > 0;
   if (leave > 0) { // huyen hacia la hierba
     leave -= dt;
@@ -190,7 +262,10 @@ export function aliveFoes() {
   return l;
 }
 
-/** Toque de daño: partículas en el bicho más cercano y animación de golpe. */
+/**
+ * Toque de daño: el zapato pequeño irá a pisar al bicho más cercano (o junto al pie humano). Se apunta en la
+ * cola; si ya hay muchos pendientes se descarta el más antiguo.
+ */
 export function enemyHit(at) {
   const ax = at?.x ?? FOE_LINE.x + 60, ay = at?.y ?? FOE_LINE.y;
   let best = null, bd = Infinity;
@@ -199,16 +274,9 @@ export function enemyHit(at) {
     const d = (o.x - ax) ** 2 + (o.y - (ay + 20)) ** 2;
     if (d < bd) { bd = d; best = o; }
   }
-  if (best) {
-    best.hurt = 1;
-    puff(best.x + rnd(-18, 18), best.y - 22 + rnd(-10, 10), 'red', 8, 110);
-    puff(best.x, best.y - 16, 'dust', 3, 50);
-    ctx.shake = Math.max(ctx.shake || 0, 0.35);
-  } else if (shoe && shoe.g.visible) {
-    puff(shoe.x + rnd(-30, 30), shoe.y - 80 + rnd(-20, 20), 'red', 10, 140);
-    ctx.shake = Math.max(ctx.shake || 0, 0.45);
-  } else {
-    puff(ax + rnd(-20, 20), ay, 'red', 5, 90);
-  }
+  const p = best ? { x: best.x, y: best.y, foe: best } : shoe && shoe.g.visible ? { x: shoe.x + rnd(-30, 30), y: shoe.y + rnd(-6, 6) } : { x: ax, y: ay };
+  if (!tapShoe) { tapShoe = buildShoe(); tapShoe.idle = 0; tapShoe.g.visible = tapShoe.shadowG.visible = false; }
+  tapQ.push(p);
+  if (tapQ.length > TAP_QUEUE) tapQ.shift();
 }
 export const enemyPos = () => ({ x: FOE_LINE.x + 60, y: FOE_LINE.y, up: 30 });

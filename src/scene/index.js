@@ -15,12 +15,11 @@ import { buildBrood, updateBrood, refreshQueen, resetQueenPose, queen, brood, sl
 export { broodBars };
 /** Para depurar desde la consola (__ax.Scene.agents): las hormigas que se dibujan. */
 export { agents } from './colony.js';
-import { syncAgents, updateAgents, onBorn, onDeath, refreshMutation, clearAgents } from './colony.js';
+import { syncAgents, updateAgents, onBorn, onDeath, onMassDeath, refreshMutation, clearAgents } from './colony.js';
 import { buildEnemies, updateEnemies, resetEnemies, retreat, aliveFoes, enemyHit, enemyPos } from './enemies.js';
 import { createCamera, fitCamera, updateCamera, zoomBy, panBy, resetView, focus, screenToImage, imageToScreen } from './camera.js';
 import { toggleDebug, initNav } from './colliders.js';
-import { startEnding, stopEnding, updateEnding } from './ending.js';
-export { startEnding, stopEnding };
+import { startEnding as beginEnding, stopEnding as endEnding, updateEnding } from './ending.js';
 import { on } from '../core/events.js';
 import { EGG_PILE, LARVA_PILE } from './layout.js';
 
@@ -76,6 +75,7 @@ function wireEvents() {
   });
   on('born', d => { const p = slotPos('larva', d.slot); puff(p.x, p.y - 10, 'gold', 10, 90, 40); onBorn(d.caste, d.slot, d.shiny); syncT = 0; });
   on('death', d => onDeath(d.caste, d.shiny));
+  on('massDeath', () => { onMassDeath(); syncT = 1; }); // pisotón humano: caen todas de golpe
   on('stage', () => { for (let i = 0; i < 6; i++) puff(QUEEN.x + (Math.random() - 0.6) * 220, QUEEN.y + (Math.random() - 0.5) * 30, 'gold', 6, 140, 40); });
   on('nightLost', retreat);
   on('evolve', () => { refreshQueen(); clearAgents(); if (ctx.G) syncAgents(true); for (let i = 0; i < 8; i++) puff(500 + Math.random() * 700, 660 + Math.random() * 100, 'gold', 6, 160, 60); });
@@ -90,6 +90,22 @@ export function resize() {
 }
 
 export function reset() { stopEnding(); resetQueenPose(); clearAgents(); ctx.G = null; resetEnemies(); }
+
+/**
+ * Final del juego: el nido se ve en 3D de verdad (la cámara se mueve y la foto fija se notaría), sin hormigas
+ * ni enemigos; solo la reina, que sale del nido. Al acabar, todo vuelve como estaba.
+ */
+let endingWasLive = null;
+export function startEnding() {
+  if (endingWasLive == null) endingWasLive = isLiveMap();
+  setLiveMap(true);
+  clearAgents(); resetEnemies();
+  beginEnding();
+}
+export function stopEnding() {
+  endEnding();
+  if (endingWasLive != null) { setLiveMap(endingWasLive); endingWasLive = null; if (ctx.G) syncAgents(true); }
+}
 
 /** Posición de pantalla de un punto de la imagen (`up`: píxeles de imagen por encima del terreno). */
 export const toScreen = p => imageToScreen(p.x, p.y, p.up || 0);
@@ -159,8 +175,9 @@ export function update(game, derived, dt, realDt, skipDraw) {
   if (first) { refreshQueen(); queen.s = 1 + 0.1 * game.stage; syncAgents(true); refreshMutation(); syncT = 1; }
   syncT -= dt;
   if (syncT <= 0) { syncT = 1; syncAgents(false); }
-  updateEnemies(dt); updateAgents(dt); updateBrood(dt); updateEnding(dt); updatePantry(dt); updateParticles(dt);
+  updateEnemies(dt); updateAgents(dt); updateBrood(dt); updatePantry(dt); updateParticles(dt);
   if (skipDraw) return;
+  updateEnding(realDt); // con tiempo real y una vez por fotograma: la partida está parada mientras dura
   // si el FPS baja, se dibujan menos hormigas (la colonia real no cambia)
   if (tickPerf(realDt)) { syncAgents(false); syncT = 1; }
 

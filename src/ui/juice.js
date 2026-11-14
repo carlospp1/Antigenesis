@@ -8,6 +8,7 @@
 import { icon } from './icons.js';
 import * as Audio from '../audio/audio.js';
 import { BAL } from '../game/data.js';
+import { comboMarks } from '../game/rules.js';
 
 const $ = id => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -17,56 +18,52 @@ const narrow = matchMedia('(max-width: 720px)');
 export function buzz(pattern) { try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) { /* nada */ } }
 
 /* ---------- racha de toques ---------- */
-let comboEl = null, hideT = null;
+let comboEl = null;
 
 /**
  * Muestra la racha: n toques seguidos y su multiplicador (de rules.comboTap). cap: toques en los que llega
- * al máximo (BAL.comboCap + 1).
+ * al máximo (BAL.comboCap + 1). opts: prev (cuenta antes de este toque o lote de la mano fantasma),
+ * quiet (sin sonido: la mano) y early («Marca temprana»: las marcas llegan antes).
+ * El contador se queda mientras la racha esté viva; lo quita comboEnd().
  */
-export function tap(n, mult, cap = 21) {
+export function tap(n, mult, cap = 21, { prev, quiet, early = 0 } = {}) {
   if (!n || n < 3) return;
-  Audio.play('combo', n);
+  if (!quiet) Audio.play('combo', n);
   if (!comboEl) { comboEl = document.createElement('div'); comboEl.id = 'combo'; $('fx').appendChild(comboEl); }
-  const reached = BAL.comboMarks.filter(([at]) => n >= at).length;
+  const M = comboMarks(early);
+  const reached = M.marks.filter(([at]) => n >= at).length;
   const topped = n >= cap && !reached;
   const tier = n >= cap ? 3 : n >= 14 ? 2 : n >= 8 ? 1 : 0;
-  // ×valor (todas las marcas) vs clics/toque (solo comboClickAt)
+  // ×valor (todas las marcas) vs clics/toque (solo las de clics)
   const xm = (Math.round(mult * 10) / 10).toString().replace('.', ',');
   let clicks = 1;
-  for (const at of BAL.comboClickAt) if (n >= at) clicks++;
-  // clics que sumó este toque (estado previo) — con pasos >1 se puede saltar la marca exacta
-  let added = 1;
-  for (let c = 1; c <= BAL.comboClickAt.length + 1; c++) {
-    const b = n - c;
-    if (b < 0) continue;
-    let cb = 1;
-    for (const at of BAL.comboClickAt) if (b >= at) cb++;
-    if (cb === c) { added = c; break; }
-  }
-  const before = n - added;
-  const markRow = BAL.comboMarks.find(([at]) => before < at && n >= at);
-  const clickHit = BAL.comboClickAt.find(at => before < at && n >= at);
+  for (const at of M.clicks) if (n >= at) clicks++;
+  // marcas cruzadas desde la cuenta anterior (un lote de la mano puede cruzar varias: cuenta la última)
+  const before = prev ?? n - 1;
+  const markRow = M.marks.filter(([at]) => before < at && n >= at).pop();
+  const clickHit = M.clicks.filter(at => before < at && n >= at).pop();
   comboEl.className = 'combo' + (reached ? ' mk' : ' t' + tier) + (n >= 1000 ? ' long' : '');
   comboEl.style.setProperty('--mk', reached);
   comboEl.style.setProperty('--hot', markColor(reached));
-  // en marca de valor: ×; si también es marca de clics, se muestra aparte
   comboEl.innerHTML = reached
     ? `<small>RACHA · ${n}</small><b>×${xm}</b><em>${clicks > 1 ? clicks + ' clics/toque' : '+' + Math.round((mult - 1) * 100) + '%'}</em>`
     : `<small>RACHA</small><b>×${n}</b><em>${topped ? 'MÁX · ' : ''}+${Math.round((mult - 1) * 100)}%</em>`;
   comboEl.classList.remove('pop'); void comboEl.offsetWidth; comboEl.classList.add('pop');
-  clearTimeout(hideT);
-  hideT = setTimeout(() => { if (comboEl) comboEl.classList.add('out'); }, 900);
   if (markRow || clickHit != null) {
-    const at = clickHit != null ? clickHit : markRow[0];
+    const at = clickHit != null && (!markRow || clickHit >= markRow[0]) ? clickHit : markRow[0];
     const mLabel = markRow ? markRow[1] : xm;
     const extra = clickHit != null ? ' · cada toque cuenta como ' + clicks : '';
     celebrate('¡Racha de ' + at + '!', 'Toques ×' + mLabel + extra, 'record');
     buzz([30, 40, 30]);
   }
+  else if (quiet || before >= n) return;
   else if (narrow.matches) { if (n === 10) buzz(25); else if (n === cap) buzz([30, 40, 30]); }
   else if (n === 10) { celebrate('¡Buen ritmo!', 'Racha de 10 · tus toques rinden +' + Math.round((mult - 1) * 100) + '%', 'combo'); buzz(25); }
   else if (n === cap) { celebrate('¡Racha máxima!', 'Tus toques rinden +' + Math.round((mult - 1) * 100) + '%', 'combo'); buzz([30, 40, 30]); }
 }
+
+/** La racha se ha perdido (rules.comboCheck): se va el contador. */
+export function comboEnd() { if (comboEl) comboEl.classList.add('out'); }
 
 /** Verde suave al principio de las marcas; rojo vivo en la última. */
 function markColor(k) {

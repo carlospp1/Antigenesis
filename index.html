@@ -29,6 +29,7 @@
       <button class="pill panel found" id="bFound" hidden title="Funda una colonia nueva: empiezas de cero, pero te llevas este ADN"><i data-icon="dna"></i><b id="vFound">+0</b><span id="vFoundTxt">ADN · Fundar</span></button>
       <div class="pill panel clock" id="clock" title="Ciclo de día y noche"><span id="clockIc"></span><b id="vDay">Día 1</b><div class="meter"><i id="vDayBar"></i></div><em id="vDayLeft"></em></div>
       <button class="pill panel skip" id="bSkip" data-act="skipDay" hidden title="Saltar el día: la noche llega ya y dará la mitad de ADN"><i data-icon="moon"></i><b>Saltar día</b></button>
+      <button class="pill panel speed" id="bSpeed" data-act="gameSpeed" title="Acelerar el tiempo"><i data-icon="arrows"></i><b id="vSpeed">×1</b></button>
     </div>
     <div class="icons">
       <button class="sq panel" id="bBook" title="Guía y créditos" aria-label="Guía y créditos"><i data-icon="book"></i><span class="badge" id="bookBadge">1</span></button>
@@ -54,7 +55,7 @@
     <div class="tv-top"><div id="tvTabs"><button data-tree="skills">Árbol<span class="long"> de la colonia</span></button><button data-tree="perm">Linaje</button><button data-tree="evo">Evolución</button></div><div id="tvMoney"></div></div>
     <div id="tvCanvas"><div id="tvWorld"></div></div>
     <div id="tvTip" class="panel"></div>
-    <div class="tv-foot"><button id="tvReset" class="link">Reiniciar<span class="long"> árbol</span> <small>(devuelve todo)</small></button><span id="tvNote"></span><span id="tvBlood"></span>
+    <div class="tv-foot"><button id="tvAuto" class="pill panel auto" hidden title="El mayordomo compra solo las mejoras del árbol cuando hay jalea o biomasa"></button><button id="tvReset" class="link" hidden>Reiniciar<span class="long"> árbol</span> <small>(devuelve todo)</small></button><span id="tvNote"></span><span id="tvBlood"></span>
       <button id="tvFound" class="btn-green" hidden>Fundar nueva colonia</button><button id="tvClose" class="link">Continuar <kbd>Esc</kbd></button></div>
   </div>
 

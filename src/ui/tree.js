@@ -11,7 +11,7 @@ const $ = id => document.getElementById(id);
 const CELL = 112;
 const CUR = { jelly: ['leaf', 'jalea'], bio: ['seed', 'biomasa'], adn: ['dna', 'ADN'] };
 
-export const tv = { open: false, tree: 'skills', sel: null, hover: null, x: 0, y: 0, z: 1, onBuy: null, onClose: null, onFound: null, onReset: null };
+export const tv = { open: false, tree: 'skills', sel: null, hover: null, x: 0, y: 0, z: 1, onBuy: null, onClose: null, onFound: null, onReset: null, onAuto: null };
 let G = null, lastKey = '';
 
 const nodesOf = tree => tree === 'perm' ? Game.PERKS : Game.SKILLS;
@@ -37,10 +37,9 @@ function centerOn(id) {
   }
   const n = nodesOf(tv.tree)[id], box = $('tvCanvas').getBoundingClientRect();
   tv.z = Math.min(1, Math.max(box.height < 420 ? 0.45 : 0.55, Math.min(box.width / 1350, box.height / 700)));
-  // la raíz es la punta del ADN: arriba en el árbol (que baja) y a la izquierda en el linaje (que va a la derecha)
-  const fx = id === 'root' && tv.tree === 'perm' ? 0.18 : 0.5, fy = id === 'root' && tv.tree === 'skills' ? 0.2 : 0.5;
-  tv.x = box.width * fx - (n.x + 0.5) * CELL * tv.z;
-  tv.y = box.height * fy - (n.y + 0.5) * CELL * tv.z;
+  // los dos árboles son un molinillo con la raíz en el centro
+  tv.x = box.width * 0.5 - (n.x + 0.5) * CELL * tv.z;
+  tv.y = box.height * 0.5 - (n.y + 0.5) * CELL * tv.z;
   applyView();
 }
 
@@ -57,7 +56,7 @@ export function renderTree(game, force) {
   G = game;
   if (tv.tree === 'evo') { renderEvo(force); return; }
   const nodes = nodesOf(tv.tree), owned = tv.tree === 'perm' ? G.perm : G.skills, st = Game.states(G, tv.tree);
-  const key = [tv.tree, Object.keys(owned).join(), Math.floor(G.jelly), G.bio, G.adn, tv.sel, tv.hover, G.phase === 'dead', Game.debug.free].join('|');
+  const key = [tv.tree, Object.keys(owned).join(), Math.floor(G.jelly), G.bio, G.adn, tv.sel, tv.hover, G.phase === 'dead', Game.debug.free, G.butler].join('|');
   renderHead();
   if (!force && key === lastKey) return;
   lastKey = key;
@@ -97,8 +96,15 @@ function renderHead() {
   const inf = Game.debug.free, pills = perm ? [['adn', inf ? '∞' : G.adn]] : [['jelly', inf ? '∞' : Math.floor(G.jelly)], ['bio', inf ? '∞' : G.bio]];
   const h = pills.map(([k, v]) => `<div class="pill panel">${icon(CUR[k][0])}<b>${typeof v === 'string' ? v : fmt(v)}</b><span>${CUR[k][1]}</span></div>`).join('');
   if ($('tvMoney').dataset.k !== h) { $('tvMoney').dataset.k = h; $('tvMoney').innerHTML = h; }
-  const dead = G.phase === 'dead';
-  $('tvReset').hidden = perm;
+  const dead = G.phase === 'dead', P = Game.treeFx(Game.PERKS, G.perm);
+  // reiniciar el árbol: se desbloquea con «Borrón y cuenta nueva» en el linaje
+  $('tvReset').hidden = perm || !(P.resetTree || Game.debug.free);
+  // interruptor del mayordomo: se desbloquea con «Mayordomo del nido» en el linaje
+  const auto = $('tvAuto');
+  auto.hidden = tv.tree !== 'skills' || !P.autoBuy;
+  auto.classList.toggle('on', !!G.butler);
+  const autoTxt = 'Mayordomo: ' + (G.butler ? 'encendido' : 'apagado');
+  if (auto.textContent !== autoTxt) auto.textContent = autoTxt;
   const lg = Game.legacy(G);
   $('tvFound').hidden = !(perm && dead);
   $('tvFound').textContent = 'Empezar la nueva colonia';
@@ -183,7 +189,13 @@ const STAT = {
   farm: ['Granjas', D => D.farm > 0 ? fmt(D.farm * Game.nightPrize(G, D) / 60, 1) + ' de jalea/s' : 'no tienes'],
   lives: ['Asaltos que resiste la reina', D => fmt(D.lives)],
   discount: ['Descuento del árbol', D => pct(D.discount)], cutMax: ['Rebaja máxima de los huevos', D => pct(D.cutMax)],
-  autoBuy: ['Mayordomo', D => D.autoBuy > 0 ? 'compra sola ×' + D.autoBuy : 'apagado'],
+  autoBuy: ['Mayordomo', D => D.autoBuy > 0 ? 'encendido' : 'apagado'],
+  resetTree: ['Reiniciar el árbol', D => D.resetTree ? 'disponible' : 'no disponible'],
+  stompHits: ['Pisotones que aguantan', D => fmt(D.stompHits)],
+  tapRate: ['Toque a la reina', D => fmt(Game.BAL.tapFood * D.tapQ + D.tapRate * D.income, 1) + ' de comida (' + pct(D.tapRate) + ' de la recolección)'],
+  tapSplash: ['El resto de la cría se lleva', D => pct(D.tapSplash) + ' de cada toque'],
+  comboEarly: ['Marcas de la racha', D => pct(D.comboEarly) + ' antes'],
+  comboKeep: ['Al perder la racha conservas', D => pct(D.comboKeep)],
   startAnts: ['Hormigas al empezar', D => fmt(D.P.startAnts || 0)], startJelly: ['Jalea al empezar', D => fmt(D.P.startJelly || 0)],
   startBio: ['Biomasa al empezar', D => fmt(D.P.startBio || 0)], startEggs: ['Huevos al empezar', D => fmt(D.P.startEggs || 0)],
   keepJelly: ['Jalea heredada', D => pct(D.P.keepJelly || 0)]
@@ -209,11 +221,12 @@ function statHTML(n) {
   return out.length ? `<p class="stat">Actual · ${out.join(' · ')}</p>` : '';
 }
 
-/** Nodo visible pero no comprable: le falta la mejora anterior o no está conectado. */
+/** Nodo visible pero no comprable: le falta algo del linaje o la mejora de al lado. */
 function needsHTML(id) {
-  const miss = Game.missing(G, tv.tree, id), nodes = nodesOf(tv.tree), req = nodes[id].reqPerk;
+  const nodes = nodesOf(tv.tree), n = nodes[id], req = n.reqPerk;
   if (req && !G.perm[req]) return `<p class="warn">Necesita «${Game.PERKS[req].name}» en el Linaje.</p>`;
-  return miss.length ? `<p class="warn">Primero compra ${miss.map(m => '«' + nodes[m].name + '»').join(' y ')}.</p>` : '<p class="warn">Aún no está conectado a lo que tienes.</p>';
+  const parent = nodes[n.links[0]];
+  return parent ? `<p class="warn">Primero compra «${parent.name}».</p>` : '<p class="warn">Aún no está conectado a lo que tienes.</p>';
 }
 
 export function wireTree(getGame) {
@@ -278,4 +291,5 @@ export function wireTree(getGame) {
   $('tvClose').onclick = () => tv.onClose && tv.onClose();
   $('tvFound').onclick = () => tv.onFound && tv.onFound();
   $('tvReset').onclick = () => tv.onReset && tv.onReset($('tvReset'));
+  $('tvAuto').onclick = () => tv.onAuto && tv.onAuto();
 }

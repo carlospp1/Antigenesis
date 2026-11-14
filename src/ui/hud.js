@@ -9,7 +9,8 @@ import { icon } from './icons.js';
 const $ = id => document.getElementById(id);
 /** Versión del juego (se ve en Ajustes). */
 const VERSION = '0.1.2';
-export const ui = { sheet: null, holding: false, paused: false, speed: 1, tab: 'colony', debug: false, devOpen: false };
+// speed: velocidad del jugador (×1–×3, botón junto al reloj) · devSpeed: la de depuración (×1–×20, manda si es > 1)
+export const ui = { sheet: null, holding: false, paused: false, speed: 1, devSpeed: 1, tab: 'colony', debug: false, devOpen: false };
 let lastDock = '', lastSheet = '';
 const cache = {};
 const setText = (id, v) => { if (cache[id] !== v) { cache[id] = v; $(id).textContent = v; } };
@@ -31,6 +32,9 @@ function renderTop(G, D) {
   $('clock').className = 'pill panel clock ' + (night ? 'night' : dusk ? 'dusk' : '');
   setHTML($('clockIc'), icon(night ? 'moon' : 'sun'), 'clockIc');
   $('bSkip').hidden = !(D.skipDay && G.phase === 'day' && !dusk);
+  setText('vSpeed', '×' + ui.speed);
+  $('bSpeed').classList.toggle('on', ui.speed > 1);
+  $('bSpeed').title = ui.speed < 3 ? 'Acelerar el tiempo (×' + (ui.speed + 1) + ')' : 'Volver a la velocidad normal';
 
   const o = Game.OBJ[G.obj];
   $('quest').hidden = !o;
@@ -46,7 +50,12 @@ function renderTop(G, D) {
   if (dusk) setHTML(al, `<b>¡Alarma! Cae la noche</b><span>Se acercan ${D.night.text}. Llegan en ${fmtTime(G.t)}.</span>`, 'alarm');
   else if (f) {
     const tot = D.night.totalHp, left = f.count > 0 ? (f.count - 1) * D.night.hpEach + f.cur + f.boss : f.boss;
-    setHTML(al, `<b>${G.ants > 0 ? '¡Nos atacan!' : '¡No queda nadie en la entrada!'}</b><div class="meter"><i style="width:${Math.max(0, 100 * left / tot)}%"></i></div><span>${D.night.boss && D.night.boss.final ? 'Los humanos' : f.count + ' ' + (f.count === 1 ? D.night.era.one : D.night.era.many) + (f.boss > 0 ? ' y ' + D.night.boss.name : '')}. Bajas: ${f.lost}</span>`, 'alarm');
+    const human = D.night.boss && D.night.boss.final;
+    // los humanos pisan: se cuenta cuántos pisotones aguantan todavía
+    const who = !human ? f.count + ' ' + (f.count === 1 ? D.night.era.one : D.night.era.many) + (f.boss > 0 ? ' y ' + D.night.boss.name : '')
+      : Game.immuneBoss(G, D.night) ? 'Los humanos · un pisotón las mata a todas: hace falta la Hormiga titán'
+      : G.ants > 0 ? `Los humanos · aguantan ${Math.max(0, D.stompHits - (f.stomps || 0) - 1)} pisotones más` : 'Los humanos · el pie va a por el nido';
+    setHTML(al, `<b>${G.ants > 0 ? '¡Nos atacan!' : '¡No queda nadie en la entrada!'}</b><div class="meter"><i style="width:${Math.max(0, 100 * left / tot)}%"></i></div><span>${who}. Bajas: ${fmt(f.lost)}</span>`, 'alarm');
   }
   Audio.setTension(!!f);
 
@@ -80,12 +89,21 @@ function dockColony(G, D) {
     infoCard('egg', 'Cría', `<span class="fx">Huevo ${fmt(Game.BAL.eggTime / D.brood, 1)} s · larva ${fmt(Game.BAL.larvaTime / D.brood, 1)} s</span>`),
     infoCard('shield', G.phase === 'night' ? 'Noche ' + G.level : 'Esta noche', `<span class="fx">${D.night.text}</span><span class="fx stats"><small>Tus hormigas: daño ${fmt(D.dmg, 1)} · vida ${fmt(D.hp, 0)}</small></span>`, '',
       // previsión como chip: se lee de un vistazo (el detalle, en la frase de al lado en pantallas grandes)
-      `<p class="note ${!G.ants || !fc.win ? 'warn' : 'good'}"><b class="chip">${!G.ants ? 'Sin hormigas' : fc.immune ? 'Inmunes' : fc.win ? 'Ganáis' : 'No aguantan'}</b><span class="why">${!G.ants ? 'Si llega la noche así, matarán a la reina.' : fc.immune ? 'Solo la Hormiga titán puede herir a los humanos.' : fc.win ? 'Unas ' + fc.losses + ' bajas.' : 'Cría más o mejora en el Árbol.'}</span></p>`),
+      `<p class="note ${!G.ants || !fc.win ? 'warn' : 'good'}"><b class="chip">${!G.ants ? 'Sin hormigas' : fc.immune ? 'Inmunes' : fc.win ? 'Ganáis' : 'No aguantan'}</b><span class="why">${whyText(G, D, fc)}</span></p>`),
     infoCard('arrows', 'Árbol', `<span class="fx">${nBuy ? nBuy + (nBuy === 1 ? ' mejora disponible' : ' mejoras disponibles') : 'Sigue recolectando jalea'}</span>`, `<button class="btn-green${nBuy ? '' : ' no'}" data-act="openTree" data-id="skills">Abrir</button>`)
   ];
   const l = Game.legacy(G);
   if (l.ready) cards.push(infoCard('dna', 'Fundar colonia', `<span class="fx">Ganas +${l.gain} ADN y eliges mejoras de Linaje antes de empezar</span>`, `<button class="btn-green" data-act="prestige">${icon('dna')}Fundar</button>`));
   return cards.join('');
+}
+
+/** La frase de la previsión de esta noche (la noche final habla de pisotones). */
+function whyText(G, D, fc) {
+  const human = D.night.boss && D.night.boss.final;
+  if (!G.ants) return human ? 'El primer pisotón irá directo a la reina.' : 'Si llega la noche así, matarán a la reina.';
+  if (fc.immune) return 'Un pisotón las mata a todas y el siguiente, a la reina. Solo la Hormiga titán puede herir a los humanos.';
+  if (human) return fc.win ? `Caen antes del ${D.stompHits}.º pisotón.` : `No les da tiempo: al ${D.stompHits}.º pisotón caen todas.`;
+  return fc.win ? 'Unas ' + fc.losses + ' bajas.' : 'Cría más o mejora en el Árbol.';
 }
 
 function renderDock(G, D) {
@@ -158,7 +176,8 @@ function renderSheet(G) {
       ${row('Versión', `<b>${VERSION}</b>`)}
       <button class="dev-head${ui.devOpen ? ' open' : ''}" data-act="dev" aria-expanded="${!!ui.devOpen}">Pruebas y depuración</button>
       ${ui.devOpen ? `<div class="dev">
-        ${row('Velocidad', [1, 2, 4, 6, 10, 20].map(v => btn(ui.speed === v, 'speed', '×' + v, v)).join(''))}
+        ${row('Velocidad (debug)', [1, 2, 4, 6, 10, 20].map(v => btn(ui.devSpeed === v, 'devSpeed', '×' + v, v)).join(''), 'manda sobre el botón ×1–×3 del juego')}
+        ${row('Final', btn(false, 'ending', 'Ver cinemática'), 'la reina sale del nido y la colonia conquista el planeta')}
         ${row('Bot', btn(false, 'bot', 'Abrir panel'), 'tecla B · juega solo y registra cada acción')}
         ${row('Hormigas', btn(!code, 'antModel', 'Ilustradas', 'glb') + btn(code, 'antModel', 'En código', 'code'), 'se aplica al recargar')}
         ${row('Colisiones', btn(ui.debug, 'debug', ui.debug ? 'Visibles' : 'Ocultas'), 'tecla C')}
