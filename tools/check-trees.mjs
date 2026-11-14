@@ -1,9 +1,8 @@
-// Comprueba la forma de los dos árboles (src/game/trees.js):
-//   · ningún par de nodos en la misma casilla
-//   · cada enlace une casillas pegadas en horizontal o vertical
-//   · todos los nodos llegan a la raíz
-//   · ni ids ni nombres repetidos dentro de un árbol
-//   · siguen estando todos los nodos hechos a mano (ids que pueden estar en partidas guardadas)
+// Comprueba los dos árboles (src/game/trees.js y su colocación, src/game/treeLayout.js):
+//   · todos los nodos tienen sitio (si no: node tools/layout-trees.mjs) y no hay dos en la misma casilla
+//   · cada nodo está a 1 casilla de sus padres (también en diagonal); como mucho a 2
+//   · todos llegan a la raíz y el precio nunca baja respecto a lo que hay que comprar antes
+//   · ni ids ni nombres repetidos, y siguen todos los nodos hechos a mano (pueden estar en partidas guardadas)
 //   node tools/check-trees.mjs
 import { SKILLS, PERKS } from '../src/game/trees.js';
 
@@ -16,14 +15,17 @@ let bad = 0;
 const fail = (t, m) => { bad++; console.log('✗ ' + t + ': ' + m); };
 for (const [name, N] of [['SKILLS', SKILLS], ['PERKS', PERKS]]) {
   const cells = new Map(), names = new Map();
+  let far = 0;
   for (const id in N) {
     const n = N[id], k = n.x + ',' + n.y;
     if (cells.has(k)) fail(name, `${id} y ${cells.get(k)} en la misma casilla (${k})`); else cells.set(k, id);
     if (names.has(n.name)) fail(name, `nombre repetido «${n.name}» (${id}, ${names.get(n.name)})`); else names.set(n.name, id);
+    if (n.unplaced) fail(name, `${id} no tiene sitio: lanza node tools/layout-trees.mjs`);
     for (const l of n.links) {
       const m = N[l];
-      if (!m) { fail(name, `${id} enlaza con ${l}, que no existe`); continue; }
-      if (Math.abs(n.x - m.x) + Math.abs(n.y - m.y) !== 1) fail(name, `${id} → ${l} no están pegados`);
+      if (!m) { fail(name, `${id} depende de ${l}, que no existe`); continue; }
+      const d = Math.max(Math.abs(n.x - m.x), Math.abs(n.y - m.y));
+      if (d > 2) fail(name, `${id} está a ${d} casillas de su padre ${l}`); else if (d === 2) far++;
     }
     if (n.reqPerk && !PERKS[n.reqPerk]) fail(name, `${id} pide ${n.reqPerk}, que no existe en el linaje`);
     for (const o of n.own || []) if (!SKILLS[o]) fail(name, `${id} deja tuyo ${o}, que no existe en el árbol`);
@@ -33,8 +35,24 @@ for (const [name, N] of [['SKILLS', SKILLS], ['PERKS', PERKS]]) {
   while (q.length) for (const a of N[q.shift()].adj) if (!seen.has(a)) { seen.add(a); q.push(a); }
   for (const id in N) if (!seen.has(id)) fail(name, `${id} no llega a la raíz`);
   for (const id of HAND[name].split(' ')) if (!N[id]) fail(name, `falta el nodo ${id}`);
+  // el precio no baja: cada nodo cuesta al menos lo más caro (de su moneda) que haya que comprar antes
+  const cur = n => typeof n.cost === 'number' ? 'jelly' : n.cost.bio != null ? 'bio' : 'adn';
+  const amount = n => typeof n.cost === 'number' ? n.cost : n.cost.bio ?? n.cost.adn;
+  const memo = {};
+  const before = id => memo[id] || (memo[id] = N[id].links.filter(p => p !== 'root').reduce((m, p) => {
+    const b = before(p), q = N[p];
+    for (const k in b) m[k] = Math.max(m[k] || 0, b[k]);
+    m[cur(q)] = Math.max(m[cur(q)] || 0, amount(q));
+    return m;
+  }, {}));
+  for (const id in N) {
+    if (id === 'root') continue;
+    const n = N[id], top = before(id)[cur(n)] || 0;
+    if (amount(n) < top) fail(name, `${id} (${amount(n)} ${cur(n)}) cuesta menos que algo que hay que comprar antes (${top})`);
+    if (!n.desc) fail(name, `${id} no tiene descripción`);
+  }
   const xs = Object.values(N).map(n => n.x), ys = Object.values(N).map(n => n.y);
-  console.log(`${name}: ${Object.keys(N).length} nodos · rejilla ${Math.max(...xs) + 1}×${Math.max(...ys) + 1}`);
+  console.log(`${name}: ${Object.keys(N).length} nodos · rejilla ${Math.max(...xs) + 1}×${Math.max(...ys) + 1} · enlaces a 2 casillas: ${far}`);
 }
 if (bad) { console.log(`\n${bad} problemas`); process.exit(1); }
 console.log('Todo en orden.');

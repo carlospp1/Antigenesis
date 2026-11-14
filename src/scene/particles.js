@@ -42,6 +42,18 @@ export function feedFly(fromX, fromY, target, onArrive, type, size, front) {
   s.m.visible = true; s.m.position.copy(s.a); s.m.scale.set(0.01, 0.01, 1);
 }
 
+/**
+ * Súper toque de suerte: un chaparrón de comida (sobre todo dorada) que cae desde lo alto sobre la reina
+ * durante un segundo; cada pieza acaba en su boca. n piezas (el grupo tiene 32: se dejan algunas libres).
+ */
+export function foodShower(x, y, target, onBite, n = 24) {
+  const types = ['gold', 'gold', 'berry', 'leaf', 'gold', 'seed'];
+  for (let i = 0; i < n; i++) setTimeout(() => {
+    feedFly(x + rnd(-230, 230), y + rnd(-420, -150), target, () => { if (onBite) onBite(); }, types[i % types.length], rnd(34, 62));
+    if (i % 4 === 0) puff(x + rnd(-200, 200), y + rnd(-300, -120), 'gold', 3, 90, 30);
+  }, i * 45);
+}
+
 /** «Festín»: una lluvia de comida, desde arriba, que cae en la boca durante un par de segundos. */
 export function feastRain(x, y, target, onBite) {
   const types = ['gold', 'berry', 'leaf', 'seed'];

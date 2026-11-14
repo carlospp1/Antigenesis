@@ -7,6 +7,11 @@ export function fmt(x, d) {
   return v.toFixed(v < 10 ? 2 : v < 100 ? 1 : 0).replace('.', ',') + UNITS[e];
 }
 
+/** Multiplicador con una cifra decimal: «×2,5». */
+export const fmtMult = m => '×' + (Math.round(m * 10) / 10).toString().replace('.', ',');
+/** Prefijo de la racha para los números que salen al tocar: «×2,5 » desde ×2, nada por debajo. */
+export const streakTag = m => (m >= 2 ? fmtMult(m) + ' ' : '');
+
 export function fmtTime(s) {
   if (s < 60) return Math.ceil(s) + ' s';
   if (s < 3600) return Math.floor(s / 60) + ' min';

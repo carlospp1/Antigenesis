@@ -9,7 +9,7 @@ let uid = 1;
 export const adnFor = (nights, stage) => Math.max(1, Math.floor(Math.pow(Math.max(0, nights), BAL.adnP) * BAL.adnK + stage * 2));
 export const bumpUid = id => { uid = Math.max(uid, id + 1); };
 /** Versión de los árboles: las partidas con otra se reparten de nuevo al cargar (storage.js). */
-export const TREE_V = 2;
+export const TREE_V = 3;
 
 /** Partida nueva. keep: lo que hereda una colonia nueva (ADN, linaje, objetivos…). */
 export function newGame(keep) {
@@ -17,11 +17,11 @@ export function newGame(keep) {
     v: 4, treeV: TREE_V, last: Date.now(), jelly: 0, eaten: 0, ants: 0, lay: 0, stage: 0, eggs: [], larvae: [], skills: {},
     phase: 'day', t: DAY, level: 1, warned: false, foes: null, guard: 0, bio: 0, rate: 0, spent: { jelly: 0, bio: 0 },
     livesUsed: 0, hives: 0, shiny: 0, evo: 0, obj: 0, adn: 0, adnTotal: 0, perm: {}, gen: 1, best: 0, won: false, total: 0, mute: false,
-    audio: null, butler: false, speed: 1, clock: 0, combo: 0, comboT: 0, comboLive: false,
+    audio: null, butler: false, speed: 1, clock: 0, combo: 0, comboT: 0, comboLive: false, eggCut: 0,
     stats: { clicks: 0, laid: 0, born: 0, dead: 0, time: 0 }
   };
   if (keep) {
-    Object.assign(G, { autoBuy: !!keep.autoBuy, butler: !!keep.butler, speed: keep.speed || 1, evo: keep.evo || 0, adnTotal: keep.adnTotal || 0, adn: keep.adn, perm: keep.perm, gen: keep.gen, mute: keep.mute, audio: keep.audio || null, obj: keep.obj, best: keep.best, won: keep.won, total: keep.total });
+    Object.assign(G, { autoBuy: !!keep.autoBuy, butler: !!keep.butler, speed: keep.speed || 1, eggCut: keep.eggCut || 0, evo: keep.evo || 0, adnTotal: keep.adnTotal || 0, adn: keep.adn, perm: keep.perm, gen: keep.gen, mute: keep.mute, audio: keep.audio || null, obj: keep.obj, best: keep.best, won: keep.won, total: keep.total });
     const P = treeFx(PERKS, G.perm);
     G.ants = P.startAnts || 0; G.jelly = (P.startJelly || 0) + (keep.inherit || 0) * (P.keepJelly || 0); G.bio = P.startBio || 0;
     for (let i = 0; i < Math.min(BROOD_SLOTS, P.startEggs || 0); i++) G.eggs.push({ id: uid++, n: 1, p: 0, slot: i }); // nido preparado
@@ -29,16 +29,12 @@ export function newGame(keep) {
   return G;
 }
 
-/** Efectos de estadísticas que se rebajan en los árboles (las probabilidades, los extras y los toques van enteros). */
-const DAMP = new Set(['food', 'speed', 'dmg', 'hp', 'growth', 'reserve', 'prize', 'foodX', 'dmgX', 'hpX', 'growthX', 'comboStep']);
-
 /** Valores derivados (árbol + linaje + balance). Se llama muchas veces por segundo. */
 export function calc(G) {
   const T = treeFx(SKILLS, { ...G.skills, ...linajeSkills(G.perm).own });
   const P = treeFx(PERKS, G.perm), D = { T, P };
-  // las estadísticas del árbol y del linaje van rebajadas (treeK, permK): la evolución ya sube todo
-  const kT = k => DAMP.has(k) ? BAL.treeK : 1, kP = k => DAMP.has(k) ? BAL.permK : 1;
-  const add = k => (T[k] || 0) * kT(k) + (P[k] || 0) * kP(k), mul = k => Math.pow(T[k] ?? 1, kT(k)) * Math.pow(P[k] ?? 1, kP(k));
+  // los valores de los árboles son los que se aplican (lo que dice cada nodo es lo que da)
+  const add = k => (T[k] || 0) + (P[k] || 0), mul = k => (T[k] ?? 1) * (P[k] ?? 1);
   D.blood = 1 + BAL.blood * (G.adnTotal || 0); // Sangre antigua
   D.carry = BAL.carry * (1 + add('food')) * mul('foodX') * Math.pow(BAL.stageFood, G.stage) * D.blood;
   D.speed = 2.6 * (1 + add('speed'));
@@ -53,8 +49,9 @@ export function calc(G) {
   for (const e of G.larvae) brood += e.n;
   // los huevos «sin precio» no cuentan para encarecer el siguiente
   const raw = BAL.eggBase * Math.pow(BAL.eggCurve - add('curve'), Math.max(0, D.pop + brood - (G.free || 0))) * mul('eggCostX');
-  // «Toque menguante»: se resta una cantidad fija de comida (la misma para el huevo actual y los siguientes).
-  // El porcentaje solo es el suelo: este huevo no baja de ahí, y lo que sobre del toque vuelve a alimentar a la reina.
+  // «Toque menguante»: tus toques juntan un descuento fijo de comida (G.eggCut) que se guarda para siempre (pasa de
+  // colonia en colonia) y se resta de cada huevo. El porcentaje es el suelo: un huevo no baja de ahí, y mientras el
+  // descuento ya lo cubra, el toque vuelve a alimentar a la reina. Huevo de 7M con 1M guardado: 6M; huevo de 5000: −25%.
   D.cutMax = Math.min(0.5, BAL.cutMax + add('cutMax'));
   const floor = raw * (1 - D.cutMax);
   D.eggCost = Math.max(floor, raw - (G.eggCut || 0));
@@ -89,7 +86,7 @@ export function calc(G) {
   D.gold = !!(T.gold || P.gold);
   D.jaw = !!(T.jaw || P.jaw);
   // suerte: críticos al tocar, entregas dobles y hormigas doradas
-  D.tapCrit = Math.min(0.9, add('tapCrit'));       // probabilidad de que un toque valga más
+  D.tapCrit = Math.min(BAL.tapCritMax, add('tapCrit')); // probabilidad de que un toque valga más
   D.critX = (T.critBig || P.critBig) ? 5 : 2;       // cuánto vale un toque de suerte
   D.luck = Math.min(0.9, add('luck'));              // probabilidad de que una entrega valga x2
   D.shinyP = Math.min(0.5, add('shiny'));           // probabilidad de que una hormiga nazca dorada
@@ -98,7 +95,7 @@ export function calc(G) {
   D.shinySpeed = 1.5;                                    // …y van más rápido
   D.goldFood = Math.min(0.5, add('goldFood'));      // probabilidad de que una entrega sea comida dorada (×5)
   D.feast = Math.min(0.03, BAL.feast + add('feast')); // «Festín»: entrega ×50 (0,1% de base, 3% como máximo)
-  D.ghost = add('ghost') * mul('ghostX');           // toques por segundo de la mano fantasma
+  D.ghost = Math.min(BAL.ghostMax, add('ghost') * mul('ghostX')); // toques por segundo de las manos fantasma
   D.lives = P.lives || 0;
   D.farm = add('farm');        // granjas: jalea sola, en fracción del premio de una noche por minuto
   D.combo = !!P.combo;         // la racha se desbloquea en el linaje («Racha»)
@@ -114,7 +111,7 @@ export function calc(G) {
   D.night = nightDef(G.level);
   // «Toque nutritivo»: cada toque a la reina suma una parte de lo que la colonia recolecta por segundo
   D.income = forageRate(G, D);
-  D.tapRate = Math.min(0.1, add('tapRate')) * BAL.tapRateK;
+  D.tapRate = Math.min(BAL.tapRateMax, add('tapRate')) * BAL.tapRateK;
   return D;
 }
 
@@ -232,9 +229,12 @@ export function comboInfo(n, D) {
   return { mult, clicks };
 }
 
-/** Suma un toque a la racha (los clics por toque de la marca en la que va), aterrizando en las marcas. */
-function comboAdd(G, D) {
-  const before = G.combo || 0, next = before + comboInfo(before, D).clicks;
+/**
+ * Suma un toque a la racha, aterrizando en las marcas. Tus toques suman los clics por toque de la marca en la que
+ * va la racha; los de la mano fantasma (step = 1), solo uno.
+ */
+function comboAdd(G, D, step) {
+  const before = G.combo || 0, next = before + (step || comboInfo(before, D).clicks);
   const hit = comboMarks(D.comboEarly).stops.find(at => before < at && at <= next);
   G.combo = hit != null ? hit : next;
 }
@@ -305,7 +305,7 @@ export function click(G, kind, id) {
 
 /**
  * Varios toques de la mano fantasma de golpe: un solo digest y un solo evento.
- * Tiene todo lo de tus toques. Con la racha viva, cada toque suya también la sube (pero no reinicia la
+ * Tiene todo lo de tus toques. Con la racha viva, cada toque suyo la sube en uno (pero no reinicia la
  * cuenta atrás: eso solo lo hacen tus toques); sin racha viva, ni la sube ni cobra su ×.
  */
 function ghostBatch(G, D, n) {
@@ -313,7 +313,7 @@ function ghostBatch(G, D, n) {
   let food = 0, cutTot = 0, eaten = 0, crit = 0, room = D.cutRoom, m = 1;
   const before = G.stats.laid, comboBefore = G.combo || 0, live = D.combo && G.comboLive;
   for (let i = 0; i < n; i++) {
-    if (live) { comboAdd(G, D); m = comboMult(G, D); }
+    if (live) { comboAdd(G, D, 1); m = comboMult(G, D); }
     const r = queenTap(G, D, m, room);
     room -= r.cut; cutTot += r.cut; eaten += r.f;
     if (r.feed > 0) food += r.feed;
@@ -422,7 +422,7 @@ function tickHuman(G, D, dt) {
     f.boss -= fightForce(G, D) * D.dmg * dt;
     if (f.boss <= 0.0001) { f.boss = 0; G.bio += 4 * D.bioKill; emit('foeDeath', { boss: true }); winNight(G, D); return; }
   }
-  if (f.stompT == null) f.stompT = BAL.stompFirst; // partida guardada a mitad de la noche final
+  if (f.stompT == null) { f.stompT = BAL.stompFirst; f.stomps = 0; f.wiped = false; } // partida guardada a mitad de la noche final
   f.stompT -= dt;
   if (f.stompT > 0) return;
   f.stompT += BAL.stompEvery;
@@ -478,7 +478,7 @@ function queenDies(G) {
   const gain = adnGain(G);
   // el ADN se cobra ya, para poder gastarlo en el Linaje antes de fundar la colonia nueva
   // se limpian los enemigos: si no, el asalto sigue y la escena parece «desplazada»
-  G.phase = 'dead'; G.foes = null; G.pendingAdn = gain; G.adn += gain; G.adnTotal = (G.adnTotal || 0) + gain;
+  G.phase = 'dead'; G.foes = null; G.pendingAdn = gain; G.comboLive = false; G.adn += gain; G.adnTotal = (G.adnTotal || 0) + gain;
   G.best = Math.max(G.best, G.level - 1);
   emit('queenDeath', { gain, level: G.level, gen: G.gen });
 }
@@ -554,19 +554,32 @@ export function tick(G, dt, realDt = dt) {
 /* ---------- árboles ---------- */
 
 /**
+ * Caché de lo que solo cambia al comprar: el estado de cada nodo, lo que encarece el siguiente y «Todo para la
+ * reina». Se rehace si cambia la partida, sus árboles o el número de compras (treeRev sube con cada compra o reinicio).
+ * Sin ella, el panel recorría el árbol entero por cada uno de sus 400 nodos varias veces por segundo.
+ */
+let treeRev = 0;
+const count = o => { let n = 0; for (const k in o) n++; return n; };
+const tc = { G: null, skills: null, perm: null, key: '', st: {}, cost: null, store: undefined };
+function treeCache(G) {
+  const key = treeRev + ':' + count(G.skills) + ':' + count(G.perm);
+  if (tc.G !== G || tc.skills !== G.skills || tc.perm !== G.perm || tc.key !== key)
+    Object.assign(tc, { G, skills: G.skills, perm: G.perm, key, st: {}, cost: null, store: undefined });
+  return tc;
+}
+
+/**
  * «Todo para la reina» (linaje): ¿queda algo que comprar con jalea en el árbol de la colonia?
  * Solo cuenta lo que está a tu alcance (conectado y con sus requisitos); los rombos no usan jalea.
- * Se guarda en caché mientras no cambie lo comprado.
  */
-const storeCache = { G: null, key: '', v: false };
 function storeClosed(G, P = treeFx(PERKS, G.perm)) {
   if (!P.noStore) return false;
-  const key = Object.keys(G.skills).join() + '|' + Object.keys(G.perm).join();
-  if (storeCache.G === G && storeCache.key === key) return storeCache.v;
-  const st = states(G, 'skills'); // en debug ya está todo comprado; si no, solo lo que de verdad tienes
-  const v = !Object.keys(SKILLS).some(id => st[id] === 'open' && typeof SKILLS[id].cost !== 'object');
-  Object.assign(storeCache, { G, key, v });
-  return v;
+  const c = treeCache(G);
+  if (c.store === undefined) {
+    const st = states(G, 'skills');
+    c.store = !Object.keys(SKILLS).some(id => st[id] === 'open' && typeof SKILLS[id].cost !== 'object');
+  }
+  return c.store;
 }
 
 /** Cuántos nodos de cada moneda hay comprados en el árbol de la colonia (encarecen los siguientes). */
@@ -584,22 +597,25 @@ function ownedCount(G) {
 export function nodeCost(G, tree, id) {
   const n = (tree === 'perm' ? PERKS : SKILLS)[id], c = n.cost;
   if (typeof c === 'object' && c.adn != null) return { cur: 'adn', n: Math.max(1, Math.round(c.adn * (BAL.perkK ?? 1))) };
-  const k = ownedCount(G);
+  const cc = treeCache(G), ctx = cc.cost || (cc.cost = { k: ownedCount(G), disc: treeFx(PERKS, G.perm).discount || 0 }), k = ctx.k, disc = ctx.disc;
   if (typeof c === 'object') return { cur: 'bio', n: Math.max(1, Math.round(c.bio * (BAL.bioK ?? 1) * Math.pow(BAL.bioOwnG, k.bio))) };
-  const disc = treeFx(PERKS, G.perm).discount || 0;
   const knee = (BAL.skillKnee ?? 12) - 1, over = Math.max(0, c - 1 - knee);
   const exp = Math.min(c - 1, knee) + over * (BAL.skillTop ?? 1);
   return { cur: 'jelly', n: Math.round(BAL.skill0 * Math.pow(BAL.skillG, exp) * Math.pow(BAL.skillOwnG, Math.max(0, k.jelly - BAL.skillFree)) * (1 - disc)) };
 }
 
-export const states = (G, tree) =>
-  tree === 'perm' ? treeStates(PERKS, G.perm) : treeStates(SKILLS, G.skills, G.perm);
+/** Estado de cada nodo ('owned' | 'open' | 'seen' | 'fog' | 'hidden'). Solo lectura: va en caché. */
+export function states(G, tree) {
+  const c = treeCache(G);
+  return c.st[tree] || (c.st[tree] = tree === 'perm' ? treeStates(PERKS, G.perm) : treeStates(SKILLS, G.skills, G.perm));
+}
 
 /** Debug: compra de golpe todo el árbol de la colonia o todo el linaje (sin gastar). */
 export function debugMaxTree(G, tree) {
   const nodes = tree === 'perm' ? PERKS : SKILLS;
   const bag = tree === 'perm' ? G.perm : G.skills;
   for (const id in nodes) if (id !== 'root') bag[id] = true;
+  treeRev++;
   emit('skill', { id: 'debugMax', tree });
   return true;
 }
@@ -616,6 +632,7 @@ export function buyNode(G, tree, id) {
   if (!debug.free) G[c.cur] -= c.n;
   if (tree === 'perm') G.perm[id] = true;
   else { G.skills[id] = true; if (!debug.free) G.spent[c.cur] = (G.spent[c.cur] || 0) + c.n; }
+  treeRev++;
   emit('skill', { id, tree });
   return true;
 }
@@ -627,6 +644,7 @@ export function resetSkills(G, force) {
   G.jelly += G.spent.jelly || 0; G.bio += G.spent.bio || 0;
   G.skills = {}; G.spent = { jelly: 0, bio: 0 };
   G.butler = false; // si no, el mayordomo lo recompraría todo al momento
+  treeRev++;
   emit('skill', { id: 'reset', tree: 'skills' });
   return true;
 }
@@ -648,7 +666,18 @@ export function autoBuy(G, max = 3) {
   return n;
 }
 
-export const anyBuyable = (G, tree) => Object.keys(tree === 'perm' ? PERKS : SKILLS).some(id => canBuy(G, tree, id));
+/** Cuántos nodos se pueden comprar ya (solo mira los abiertos). max: deja de contar al llegar ahí. */
+export function buyable(G, tree, max = Infinity) {
+  const st = states(G, tree);
+  let n = 0;
+  for (const id in st) {
+    if (st[id] !== 'open') continue;
+    const c = nodeCost(G, tree, id);
+    if ((debug.free || G[c.cur] >= c.n) && ++n >= max) break;
+  }
+  return n;
+}
+export const anyBuyable = (G, tree) => buyable(G, tree, 1) > 0;
 
 /** Toque sobre un enemigo: daño extra, nunca remata (eso lo hacen las hormigas). */
 export function hit(G, D) {
@@ -705,7 +734,7 @@ export function abandon(G) {
   if (!l.ready) return false;
   G.adn += l.gain; G.adnTotal = (G.adnTotal || 0) + l.gain; G.pendingAdn = l.gain;
   G.best = Math.max(G.best, G.level - 1);
-  G.phase = 'dead'; G.leaving = true; G.foes = null;
+  G.phase = 'dead'; G.leaving = true; G.foes = null; G.comboLive = false;
   emit('abandon', { gain: l.gain });
   return true;
 }
@@ -716,7 +745,7 @@ export function prestige(G) {
   if (!dead && !l.ready) return null;
   const gain = dead ? 0 : l.gain; // si murió, el ADN ya se cobró en queenDies
   return newGame({ evo: G.evo || 0, adnTotal: (G.adnTotal || 0) + gain, adn: G.adn + gain, perm: G.perm, gen: G.gen + 1, mute: G.mute, audio: G.audio, obj: G.obj, best: Math.max(G.best, G.level - 1), won: G.won, total: G.total,
-    inherit: G.jelly + (G.spent.jelly || 0), autoBuy: G.autoBuy, butler: G.butler, speed: G.speed }); // Herencia: parte de la jalea reunida
+    inherit: G.jelly + (G.spent.jelly || 0), autoBuy: G.autoBuy, butler: G.butler, speed: G.speed, eggCut: G.eggCut }); // Herencia: parte de la jalea reunida
 }
 
 /**

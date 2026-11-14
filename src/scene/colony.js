@@ -13,6 +13,10 @@ import { puff, feedFly, feastRain } from './particles.js';
 import { pantryTop, pantryDrop, pantryPop } from './pantry.js';
 import { makeFoodSprite, setFoodSprite } from './foodArt.js';
 import { emit } from '../core/events.js';
+import { linajeSkills } from '../game/trees.js';
+
+/** «Mandíbula reforzada»: comprada en el árbol o dada por el linaje («Mandíbula enorme»). */
+const hasJaw = G => !!(G.skills.waK3 || linajeSkills(G.perm).own.waK3);
 
 const _p = new THREE.Vector3(), _q = new THREE.Vector3(), _n = new THREE.Vector3();
 
@@ -60,7 +64,7 @@ function spawn(at, x, y, shiny) {
   }
   tint(a);
   Object.assign(a, { shiny: !!shiny, sparkT: rnd(0, 1), caste: 'ants', carry, at, lane: rnd(-1, 1), path: [], wait: rnd(0, 1), idx: by.ants.length, after: null, x, y, hx: null, job: null });
-  if (ctx.G.skills.waK3) setJaw(a, true, GEO.ants);
+  if (hasJaw(ctx.G)) setJaw(a, true, GEO.ants);
   lookAt2D(a, rnd(-1, 1), rnd(-0.3, 0.3));
   ctx.scene.add(a.root); agents.push(a); by.ants.push(a);
   return a;
@@ -272,7 +276,7 @@ export function onMassDeath() {
 
 export function refreshMutation() {
   if (!ctx.G) return;
-  const on = !!ctx.G.skills.waK3;
+  const on = hasJaw(ctx.G);
   GEO.ants = clayAnt(on ? { mand: 1.7, headS: 1.15, mandCol: '#f0ddb4' } : {});
   for (const a of by.ants) setJaw(a, on, GEO.ants);
 }

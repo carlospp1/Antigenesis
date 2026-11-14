@@ -90,7 +90,7 @@ function updateTapShoe(dt) {
   if (!s.cur) {
     if (!tapQ.length) { // sin más golpes: espera un momento arriba y se va
       if ((s.idle += dt) > 0.25) s.g.visible = s.shadowG.visible = false;
-      else placeShoe(s, TAP_UP, TAP_L, TAP_UP);
+      else placeShoe(s, TAP_UP + (s.lastFoe ? topOf(s.lastFoe) : 0), TAP_L, TAP_UP + (s.lastFoe ? topOf(s.lastFoe) : 0));
       return;
     }
     s.cur = tapQ.shift(); s.t = 0; s.landed = false; s.idle = 0;
@@ -110,9 +110,24 @@ function updateTapShoe(dt) {
     if (!s.landed) { s.landed = true; s.x = s.cur.x; s.y = s.cur.y; landTap(s.cur); }
     if (s.t < down + hold) h = 0;
     else if (s.t < down + hold + up) h = TAP_UP * (s.t - down - hold) / up;
-    else { h = TAP_UP; s.cur = null; }
+    else { h = TAP_UP; s.lastFoe = s.cur.foe || null; s.cur = null; }
   }
-  placeShoe(s, h, TAP_L, TAP_UP);
+  // h va de 0 (apoyado) a TAP_UP: se cuenta desde lo alto del bicho, que se va aplastando
+  const base = s.cur && s.cur.foe ? topOf(s.cur.foe) : 0;
+  placeShoe(s, base + h * (1 - base / (base + TAP_UP)), TAP_L, base + TAP_UP);
+}
+
+/** Altura del lomo de un bicho, en píxeles de imagen (baja mientras está aplastado). */
+const topOf = o => o.size * 0.32 * (1 - 0.45 * Math.max(0, squash(o)));
+
+/**
+ * Cuánto está aplastado un bicho (1 = del todo): se aplasta de golpe al pisarlo y recupera la forma con un
+ * pequeño rebote (valores negativos: se estira un poco hacia arriba). o.hurt va de 1 → 0.
+ */
+function squash(o) {
+  if (!(o.hurt > 0)) return 0;
+  const t = 1 - o.hurt;
+  return t < 0.15 ? t / 0.15 : Math.exp(-(t - 0.15) * 6) * Math.cos((t - 0.15) * 14);
 }
 
 /** El zapato pequeño toca el suelo: el bicho se encoge y salta un poco de sangre. */
@@ -211,7 +226,7 @@ export function updateEnemies(dt) {
   minions.forEach((o, i) => { if (o.alive && i >= f.count) { o.alive = false; o.root.visible = false; puff(o.x, o.y - 12, 'white', 8, 90); } });
   if (boss && boss.alive && f.boss <= 0) { boss.alive = false; boss.root.visible = false; puff(boss.x, boss.y - 30, 'white', 26, 170); }
   if (final && shoe && shoe.g.visible && f.boss <= 0) { puff(shoe.x, shoe.y - 80, 'gold', 40, 260, 80); shoe.g.visible = false; shoe.shadowG.visible = false; }
-  if (final && f.boss > 0 && f.arrive <= 0 && G.phase !== 'dead') updateShoe(dt);
+  if (final && f.boss > 0 && G.phase !== 'dead') updateShoe(dt);
 
   // asalto: sin hormigas, bajan por el túnel y rodean a la reina
   if (f.raid > 0) {
@@ -244,14 +259,16 @@ export function updateEnemies(dt) {
   });
 }
 
-/** Sacudida visual tras un toque de daño (hurt va de 1 → 0). */
+/**
+ * Pisotón del zapato pequeño: el bicho se aplasta (más bajo y algo más ancho) y se hunde un poco en el suelo,
+ * sin moverse de sitio; luego recupera la forma con un rebote. Va después de placeActor (que fija su escala).
+ */
 function applyHurt(o, dt) {
-  if (!(o.hurt > 0)) { if (o.g) o.g.position.y = 0; return; }
-  o.hurt = Math.max(0, o.hurt - dt * 6);
-  const k = Math.sin(o.hurt * Math.PI);
-  o.orient.scale.multiplyScalar(1 - k * 0.18);
-  o.orient.position.x += k * 0.14; // empujón hacia la hierba
-  if (o.g) o.g.position.y = k * 0.1;
+  if (!(o.hurt > 0)) return;
+  o.hurt = Math.max(0, o.hurt - dt * 3.2); // ~0,3 s
+  const q = squash(o), sc = o.orient.scale;
+  sc.y *= 1 - 0.45 * q; sc.x *= 1 + 0.2 * q; sc.z *= 1 + 0.2 * q;
+  o.orient.position.y -= Math.max(0, q) * o.size * PXW * 0.06;
 }
 
 /** Objetivos clicables. */

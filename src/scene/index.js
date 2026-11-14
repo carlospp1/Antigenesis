@@ -9,7 +9,7 @@ import { loadGlbAnts } from './glbAnt.js';
 import { loadModels } from './assets.js';
 import { loadWorld, buildRoot, buildBackdrop, world, toImage, setLiveMap, isLiveMap } from './world.js';
 import { initPerf, tickPerf, perfInfo } from './perf.js';
-import { buildParticles, puff, updateParticles, feedFly } from './particles.js';
+import { buildParticles, puff, updateParticles, feedFly, foodShower } from './particles.js';
 import { buildPantry, updatePantry, pantryAnchor } from './pantry.js';
 import { buildBrood, updateBrood, refreshQueen, resetQueenPose, queen, brood, slotPos, queenPos, mouthWorld, broodBars, queenEats } from './brood.js';
 export { broodBars };
@@ -79,7 +79,7 @@ function wireEvents() {
   on('stage', () => { for (let i = 0; i < 6; i++) puff(QUEEN.x + (Math.random() - 0.6) * 220, QUEEN.y + (Math.random() - 0.5) * 30, 'gold', 6, 140, 40); });
   on('nightLost', retreat);
   on('evolve', () => { refreshQueen(); clearAgents(); if (ctx.G) syncAgents(true); for (let i = 0; i < 8; i++) puff(500 + Math.random() * 700, 660 + Math.random() * 100, 'gold', 6, 160, 60); });
-  on('skill', d => { if (d.id === 'waK3' || d.id === 'reset') refreshMutation(); });
+  on('skill', d => { if (['waK3', 'plw5', 'reset', 'debugMax'].includes(d.id)) refreshMutation(); });
 }
 
 export function resize() {
@@ -161,6 +161,14 @@ export function feedQueen(from, onArrive, type) {
     puff(at.x, at.y, 'gold', 4, 60);
     if (onArrive) onArrive({ x: at.x, y: at.y, up: 30 });
   }, type, undefined, true);
+}
+
+/** Súper toque de suerte: le cae a la reina un chaparrón de comida y se lo va tragando. */
+export function luckyRain() {
+  const m = new THREE.Vector3(), q = queenPos();
+  queenEats(2.6);
+  puff(q.x, q.y - 90, 'gold', 30, 240, 90);
+  foodShower(q.x, q.y - 40, () => mouthWorld(m), () => { queen.gulp = 1; queenEats(1.6); });
 }
 
 export function bump(h) {

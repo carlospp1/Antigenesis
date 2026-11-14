@@ -153,7 +153,7 @@ export const BAL = {
     carry: 4, // comida por viaje al empezar (se reparte entre la reina y la despensa)
     eggBase: 16, // coste del primer huevo
     eggCurve: 1.2, // cada hormiga o cría encarece el siguiente huevo
-    cutMax: 0.25, // «Toque menguante»: lo más que los toques rebajan un huevo (con el linaje, hasta 0,5)
+    cutMax: 0.25, // «Toque menguante»: lo más que el descuento guardado rebaja un huevo (con el linaje, hasta 0,5)
     feast: 0.001, // «Festín»: probabilidad base de una entrega ×50 (las mejoras la suben, nunca pasa de 0,03)
     reserve: 0.2, // comida por segundo que la reina saca de sus reservas
     eggTime: 12,
@@ -163,6 +163,9 @@ export const BAL = {
     tapFood: 1, // comida que da a mano un toque a la reina (sube con las mejoras de toques)
     tapBrood: 0.12, // un toque adelanta un 12% un huevo o una larva
     tapRateK: 1, // «Toque nutritivo»: dial del % de la recolección por segundo que suma cada toque
+    tapRateMax: 0.01, // …y su tope: un 1% de la recolección por segundo en cada toque
+    tapCritMax: 0.5, // probabilidad máxima de toque de suerte
+    ghostMax: 4, // toques por segundo que dan, como mucho, todas las manos fantasma juntas
     // enemigos de la noche n: cantidad, vida y daño crecen cada noche
     foeCount0: 1,
     foeCountK: 0.6,
@@ -218,8 +221,6 @@ export const BAL = {
     ],
     comboClickAt: [200, 500, 1000, 1500, 2500, 5000, 10000],
     evoAll: 1.45, // cada evolución: comida, daño y vida ×evoAll (y +5% de velocidad)
-    treeK: 0.6,
-    permK: 0.75, // rebaja de las estadísticas del árbol y del linaje (la evolución ya sube todo)
     blood: 0.015, // «Sangre antigua»: +1,5% de comida, daño y vida por cada ADN ganado en total
 }
 

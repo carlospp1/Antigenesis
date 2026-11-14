@@ -9,6 +9,7 @@ import { icon } from './icons.js';
 import * as Audio from '../audio/audio.js';
 import { BAL } from '../game/data.js';
 import { comboMarks } from '../game/rules.js';
+import { fmtMult } from '../core/format.js';
 
 const $ = id => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -35,7 +36,7 @@ export function tap(n, mult, cap = 21, { prev, quiet, early = 0 } = {}) {
   const topped = n >= cap && !reached;
   const tier = n >= cap ? 3 : n >= 14 ? 2 : n >= 8 ? 1 : 0;
   // ×valor (todas las marcas) vs clics/toque (solo las de clics)
-  const xm = (Math.round(mult * 10) / 10).toString().replace('.', ',');
+  const xm = fmtMult(mult).slice(1);
   let clicks = 1;
   for (const at of M.clicks) if (n >= at) clicks++;
   // marcas cruzadas desde la cuenta anterior (un lote de la mano puede cruzar varias: cuenta la última)

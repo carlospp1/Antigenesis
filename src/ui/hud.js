@@ -2,14 +2,14 @@
 // pestañas laterales, tarjetas inferiores, etiquetas ancladas a la escena, hojas modales y avisos.
 import * as Game from '../game/index.js';
 import * as Audio from '../audio/audio.js';
-import { fmt, fmtTime } from '../core/format.js';
+import { fmt, fmtTime, fmtMult } from '../core/format.js';
 import { toScreen, anchors, broodBars, isLiveMap } from '../scene/index.js';
 import { icon } from './icons.js';
 
 const $ = id => document.getElementById(id);
 /** Versión del juego (se ve en Ajustes). */
 const VERSION = '0.1.2';
-// speed: velocidad del jugador (×1–×3, botón junto al reloj) · devSpeed: la de depuración (×1–×20, manda si es > 1)
+// speed: velocidad del jugador (×1, ×2, ×3 o ×5: botón junto al reloj) · devSpeed: la de depuración (×1–×20, manda si es > 1)
 export const ui = { sheet: null, holding: false, paused: false, speed: 1, devSpeed: 1, tab: 'colony', debug: false, devOpen: false };
 let lastDock = '', lastSheet = '';
 const cache = {};
@@ -34,7 +34,7 @@ function renderTop(G, D) {
   $('bSkip').hidden = !(D.skipDay && G.phase === 'day' && !dusk);
   setText('vSpeed', '×' + ui.speed);
   $('bSpeed').classList.toggle('on', ui.speed > 1);
-  $('bSpeed').title = ui.speed < 3 ? 'Acelerar el tiempo (×' + (ui.speed + 1) + ')' : 'Volver a la velocidad normal';
+  $('bSpeed').title = ui.speed < 5 ? 'Acelerar el tiempo' : 'Volver a la velocidad normal';
 
   const o = Game.OBJ[G.obj];
   $('quest').hidden = !o;
@@ -82,9 +82,11 @@ function infoCard(art, title, lines, row = '', note = '') {
 
 function dockColony(G, D) {
   const fc = Game.forecast(G, D), fill = Math.min(1, G.lay / D.eggCost), nx = D.next, st = Game.STAGES[G.stage];
-  const nBuy = Object.keys(Game.SKILLS).filter(id => Game.canBuy(G, 'skills', id)).length;
+  const nBuy = Game.buyable(G, 'skills');
   const cards = [
     infoCard('crown', st.name, `<span class="fx">Huevo: ${fmt(Math.min(G.lay, D.eggCost), 0)} / ${fmt(D.eggCost, 0)} de comida</span><div class="meter"><i style="width:${fill * 100}%"></i></div>
+      <span class="fx">${tapLine(G, D)}</span>
+      ${D.tapCut ? `<span class="fx">Descuento guardado: −${fmt(G.eggCut || 0, 0)} por huevo (como mucho, el ${Math.round(D.cutMax * 100)}%)</span>` : ''}
       ${nx ? `<span class="fx">Crece a ${nx.name}: ${fmt(Math.min(G.eaten, nx.at), 0)} / ${fmt(nx.at, 0)} con tus toques</span><div class="meter green"><i style="width:${Math.min(100, 100 * G.eaten / nx.at)}%"></i></div>` : ''}`),
     infoCard('egg', 'Cría', `<span class="fx">Huevo ${fmt(Game.BAL.eggTime / D.brood, 1)} s · larva ${fmt(Game.BAL.larvaTime / D.brood, 1)} s</span>`),
     infoCard('shield', G.phase === 'night' ? 'Noche ' + G.level : 'Esta noche', `<span class="fx">${D.night.text}</span><span class="fx stats"><small>Tus hormigas: daño ${fmt(D.dmg, 1)} · vida ${fmt(D.hp, 0)}</small></span>`, '',
@@ -95,6 +97,12 @@ function dockColony(G, D) {
   const l = Game.legacy(G);
   if (l.ready) cards.push(infoCard('dna', 'Fundar colonia', `<span class="fx">Ganas +${l.gain} ADN y eliges mejoras de Linaje antes de empezar</span>`, `<button class="btn-green" data-act="prestige">${icon('dna')}Fundar</button>`));
   return cards.join('');
+}
+
+/** Lo que da ahora un toque a la reina (con la racha que lleves) y, si hay, cuánto tocan las manos fantasma. */
+function tapLine(G, D) {
+  const m = Game.comboMult(G, D), each = (Game.BAL.tapFood * D.tapQ + D.tapRate * D.income) * m;
+  return `Tu toque: +${fmt(each, each < 10 ? 1 : 0)} de comida${m > 1 ? ' (racha ' + fmtMult(m) + ')' : ''}${D.tapCrit > 0 ? ` · suerte ${Math.round(D.tapCrit * 100)}% (×${D.critX})` : ''}${D.ghost > 0 ? ` · manos: ${fmt(D.ghost, 1)} toques/s` : ''}`;
 }
 
 /** La frase de la previsión de esta noche (la noche final habla de pisotones). */

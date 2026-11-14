@@ -55,7 +55,7 @@ export function renderTree(game, force) {
   if (!tv.open) return;
   G = game;
   if (tv.tree === 'evo') { renderEvo(force); return; }
-  const nodes = nodesOf(tv.tree), owned = tv.tree === 'perm' ? G.perm : G.skills, st = Game.states(G, tv.tree);
+  const nodes = nodesOf(tv.tree), owned = tv.tree === 'perm' ? G.perm : G.skills, st = shown(Game.states(G, tv.tree));
   const key = [tv.tree, Object.keys(owned).join(), Math.floor(G.jelly), G.bio, G.adn, tv.sel, tv.hover, G.phase === 'dead', Game.debug.free, G.butler].join('|');
   renderHead();
   if (!force && key === lastKey) return;
@@ -75,7 +75,7 @@ export function renderTree(game, force) {
     }
   }
   const W = (maxX + 1) * CELL, H = (maxY + 1) * CELL;
-  let html = `<svg class="tv-lines" width="${W}" height="${H}">${lines}</svg>`;
+  let html = (Game.debug.free ? zonesHTML(nodes) : '') + `<svg class="tv-lines" width="${W}" height="${H}">${lines}</svg>`;
   for (const id in nodes) {
     const n = nodes[id], s = st[id];
     if (s === 'hidden') continue;
@@ -88,6 +88,37 @@ export function renderTree(game, force) {
   world.style.width = W + 'px'; world.style.height = H + 'px';
   world.innerHTML = html;
   renderTip(st);
+}
+
+/** En modo debug se ve el árbol entero, aunque no esté desbloqueado (sin niebla). */
+function shown(st) {
+  if (!Game.debug.free) return st;
+  const out = {};
+  for (const id in st) out[id] = st[id] === 'hidden' || st[id] === 'fog' ? 'seen' : st[id];
+  return out;
+}
+
+/**
+ * Solo en modo debug: el nombre de cada lado del árbol (Game.ZONES), en el centro de sus nodos.
+ * Se calcula una vez por árbol: la forma no cambia.
+ */
+const zoneCache = {};
+function zonesHTML(nodes) {
+  const tree = nodes === Game.PERKS ? 'perm' : 'skills';
+  if (zoneCache[tree]) return zoneCache[tree];
+  const sum = {};
+  for (const id in nodes) {
+    const n = nodes[id];
+    if (id === 'root') continue;
+    const s = sum[n.cat] || (sum[n.cat] = { x: 0, y: 0, n: 0 });
+    s.x += n.x; s.y += n.y; s.n++;
+  }
+  let h = '';
+  for (const cat in sum) {
+    const s = sum[cat], [name, what] = Game.ZONES[tree][cat] || [cat, ''];
+    h += `<div class="tv-zone" style="left:${(s.x / s.n + 0.5) * CELL}px;top:${(s.y / s.n + 0.5) * CELL}px"><b>${name}</b><span>${what}</span></div>`;
+  }
+  return (zoneCache[tree] = h);
 }
 
 function renderHead() {
@@ -189,6 +220,7 @@ const STAT = {
   farm: ['Granjas', D => D.farm > 0 ? fmt(D.farm * Game.nightPrize(G, D) / 60, 1) + ' de jalea/s' : 'no tienes'],
   lives: ['Asaltos que resiste la reina', D => fmt(D.lives)],
   discount: ['Descuento del árbol', D => pct(D.discount)], cutMax: ['Rebaja máxima de los huevos', D => pct(D.cutMax)],
+  tapCut: ['Descuento guardado', D => fmt(G.eggCut || 0, 0) + ' de comida por huevo (máx. ' + pct(D.cutMax) + ')'],
   autoBuy: ['Mayordomo', D => D.autoBuy > 0 ? 'encendido' : 'apagado'],
   resetTree: ['Reiniciar el árbol', D => D.resetTree ? 'disponible' : 'no disponible'],
   stompHits: ['Pisotones que aguantan', D => fmt(D.stompHits)],
@@ -221,12 +253,13 @@ function statHTML(n) {
   return out.length ? `<p class="stat">Actual · ${out.join(' · ')}</p>` : '';
 }
 
-/** Nodo visible pero no comprable: le falta algo del linaje o la mejora de al lado. */
+/** Nodo visible pero no comprable: le falta algo del linaje o alguno de sus padres (hacen falta todos). */
 function needsHTML(id) {
   const nodes = nodesOf(tv.tree), n = nodes[id], req = n.reqPerk;
   if (req && !G.perm[req]) return `<p class="warn">Necesita «${Game.PERKS[req].name}» en el Linaje.</p>`;
-  const parent = nodes[n.links[0]];
-  return parent ? `<p class="warn">Primero compra «${parent.name}».</p>` : '<p class="warn">Aún no está conectado a lo que tienes.</p>';
+  const miss = Game.missingParents(nodes, tv.tree === 'perm' ? G.perm : G.skills, G.perm, id).map(p => '«' + nodes[p].name + '»');
+  if (!miss.length) return '';
+  return `<p class="warn">Primero compra ${miss.length > 1 ? miss.slice(0, -1).join(', ') + ' y ' + miss[miss.length - 1] : miss[0]}.</p>`;
 }
 
 export function wireTree(getGame) {

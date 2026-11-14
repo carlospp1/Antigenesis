@@ -4,7 +4,7 @@ import * as Game from './game/index.js';
 import * as Scene from './scene/index.js';
 import * as Audio from './audio/audio.js';
 import { on } from './core/events.js';
-import { fmt, fmtTime } from './core/format.js';
+import { fmt, fmtTime, streakTag } from './core/format.js';
 import { ui, render, openSheet, toast, float, setTab, placeLabels, evoUnlocked } from './ui/hud.js';
 import { wireStageInput } from './ui/input.js';
 import { hydrateIcons } from './ui/icons.js';
@@ -16,6 +16,8 @@ import { startTour, tourPending } from './ui/tour.js';
 import { createBot } from './ui/bot.js';
 
 const $ = id => document.getElementById(id);
+/** Velocidades del botón junto al reloj: cada pulsación pasa a la siguiente; tras ×5 vuelve a ×1. */
+const SPEEDS = [1, 2, 3, 5];
 let G, D, resetArmed = 0;
 
 function act(a, id, btn) {
@@ -31,7 +33,7 @@ function act(a, id, btn) {
   else if (a === 'skipDay') { ok = Game.skipDay(G); sfx = 'click'; }
   else if (a === 'antModel') { try { localStorage.setItem('antigenesis.antModel', id); } catch (e) { /* nada */ } Game.save(G); location.reload(); return; }
   else if (a === 'devSpeed') { ui.devSpeed = +id; sfx = 'click'; }
-  else if (a === 'gameSpeed') { ui.speed = G.speed = ui.speed % 3 + 1; sfx = 'click'; }
+  else if (a === 'gameSpeed') { ui.speed = G.speed = SPEEDS[(SPEEDS.indexOf(ui.speed) + 1) % SPEEDS.length]; sfx = 'click'; }
   else if (a === 'ending') { openSheet(G, null); runEnding(); sfx = 'click'; }
   else if (a === 'bot') { bot.panel(); openSheet(G, null); sfx = 'click'; }
   else if (a === 'debug') { ui.debug = Scene.toggleDebug(); sfx = 'click'; }
@@ -45,7 +47,7 @@ function act(a, id, btn) {
   else if (a === 'debugPerm') { Game.debugMaxTree(G, 'perm'); toast('Linaje al máximo.', 'good'); if (tv.open) renderTree(G, true); sfx = 'skill'; }
   else if (a === 'reset') {
     if (Date.now() - resetArmed < 4000) {
-      cancelEnding(); Game.wipe(); Scene.reset(); G = Game.newGame(); D = Game.calc(G); resetArmed = 0; ui.speed = 1;
+      cancelEnding(); Game.wipe(); Scene.reset(); G = Game.newGame(); D = Game.calc(G); resetArmed = 0; ui.speed = 1; Juice.comboEnd();
       openSheet(G, null); toast('Partida nueva.'); sfx = 'click';
     } else { resetArmed = Date.now(); if (btn) btn.textContent = '¿Seguro? Pulsa otra vez'; sfx = 'deny'; Audio.play(sfx); return; }
   }
@@ -93,7 +95,7 @@ const bot = createBot({
   setSpeed: v => { ui.devSpeed = v; },
   /** Partida nueva desde cero (el bot la usa al ganar para seguir jugando). */
   newGame() {
-    cancelEnding(); Game.wipe(); Scene.reset(); G = Game.newGame(); D = Game.calc(G);
+    cancelEnding(); Game.wipe(); Scene.reset(); G = Game.newGame(); D = Game.calc(G); ui.speed = 1; Juice.comboEnd();
     for (const id of ['winView', 'deathView']) if ($(id)) $(id).hidden = true;
     openSheet(G, null); closeTree();
     return G;
@@ -102,14 +104,14 @@ const bot = createBot({
 
 function clickScene(hit) {
   // árbol abierto: el tiempo (G.total) no avanza → sin esto la racha no caduca por comboGap
-  if (G.phase === 'dead' || ui.paused || tv.open) return;
+  if (G.phase === 'dead' || ui.paused || tv.open || endingRunning()) return;
   if (!hit) return;
   const prev = G.combo || 0, early = D.comboEarly;
   if (hit.kind === 'enemy') {
     const d = Game.hit(G, D), m = Game.comboMult(G, D);
     if (d > 0) {
       Scene.enemyHit(hit.pos || hit.click);
-      const streak = m >= 2 ? '×' + (Math.round(m * 10) / 10).toString().replace('.', ',') + ' ' : '';
+      const streak = streakTag(m);
       float(streak + '−' + fmt(d, 0), hit.pos, m >= 2 ? 'lucky' : 'hit');
       Audio.play('hit');
       Juice.tap(G.combo, m, D.comboCap + 1, { prev, early });
@@ -120,14 +122,32 @@ function clickScene(hit) {
   Scene.bump(hit);
   Audio.play('click');
   Juice.tap(r.combo, r.mult, D.comboCap + 1, { prev, early }); // racha de toques seguidos (rinden más)
-  const streak = r.mult >= 2 ? '×' + (Math.round(r.mult * 10) / 10).toString().replace('.', ',') + ' ' : '';
+  const streak = streakTag(r.mult);
   if (hit.kind === 'queen') { // la comida vuela hasta su boca y el número sale al tragarla
-    if (r.crit) { float('¡×' + r.crit + '!', hit.click, 'lucky'); burst('×' + r.crit, 'Toque de suerte', r.crit >= 5 ? 'x5' : 'x2', Scene.toScreen(hit.click)); Audio.play('skill'); }
+    if (r.crit) luckyTap(r.crit, hit.click, 'Toque de suerte', true);
     Scene.feedQueen(hit.click, at => { float(r.laid ? '+huevo' : streak + (r.cut ? '−' : '+') + fmt(r.food), at, r.laid ? 'good' : r.crit || r.mult >= 2 ? 'lucky' : 'crit'); Audio.play('deposit'); });
     return;
   }
   float(streak + (r.crit ? '¡×' + r.crit + '! ' : '') + '+' + r.pct + '%', Scene.entityPos(hit.kind, hit.slot), r.crit || r.mult >= 2 ? 'lucky' : '');
-  if (r.crit) { burst('×' + r.crit, 'Cría acelerada', r.crit >= 5 ? 'x5' : 'x2', Scene.toScreen(Scene.entityPos(hit.kind, hit.slot))); Audio.play('skill'); }
+  if (r.crit) luckyTap(r.crit, Scene.entityPos(hit.kind, hit.slot), 'Cría acelerada');
+}
+
+/**
+ * Toque de suerte. El ×5 (súper toque) a la reina le hace llover comida encima, con caja registradora y vibración;
+ * como mucho uno cada 1,5 s (con mucha suerte comprada saldría sin parar), y entre medias solo el número.
+ * El ×2, el estallido pequeño de siempre en el sitio del toque.
+ */
+let lastRain = 0;
+function luckyTap(crit, at, what, queen) {
+  if (crit < 5) { float('¡×' + crit + '!', at, 'lucky'); burst('×' + crit, what, 'x2', Scene.toScreen(at)); Audio.play('skill'); return; }
+  float('¡×' + crit + '!', at, 'jackpot');
+  const now = performance.now();
+  if (!queen || now - lastRain < 1500) { Audio.play('skill'); return; }
+  lastRain = now;
+  Scene.luckyRain();
+  Audio.play('win');
+  for (let i = 0; i < 6; i++) setTimeout(() => Audio.play('coin', i), 80 + i * 70); // caja registradora
+  Juice.buzz([25, 40, 25, 40, 90]);
 }
 
 function wireButtons() {
@@ -283,7 +303,7 @@ function wireGameEvents() {
     if (r.crit) burst('×' + r.crit, 'Mano fantasma', r.crit >= 5 ? 'x5' : 'x2', sp);
     // con la racha viva, la mano también la sube: el contador lo enseña (sin sonar)
     if (r.combo > r.comboBefore) Juice.tap(r.combo, r.mult, D.comboCap + 1, { prev: r.comboBefore, quiet: true, early: D.comboEarly });
-    const streak = r.mult >= 2 ? '×' + (Math.round(r.mult * 10) / 10).toString().replace('.', ',') + ' ' : '';
+    const streak = streakTag(r.mult);
     const label = r.laid ? '+huevo' : streak + (r.cut ? '−' : '+') + fmt(r.food);
     setTimeout(() => Scene.feedQueen(from, at => float(label, at, r.laid ? 'good' : r.crit || r.mult >= 2 ? 'lucky' : 'crit')), 250);
   });
@@ -297,7 +317,9 @@ function wireGameEvents() {
   on('evolve', d => { Juice.celebrate('¡Evolución!', d.name, 'evolve'); Audio.play('win'); });
   on('raid', () => { toast('¡Han caído todas! Van a por la reina.', 'warn'); Audio.play('alarm'); });
   on('queenSurvives', () => toast('El nido resiste: la reina sobrevive.', 'good'));
+  on('abandon', () => Juice.comboEnd());
   on('queenDeath', d => {
+    Juice.comboEnd();
     Audio.play('retreat'); closeTree(); Scene.resetView(); // vuelve a la vista entera aunque estuvieras con zoom
     $('deathText').textContent = `Generación ${d.gen}. Tu colonia aguantó ${d.level - 1} ${d.level - 1 === 1 ? 'noche' : 'noches'}.`;
     $('deathAdn').textContent = '+' + d.gain;

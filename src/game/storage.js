@@ -14,6 +14,8 @@ export function load() {
     // sin treeV: partida con los árboles de antes → se devuelve todo para repartirlo de nuevo
     const G = Object.assign(newGame(), { treeV: 0 }, o);
     migrateTrees(G);
+    // la racha de antes contaba con otro reloj: empieza de cero (si no, el primer toque heredaría ×4)
+    if (o.clock == null) { G.combo = 0; G.comboLive = false; }
     for (const e of G.eggs.concat(G.larvae)) bumpUid(e.id);
     return G;
   } catch (e) { return null; }

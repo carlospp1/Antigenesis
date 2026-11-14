@@ -232,6 +232,12 @@ body.danger #vignette { box-shadow: inset 0 0 140px 40px rgba(200, 30, 10, .55);
 .node .face .ic [fill]:not([fill="none"]) { fill: currentColor; }
 .node .face .ic [stroke] { stroke: currentColor; }
 .node.brood .face { background: #6e2a26; } .node.food .face { background: #2f5230; } .node.war .face { background: #2e3a55; } .node.tap .face { background: #2a2320; } .node.root .face { background: #5a3a1a; }
+.node.found .face { background: #45305a; }
+/* solo en modo debug: el nombre de cada lado del árbol, en el centro de sus nodos (ui/tree.zonesHTML) */
+.tv-zone { position: absolute; transform: translate(-50%, -50%); pointer-events: none; text-align: center; white-space: nowrap; z-index: 2;
+  text-shadow: 0 0 6px #000, 0 0 12px #000; }
+.tv-zone b { display: block; font: 700 34px/1.1 Cinzel, Georgia, serif; color: rgba(255, 236, 200, .85); }
+.tv-zone span { font: 800 14px Nunito, sans-serif; color: rgba(255, 236, 200, .6); letter-spacing: .08em; text-transform: uppercase; }
 .node.key .face { width: 74px; height: 74px; transform: rotate(45deg); border-radius: 12px; }
 .node.key .face .ic { transform: rotate(-45deg); width: 44px; height: 44px; }
 .node.owned .face { background: #120c09; color: #fff8ec; border-color: #f0b84c; box-shadow: 0 0 0 2px rgba(240, 184, 76, .35), 0 0 22px rgba(240, 184, 76, .55); }
@@ -319,6 +325,9 @@ kbd { font: 700 13px Nunito, sans-serif; border: 2px solid var(--ink); border-ra
 @keyframes bflash { 0% { transform: scale(.2); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
 @keyframes bspark { 0% { transform: translate(0, 0) scale(1.4); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; } }
 @keyframes shine { to { background-position: 300% 0; } }
+/* súper toque de suerte (×5): el número, grande (la comida que llueve sobre la reina es scene.luckyRain) */
+.float.jackpot { color: #ffd34a; font-size: 52px; font-weight: 900; text-shadow: 0 0 14px rgba(255, 130, 205, .95), 0 3px 4px rgba(40, 20, 8, .9); }
+
 body.shake #stage { animation: shk .4s linear; }
 /* muy sutil: el escenario apenas se mueve (como el rebote de los pisotones, scene/camera.nudge) */
 @keyframes shk { 25% { transform: translate(0, 1.5px); } 60% { transform: translate(0, -0.8px); } }
