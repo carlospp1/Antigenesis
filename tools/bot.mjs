@@ -34,6 +34,7 @@ function mulberry32(a) {
 /* ---------- métricas (escuchan los eventos de rules.js) ---------- */
 let S = null;
 on('skill', () => { if (S) S.lastBuy = S.active; });
+on('adnDrop', d => { if (S) S.drop += d.n; });
 on('evolve', d => { if (S) { S.lastBuy = S.active; S.evos.push({ evo: d.evo, h: +(S.active / 3600).toFixed(2) }); } });
 on('nightWin', () => { if (S) S.nightsWon++; });
 on('nightLost', () => { if (S) S.nightsLost++; });
@@ -66,10 +67,10 @@ export function playGame(profileName, seed, opts = {}) {
 
   let G = R.newGame();
   if (P.auto) G.autoBuy = true;
-  S = { G, active: 0, cal: 0, colT: 0, lastBuy: 0, maxGap: 0, colonies: [], milestones: {}, evos: [], nightsWon: 0, nightsLost: 0, trace: opts.trace ? [] : null, clicks: 0 };
+  S = { G, active: 0, cal: 0, colT: 0, lastBuy: 0, maxGap: 0, colonies: [], milestones: {}, evos: [], drop: 0, nightsWon: 0, nightsLost: 0, trace: opts.trace ? [] : null, clicks: 0 };
   let sessT = 0, buyT = 0, cps = 2.5, cpsT = 0, aim = 'queen';
   const tapper = makeTapper();
-  const closeColony = cause => S.colonies.push({ gen: G.gen, night: G.level, min: +(S.colT / 60).toFixed(1), cause, adn: G.pendingAdn || 0,
+  const closeColony = cause => S.colonies.push({ gen: G.gen, night: G.level, min: +(S.colT / 60).toFixed(1), cause, adn: G.pendingAdn || 0, drop: S.drop,
     skills: Object.keys(G.skills).length, perms: Object.keys(G.perm).length, evo: G.evo || 0, ants: G.ants });
 
   while (!G.won && S.active < capA && S.cal < capC) {
@@ -82,7 +83,7 @@ export function playGame(profileName, seed, opts = {}) {
       closeColony(G.leaving ? 'fundó' : 'murió');
       while (R.canEvolve(G)) R.evolve(G);
       if (!(P.smart && saveForEvo(G))) buyLoop(G, 'perm', P, cps);
-      G = R.prestige(G); S.G = G; S.colT = 0;
+      G = R.prestige(G); S.G = G; S.colT = 0; S.drop = 0;
       continue;
     }
 

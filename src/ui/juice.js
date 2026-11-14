@@ -9,7 +9,6 @@ import { icon } from './icons.js';
 import * as Audio from '../audio/audio.js';
 import { BAL } from '../game/data.js';
 import { comboMarks } from '../game/rules.js';
-import { fmtMult } from '../core/format.js';
 
 const $ = id => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -27,40 +26,63 @@ let comboEl = null;
  * quiet (sin sonido: la mano) y early («Marca temprana»: las marcas llegan antes).
  * El contador se queda mientras la racha esté viva; lo quita comboEnd().
  */
-export function tap(n, mult, cap = 21, { prev, quiet, early = 0 } = {}) {
+export function tap(n, mult, cap = 21, { prev, quiet, early = 0, base = 1, marks = false, clicksOn = false } = {}) {
   if (!n || n < 3) return;
   if (!quiet) Audio.play('combo', n);
   if (!comboEl) { comboEl = document.createElement('div'); comboEl.id = 'combo'; $('fx').appendChild(comboEl); }
   const M = comboMarks(early);
-  const reached = M.marks.filter(([at]) => n >= at).length;
+  // las marcas solo cuentan con sus mejoras del linaje: «Marcas de la racha» (+%) y «Toques en cadena» (clics)
+  const reached = marks || clicksOn ? M.marks.filter(([at]) => n >= at).length : 0;
   const topped = n >= cap && !reached;
   const tier = n >= cap ? 3 : n >= 14 ? 2 : n >= 8 ? 1 : 0;
-  // ×valor (todas las marcas) vs clics/toque (solo las de clics)
-  const xm = fmtMult(mult).slice(1);
-  let clicks = 1;
-  for (const at of M.clicks) if (n >= at) clicks++;
+  const pctx = '+' + Math.round((mult - 1) * 100) + '%';
+  let clicks = base; // los hitos dan toques extra por clic
+  if (clicksOn) for (const at of M.clicks) if (n >= at) clicks++;
   // marcas cruzadas desde la cuenta anterior (un lote de la mano puede cruzar varias: cuenta la última)
   const before = prev ?? n - 1;
-  const markRow = M.marks.filter(([at]) => before < at && n >= at).pop();
-  const clickHit = M.clicks.filter(at => before < at && n >= at).pop();
+  const markRow = marks ? M.marks.filter(([at]) => before < at && n >= at).pop() : null;
+  const clickHit = clicksOn ? M.clicks.filter(at => before < at && n >= at).pop() : null;
   comboEl.className = 'combo' + (reached ? ' mk' : ' t' + tier) + (n >= 1000 ? ' long' : '');
   comboEl.style.setProperty('--mk', reached);
   comboEl.style.setProperty('--hot', markColor(reached));
   comboEl.innerHTML = reached
-    ? `<small>RACHA · ${n}</small><b>×${xm}</b><em>${clicks > 1 ? clicks + ' clics/toque' : '+' + Math.round((mult - 1) * 100) + '%'}</em>`
-    : `<small>RACHA</small><b>×${n}</b><em>${topped ? 'MÁX · ' : ''}+${Math.round((mult - 1) * 100)}%</em>`;
+    ? `<small>RACHA · ${n}</small><b>${pctx}</b><em>${clicks > 1 ? 'toque ×' + clicks : 'marca ' + reached}</em>`
+    : `<small>RACHA</small><b>×${n}</b><em>${topped ? 'MÁX · ' : ''}${pctx}</em>`;
   comboEl.classList.remove('pop'); void comboEl.offsetWidth; comboEl.classList.add('pop');
   if (markRow || clickHit != null) {
     const at = clickHit != null && (!markRow || clickHit >= markRow[0]) ? clickHit : markRow[0];
-    const mLabel = markRow ? markRow[1] : xm;
-    const extra = clickHit != null ? ' · cada toque cuenta como ' + clicks : '';
-    celebrate('¡Racha de ' + at + '!', 'Toques ×' + mLabel + extra, 'record');
+    const parts = [];
+    if (markRow) parts.push('+' + Math.round(markRow[1] * 100) + '% a la racha (' + pctx + ')');
+    if (clickHit != null) parts.push('cada toque vale ×' + clicks);
+    celebrate('¡Racha de ' + at + '!', parts.join(' · '), 'record');
     buzz([30, 40, 30]);
   }
   else if (quiet || before >= n) return;
   else if (narrow.matches) { if (n === 10) buzz(25); else if (n === cap) buzz([30, 40, 30]); }
   else if (n === 10) { celebrate('¡Buen ritmo!', 'Racha de 10 · tus toques rinden +' + Math.round((mult - 1) * 100) + '%', 'combo'); buzz(25); }
   else if (n === cap) { celebrate('¡Racha máxima!', 'Tus toques rinden +' + Math.round((mult - 1) * 100) + '%', 'combo'); buzz([30, 40, 30]); }
+}
+
+/**
+ * Destello en el sitio del clic (coordenadas de pantalla dentro del escenario): un anillo y unas chispas.
+ * tier 0 normal · 1 con racha · 2 racha alta · 3 toque de suerte. Como mucho 12 a la vez.
+ */
+export function clickPop(p, tier = 0) {
+  const box = $('fx');
+  if (!box || reduced || !p) return;
+  if (box.querySelectorAll('.cpop').length > 12) return;
+  const el = document.createElement('i');
+  el.className = 'cpop t' + tier;
+  el.style.left = p.x + 'px'; el.style.top = p.y + 'px';
+  const n = 4 + tier * 2;
+  let h = '<b></b>';
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + Math.random() * 0.6, d = 26 + tier * 12 + Math.random() * 18;
+    h += `<s style="--dx:${(Math.cos(a) * d).toFixed(0)}px;--dy:${(Math.sin(a) * d).toFixed(0)}px"></s>`;
+  }
+  el.innerHTML = h;
+  box.appendChild(el);
+  setTimeout(() => el.remove(), 600);
 }
 
 /** La racha se ha perdido (rules.comboCheck): se va el contador. */
@@ -101,7 +123,7 @@ export function reward(x, y, n = 10, target = 'vJelly', ic = 'leaf') {
 }
 
 /* ---------- celebraciones ---------- */
-const TIERS = { combo: 1, night: 1, goal: 1, record: 2, stage: 2, feast: 3, boss: 3, evolve: 3, win: 4 };
+const TIERS = { combo: 1, night: 1, goal: 1, record: 2, stage: 2, feast: 3, feat: 3, boss: 3, evolve: 3, win: 4 };
 let showing = null;
 
 /**
@@ -130,7 +152,7 @@ const PALETTE = {
   night: ['#ffd76a', '#b8f07a', '#fff6dc'], goal: ['#b8f07a', '#ffd76a'], record: ['#ffd76a', '#ff9a4a', '#fff6dc'],
   stage: ['#ffd76a', '#ff7aa8', '#fff6dc'], boss: ['#ff6a4a', '#ffd76a', '#fff6dc', '#b8f07a'],
   evolve: ['#c99bff', '#7ad8ff', '#ffd76a', '#fff6dc'], win: ['#ffd76a', '#ff6a4a', '#7ad8ff', '#b8f07a', '#c99bff'], combo: ['#ffd76a', '#ff9a4a'],
-  feast: ['#ffcf4a', '#fff6dc', '#ff9a4a', '#b8f07a']
+  feast: ['#ffcf4a', '#fff6dc', '#ff9a4a', '#b8f07a'], feat: ['#7ad8ff', '#ffd76a', '#fff6dc', '#c99bff']
 };
 function confetti(n, kind) {
   const box = $('fx'), cols = PALETTE[kind] || PALETTE.night;

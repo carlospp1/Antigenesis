@@ -154,7 +154,9 @@ export const BAL = {
     eggBase: 16, // coste del primer huevo
     eggCurve: 1.2, // cada hormiga o cría encarece el siguiente huevo
     cutMax: 0.25, // «Toque menguante»: lo más que el descuento guardado rebaja un huevo (con el linaje, hasta 0,5)
-    feast: 0.001, // «Festín»: probabilidad base de una entrega ×50 (las mejoras la suben, nunca pasa de 0,03)
+    feast: 0.001, // «Festín»: probabilidad base de que un toque a la reina valga ×50 al comprar el primer nodo (antes, 0; nunca pasa de 0,03)
+    feastX: 50, // lo que vale el toque del festín
+    feastCd: 5, // segundos (reloj real) entre festines: la lluvia dura unos segundos y a muchos toques por segundo saldrían seguidos
     reserve: 0.2, // comida por segundo que la reina saca de sus reservas
     eggTime: 12,
     larvaTime: 18,
@@ -165,15 +167,15 @@ export const BAL = {
     tapRateK: 1, // «Toque nutritivo»: dial del % de la recolección por segundo que suma cada toque
     tapRateMax: 0.01, // …y su tope: un 1% de la recolección por segundo en cada toque
     tapCritMax: 0.5, // probabilidad máxima de toque de suerte
-    ghostMax: 4, // toques por segundo que dan, como mucho, todas las manos fantasma juntas
+    ghostMax: 9, // toques por segundo que dan, como mucho, todas las manos fantasma juntas (8 manos con todo: ≈8,6)
     // enemigos de la noche n: cantidad, vida y daño crecen cada noche
     foeCount0: 1,
     foeCountK: 0.6,
-    foeHp0: 30,
-    foeHpG: 1.36,
-    foeDps0: 2,
-    foeDpsG: 1.3,
-    eraHard: 1.1, // cada era (4 noches) los enemigos tienen ×eraHard de vida y daño sobre la anterior
+    foeHp0: 24, // antes 30: la primera colonia llega a la noche 3 aunque el árbol dé menos
+    foeHpG: 1.5, // antes 1,36: cada colonia llega algo más lejos que la anterior (3 → 4 → 8 → 12 → 16 → 22 → 25)
+    foeDps0: 1.6, // antes 2
+    foeDpsG: 1.4,
+    eraHard: 1.15, // cada era (4 noches) los enemigos tienen ×eraHard de vida y daño sobre la anterior (antes 1,1)
     bossHp: 5,
     bossDps: 3, // jefe de cada era (cuarta noche), en múltiplos de un enemigo normal
     // la noche final: el humano no pega poco a poco, pisa (rules.tickHuman)
@@ -184,42 +186,49 @@ export const BAL = {
     prize0: 15,
     prizeG: 1.4,
     skill0: 18,
-    skillG: 2.5, // niveles 1–12: lo que ya pagaba una colonia (noche 4 ~200, noche 15 ~60 000)
+    skillG: 2.7, // antes 2,5: cada nivel de jalea cuesta más
     skillKnee: 12,
     skillTop: 0.38, // del 13 al 18 el precio afloja: el 18 queda en ~4 millones, lo que junta la noche 24
-    skillOwnG: 1.006, // hay cientos de nodos; un 12% por compra cerraba el árbol a mitad con la jalea aún subiendo
+    skillOwnG: 1.01, // cada compra encarece el resto del árbol un 1% (antes 0,6%)
     skillFree: 8, // las primeras compras no encarecen
     bioOwnG: 1.02, // la biomasa del registro: ~8 en la noche 4, ~60 en la 12, ~160 al final
     bioK: 1, // los rombos ya cuestan eso; solo se les quita el recargo que los cerraba
-    perkK: 0.25, // el linaje suma ~2100 de ADN y la partida del registro deja unos 350 antes de las evoluciones
+    perkK: 0.25,
+    perkP: 1.2, // exponente del precio del linaje: lo barato sigue barato y lo caro cuesta más (40 → ~21 ADN, 80 → ~48)
+    skillFxK: 0.6, // fuerza del árbol de la colonia: cada nodo da el 60% de lo que pone en trees.js (el texto ya sale escalado)
+    permFxK: 0.6, // fuerza del linaje (igual que skillFxK)
     stageFood: 1.25, // cada etapa de la reina multiplica la comida por viaje
     // ADN al morir o fundar: crece con las noches superadas
-    adnK: 1.5,
+    adnK: 1.2, // antes 1,5: fundar da algo menos; el resto lo sueltan los enemigos (adnFoe)
+    adnFoe: 0.008, // ADN que suelta cada enemigo: adnFoe × noche^adnFoeP (un jefe, ×4). Noche 8 ~1,8 por noche, 16 ~7,7, 24 ~19
+    adnFoeP: 1.5,
     adnP: 1.35, // noche 4 ~10 ADN, noche 12 ~50, noche 24 ~130: da para el linaje y para la evolución de esa era
-    evoCostK: 1.5, // la evolución de una era cabe en el ADN de esa era, sin vaciar el linaje
+    evoCostK: 1.6, // las evoluciones caben en el ADN de su era (ya no son lo que marca la duración: lo marca la fuerza de los árboles)
     foundAfter: 3, // superada esta noche ya se puede fundar (y ganar ADN) aunque no caiga ningún jefe
     // racha: cada toque seguido (≤ comboGap s) suma comboStep al ×, hasta comboCap (rampa suave).
-    // comboMarks: [toques, ×valor] — sube la jalea/comida/daño en cada marca.
-    // comboClickAt: solo en estas marcas cada toque cuenta como +1 clic más (2, 3, 4…).
+    // comboMarks: [toques, +extra] — con «Marcas de la racha» (linaje), cada marca suma unos puntos al % de la racha
+    //   (sutil: +5%/+10%, acumulado ~+75% en 10.000). Sin esa mejora, las marcas no dan nada.
+    // comboClickAt: con «Toques en cadena» (linaje), en estas marcas cada toque vale un clic más: ×2 en 200, ×3 en 500,
+    //   ×4 en 1.000, ×5 en 5.000, ×6 en 10.000 (vale ese tanto y suma ese tanto a la racha). El resto de marcas solo sube el %.
     comboGap: 0.8,
     comboStep: 0.012, // antes 0,025: con el árbol a tope la rampa se iba a ×4–5
     comboCap: 20,
     comboMarks: [
-      [200, 2],
-      [300, 2.5],
-      [500, 3],
-      [750, 3.5],
-      [1000, 4],
-      [1250, 4.5],
-      [1500, 5],
-      [2000, 5.5],
-      [2500, 6],
-      [3000, 6.5],
-      [5000, 7],
-      [7500, 7.5],
-      [10000, 8],
+      [200, 0.05],
+      [300, 0.05],
+      [500, 0.05],
+      [750, 0.05],
+      [1000, 0.1],
+      [1250, 0.05],
+      [1500, 0.05],
+      [2000, 0.05],
+      [2500, 0.05],
+      [3000, 0.05],
+      [5000, 0.1],
+      [7500, 0.05],
+      [10000, 0.1],
     ],
-    comboClickAt: [200, 500, 1000, 1500, 2500, 5000, 10000],
+    comboClickAt: [200, 500, 1000, 5000, 10000],
     evoAll: 1.45, // cada evolución: comida, daño y vida ×evoAll (y +5% de velocidad)
     blood: 0.015, // «Sangre antigua»: +1,5% de comida, daño y vida por cada ADN ganado en total
 }
@@ -235,8 +244,6 @@ export const STAGES = [
     { name: 'Emperatriz', at: 50000000 },
     { name: 'Soberana', at: 200000000 },
     { name: 'Reina absoluta', at: 1000000000 },
-    { name: 'Madre origen', at: 3000000000 },
-    { name: 'La primera', at: 10000000000 },
 ]
 
 // [texto, condición, premio en jalea, progreso 0..1 opcional]

@@ -4,6 +4,7 @@ import { emit } from '../core/events.js';
 import { EVOS, ERAS, STAGES, OBJ, DAY, NIGHT, NIGHT_FINAL, DUSK, BROOD_SLOTS, BAL, FINAL_NIGHT, RAID, eraFor } from './data.js';
 import { debug } from './debug.js';
 import { SKILLS, PERKS, treeFx, treeStates, linajeSkills } from './trees.js';
+import { life, featFx, checkFeats } from './feats.js';
 
 let uid = 1;
 export const adnFor = (nights, stage) => Math.max(1, Math.floor(Math.pow(Math.max(0, nights), BAL.adnP) * BAL.adnK + stage * 2));
@@ -18,10 +19,11 @@ export function newGame(keep) {
     phase: 'day', t: DAY, level: 1, warned: false, foes: null, guard: 0, bio: 0, rate: 0, spent: { jelly: 0, bio: 0 },
     livesUsed: 0, hives: 0, shiny: 0, evo: 0, obj: 0, adn: 0, adnTotal: 0, perm: {}, gen: 1, best: 0, won: false, total: 0, mute: false,
     audio: null, butler: false, speed: 1, clock: 0, combo: 0, comboT: 0, comboLive: false, eggCut: 0,
-    stats: { clicks: 0, laid: 0, born: 0, dead: 0, time: 0 }
+    stats: { clicks: 0, laid: 0, born: 0, dead: 0, time: 0 },
+    life: { clicks: 0, combo: 0, born: 0, kills: 0, feasts: 0 }, feats: {} // hitos: de toda la partida (feats.js)
   };
   if (keep) {
-    Object.assign(G, { autoBuy: !!keep.autoBuy, butler: !!keep.butler, speed: keep.speed || 1, eggCut: keep.eggCut || 0, evo: keep.evo || 0, adnTotal: keep.adnTotal || 0, adn: keep.adn, perm: keep.perm, gen: keep.gen, mute: keep.mute, audio: keep.audio || null, obj: keep.obj, best: keep.best, won: keep.won, total: keep.total });
+    Object.assign(G, { autoBuy: !!keep.autoBuy, butler: !!keep.butler, speed: keep.speed || 1, eggCut: keep.eggCut || 0, evo: keep.evo || 0, adnTotal: keep.adnTotal || 0, adn: keep.adn, perm: keep.perm, gen: keep.gen, mute: keep.mute, audio: keep.audio || null, obj: keep.obj, best: keep.best, won: keep.won, total: keep.total, life: keep.life || G.life, feats: keep.feats || {} });
     const P = treeFx(PERKS, G.perm);
     G.ants = P.startAnts || 0; G.jelly = (P.startJelly || 0) + (keep.inherit || 0) * (P.keepJelly || 0); G.bio = P.startBio || 0;
     for (let i = 0; i < Math.min(BROOD_SLOTS, P.startEggs || 0); i++) G.eggs.push({ id: uid++, n: 1, p: 0, slot: i }); // nido preparado
@@ -32,9 +34,9 @@ export function newGame(keep) {
 /** Valores derivados (árbol + linaje + balance). Se llama muchas veces por segundo. */
 export function calc(G) {
   const T = treeFx(SKILLS, { ...G.skills, ...linajeSkills(G.perm).own });
-  const P = treeFx(PERKS, G.perm), D = { T, P };
-  // los valores de los árboles son los que se aplican (lo que dice cada nodo es lo que da)
-  const add = k => (T[k] || 0) + (P[k] || 0), mul = k => (T[k] ?? 1) * (P[k] ?? 1);
+  const P = treeFx(PERKS, G.perm), F = featFx(G), D = { T, P, F };
+  // los valores de los árboles son los que se aplican (lo que dice cada nodo es lo que da); los hitos suman como el linaje
+  const add = k => (T[k] || 0) + (P[k] || 0) + (F[k] || 0), mul = k => (T[k] ?? 1) * (P[k] ?? 1);
   D.blood = 1 + BAL.blood * (G.adnTotal || 0); // Sangre antigua
   D.carry = BAL.carry * (1 + add('food')) * mul('foodX') * Math.pow(BAL.stageFood, G.stage) * D.blood;
   D.speed = 2.6 * (1 + add('speed'));
@@ -65,6 +67,7 @@ export function calc(G) {
   D.brood = (1 + add('growth')) * mul('growthX');
   D.twin = add('twin');
   D.click = (1 + add('click')) * mul('clickX');
+  D.tapN = 1 + add('tapN'); // hitos: cada clic cuenta como tapN toques
   D.tapQ = D.click * (1 + add('tapQ'));
   D.tapB = D.click * (1 + add('tapB'));
   D.tapFoe = 1 + add('tapFoe');
@@ -94,11 +97,16 @@ export function calc(G) {
   D.shinyDmg = (T.shinyElite || P.shinyElite) ? 3 : 2;  // …pegan más fuerte…
   D.shinySpeed = 1.5;                                    // …y van más rápido
   D.goldFood = Math.min(0.5, add('goldFood'));      // probabilidad de que una entrega sea comida dorada (×5)
-  D.feast = Math.min(0.03, BAL.feast + add('feast')); // «Festín»: entrega ×50 (0,1% de base, 3% como máximo)
+  // «Festín»: entrega ×50. Cerrado hasta comprar un nodo de festín; entonces 0,1% de base + los nodos (3% como máximo)
+  const feastAdd = add('feast');
+  D.feast = feastAdd > 0 ? Math.min(0.03, BAL.feast + feastAdd) : 0;
   D.ghost = Math.min(BAL.ghostMax, add('ghost') * mul('ghostX')); // toques por segundo de las manos fantasma
+  D.ghostCombo = add('ghostCombo') > 0; // «Mano rítmica» / «Manos al compás»: sus toques suben la racha
   D.lives = P.lives || 0;
   D.farm = add('farm');        // granjas: jalea sola, en fracción del premio de una noche por minuto
   D.combo = !!P.combo;         // la racha se desbloquea en el linaje («Racha»)
+  D.comboMarks = !!P.comboMarks;   // «Marcas de la racha»: cada marca suma unos puntos al %
+  D.comboClicks = !!P.comboClicks; // «Toques en cadena»: en las marcas, cada toque cuenta como más clics
   // mayordomo: el linaje lo desbloquea y el jugador lo enciende con el interruptor del Árbol (G.butler).
   // G.autoBuy lo usa solo el simulador (tools/bot.mjs).
   D.butler = !!P.autoBuy;
@@ -206,7 +214,7 @@ export function feed(G, amount, dest) {
 
 /**
  * Marcas de la racha con «Marca temprana» aplicada (llegan un % antes):
- *   marks [toques, ×valor] · clicks [toques] (en cada una, un toque cuenta como un clic más) · stops (todas, ordenadas)
+ *   marks [toques, +extra] · clicks [toques] (en cada una, un toque cuenta como un clic más) · stops (todas, ordenadas)
  */
 const markCache = new Map();
 export function comboMarks(early = 0) {
@@ -220,13 +228,16 @@ export function comboMarks(early = 0) {
   return c;
 }
 
-/** Marca de racha: { mult ×valor, clicks por toque }. */
+/**
+ * Marca de racha: { bonus (puntos que suman las marcas al % de la racha), clicks por toque }.
+ * Las marcas solo dan algo con sus mejoras del linaje: «Marcas de la racha» (bonus) y «Toques en cadena» (clics).
+ */
 export function comboInfo(n, D) {
   const M = comboMarks(D ? D.comboEarly : 0);
-  let mult = 1, clicks = 1;
-  for (const [at, m] of M.marks) if (n >= at) mult = m;
-  for (const at of M.clicks) if (n >= at) clicks++;
-  return { mult, clicks };
+  let bonus = 0, clicks = D ? D.tapN || 1 : 1;
+  if (D && D.comboMarks) for (const [at, b] of M.marks) if (n >= at) bonus += b;
+  if (D && D.comboClicks) for (const at of M.clicks) if (n >= at) clicks++;
+  return { bonus, clicks };
 }
 
 /**
@@ -260,12 +271,17 @@ export function comboTap(G, D = calc(G)) {
   return comboMult(G, D);
 }
 
-/** × del toque: rampa solo antes de la 1ª marca; con marca, el × de esa marca. Sin racha viva, ×1. */
+/**
+ * × del toque: la rampa (hasta comboCap toques) más los puntos de las marcas («Marcas de la racha»: +5%/+10% cada una).
+ * Sin racha viva, ×1.
+ */
+/** Clics que vale ahora cada toque tuyo: los de los hitos (tapN) y, con la racha viva, los de «Toques en cadena». */
+export const tapClicks = (G, D = calc(G)) => (G.comboLive ? comboInfo(G.combo || 0, D).clicks : D.tapN);
+
 export function comboMult(G, D = calc(G)) {
   if (!G.comboLive) return 1;
-  const n = G.combo || 0, mark = comboInfo(n, D).mult;
-  if (mark > 1) return mark;
-  return 1 + Math.min(Math.max(0, n - 1), D.comboCap) * D.comboStep * Math.sqrt(D.comboX);
+  const n = G.combo || 0;
+  return 1 + Math.min(Math.max(0, n - 1), D.comboCap) * D.comboStep * Math.sqrt(D.comboX) + comboInfo(n, D).bonus;
 }
 
 /* ---------- toques ---------- */
@@ -274,9 +290,9 @@ export function comboMult(G, D = calc(G)) {
  * Un toque a la reina (tuyo o de la mano fantasma): suerte, «Toque nutritivo», «Toque menguante» y «Toque dorado».
  * room: lo que aún se puede rebajar del huevo. No hace digest (lo hace quien llama).
  */
-function queenTap(G, D, m, room) {
-  const crit = Math.random() < D.tapCrit ? D.critX : 0;
-  const f = (BAL.tapFood * D.tapQ + D.tapRate * D.income) * (crit || 1) * m;
+function queenTap(G, D, m, room, feast = false) {
+  const crit = !feast && Math.random() < D.tapCrit ? D.critX : 0; // el festín sustituye al toque de suerte
+  const f = (BAL.tapFood * D.tapQ + D.tapRate * D.income) * (crit || 1) * (feast ? BAL.feastX : 1) * m;
   const cut = D.tapCut ? Math.min(f, room) : 0;
   if (cut > 0) G.eggCut = (G.eggCut || 0) + cut;
   const feed = f - cut;
@@ -286,32 +302,50 @@ function queenTap(G, D, m, room) {
   return { f, cut, feed, crit };
 }
 
+/**
+ * «Festín»: tus toques a la reina (no los de la mano fantasma) pueden valer ×50 y le llueve comida encima.
+ * Como mucho uno cada BAL.feastCd s de reloj real. forceFeast(): el próximo toque a la reina es festín (debug).
+ */
+let forcedFeast = false;
+export function forceFeast() { forcedFeast = true; }
+function rollFeast(G, D) {
+  const now = G.clock || 0;
+  if (forcedFeast) { forcedFeast = false; G.feastAt = now; return true; }
+  if (D.feast <= 0 || (G.feastAt != null && now >= G.feastAt && now - G.feastAt < BAL.feastCd)) return false;
+  if (Math.random() >= D.feast) return false;
+  G.feastAt = now;
+  return true;
+}
+
 export function click(G, kind, id) {
   if (G.phase === 'dead') return {};
-  const D = calc(G), m = comboTap(G, D);
-  G.stats.clicks++;
+  const D = calc(G), cm = comboTap(G, D), taps = tapClicks(G, D), m = cm * taps; // un toque puede valer varios clics
+  G.stats.clicks++; life(G).clicks += taps;
   if (kind === 'queen') {
-    const before = G.stats.laid, r = queenTap(G, D, m, D.cutRoom);
+    const feast = rollFeast(G, D);
+    if (feast) life(G).feasts++;
+    const before = G.stats.laid, r = queenTap(G, D, m, D.cutRoom, feast);
     digest(G);
-    return { laid: G.stats.laid > before, food: r.feed > 0 ? r.feed : r.f, cut: r.feed <= 0, crit: r.crit, combo: G.combo, mult: m };
+    return { laid: G.stats.laid > before, food: r.feed > 0 ? r.feed : r.f, cut: r.feed <= 0, crit: r.crit, feast, combo: G.combo, mult: cm, taps };
   }
   const e = (kind === 'egg' ? G.eggs : G.larvae).find(x => x.id === id);
   const crit = Math.random() < D.tapCrit, push = BAL.tapBrood * D.tapB * (crit ? D.critX : 1) * m;
   if (e) e.p += push;
   // «Mimo contagioso»: el resto de la cría también se adelanta un poco
   if (D.tapSplash > 0) for (const o of G.eggs.concat(G.larvae)) if (o !== e) o.p += push * D.tapSplash;
-  return { pct: Math.round(100 * push), crit: crit ? D.critX : 0, combo: G.combo, mult: m };
+  return { pct: Math.round(100 * push), crit: crit ? D.critX : 0, combo: G.combo, mult: cm, taps };
 }
 
 /**
  * Varios toques de la mano fantasma de golpe: un solo digest y un solo evento.
- * Tiene todo lo de tus toques. Con la racha viva, cada toque suyo la sube en uno (pero no reinicia la
- * cuenta atrás: eso solo lo hacen tus toques); sin racha viva, ni la sube ni cobra su ×.
+ * Tiene todo lo de tus toques. Con «Mano rítmica» (colonia, biomasa) o «Manos al compás» (linaje) y la racha viva,
+ * cada toque suyo la sube en uno y cobra su × (pero no reinicia la cuenta atrás: eso solo lo hacen tus toques);
+ * si no, ni la sube ni cobra su ×.
  */
 function ghostBatch(G, D, n) {
   if (n < 1 || G.phase === 'dead') return null;
   let food = 0, cutTot = 0, eaten = 0, crit = 0, room = D.cutRoom, m = 1;
-  const before = G.stats.laid, comboBefore = G.combo || 0, live = D.combo && G.comboLive;
+  const before = G.stats.laid, comboBefore = G.combo || 0, live = D.combo && D.ghostCombo && G.comboLive; // sin «Mano rítmica», ni la suben ni cobran su ×
   for (let i = 0; i < n; i++) {
     if (live) { comboAdd(G, D, 1); m = comboMult(G, D); }
     const r = queenTap(G, D, m, room);
@@ -364,7 +398,7 @@ function born(G, n, slotIdx) {
     G.ants++; if (shiny) G.shiny = (G.shiny || 0) + 1;
     emit('born', { caste: 'ants', slot: slotIdx, shiny });
   }
-  G.stats.born += n;
+  G.stats.born += n; life(G).born += n;
 }
 
 function tickBrood(G, D, dt) {
@@ -420,7 +454,7 @@ function tickHuman(G, D, dt) {
   const f = G.foes, immune = immuneBoss(G, D.night);
   if (!immune && G.ants > 0) {
     f.boss -= fightForce(G, D) * D.dmg * dt;
-    if (f.boss <= 0.0001) { f.boss = 0; G.bio += 4 * D.bioKill; emit('foeDeath', { boss: true }); winNight(G, D); return; }
+    if (f.boss <= 0.0001) { f.boss = 0; G.bio += 4 * D.bioKill; life(G).kills++; emit('foeDeath', { boss: true }); winNight(G, D); return; }
   }
   if (f.stompT == null) { f.stompT = BAL.stompFirst; f.stomps = 0; f.wiped = false; } // partida guardada a mitad de la noche final
   f.stompT -= dt;
@@ -442,10 +476,10 @@ function tickNight(G, D, dt) {
   while (dmg > 0 && (f.count > 0 || f.boss > 0)) {
     if (f.count > 0) {
       const a = Math.min(dmg, f.cur); f.cur -= a; dmg -= a;
-      if (f.cur <= 0.0001) { f.count--; f.cur = d.hpEach; G.bio += D.bioKill; emit('foeDeath', {}); }
+      if (f.cur <= 0.0001) { f.count--; f.cur = d.hpEach; G.bio += D.bioKill; life(G).kills++; dropAdn(G, adnDrop(G.level)); emit('foeDeath', {}); }
     } else {
       const a = Math.min(dmg, f.boss); f.boss -= a; dmg -= a;
-      if (f.boss <= 0.0001) { f.boss = 0; G.bio += 4 * D.bioKill; emit('foeDeath', { boss: true }); }
+      if (f.boss <= 0.0001) { f.boss = 0; G.bio += 4 * D.bioKill; life(G).kills++; dropAdn(G, 4 * adnDrop(G.level)); emit('foeDeath', { boss: true }); }
     }
   }
   if (G.ants > 0) {
@@ -459,6 +493,19 @@ function tickNight(G, D, dt) {
     f.raid += dt;
     if (f.raid >= RAID) queenFalls(G, D);
   }
+}
+
+/**
+ * ADN que suelta un enemigo de la noche n (un jefe, ×4): casi nada al principio y cada vez más
+ * (noche 8 ~1,8 en toda la noche, noche 16 ~8, noche 24 ~19). Se suma al momento y se puede gastar en el linaje.
+ */
+export const adnDrop = n => BAL.adnFoe * Math.pow(Math.max(1, n), BAL.adnFoeP);
+function dropAdn(G, amt) {
+  G.adnBits = (G.adnBits || 0) + amt;
+  const n = Math.floor(G.adnBits);
+  if (n < 1) return;
+  G.adnBits -= n; G.adn += n; G.adnTotal = (G.adnTotal || 0) + n;
+  emit('adnDrop', { n });
 }
 
 /** ADN de las noches superadas: las noches con el día saltado cuentan la mitad. */
@@ -486,8 +533,8 @@ function queenDies(G) {
 function dawn(G) { G.foes = null; G.phase = 'day'; G.t = DAY; G.warned = false; G.skipNow = false; }
 
 /** Ingresos de recolección sin escena (para el simulador y el «Toque nutritivo»). */
-// el festín (×50) sustituye a la comida dorada (×5) cuando sale; la suerte (×2) se suma aparte
-export function forageRate(G, D) { return workForce(G, D) * D.carry * (1 + D.luck) * ((1 - D.feast) * (1 + 4 * D.goldFood) + 50 * D.feast) / BAL.trip * (D.speed / 2.6); }
+// la comida dorada vale ×5 y la suerte (×2) se suma aparte (el festín es de los toques, no de la cosecha)
+export function forageRate(G, D) { return workForce(G, D) * D.carry * (1 + D.luck) * (1 + 4 * D.goldFood) / BAL.trip * (D.speed / 2.6); }
 
 /**
  * Avanza la partida dt segundos de juego. realDt: segundos reales que representan (con la partida
@@ -543,6 +590,8 @@ export function tick(G, dt, realDt = dt) {
     }
   }
 
+  for (const f of checkFeats(G)) emit('feat', f); // hitos: estadísticas para siempre
+
   if (G.obj < OBJ.length && OBJ[G.obj][1](G)) {
     G.jelly += OBJ[G.obj][2];
     emit('goal', { text: OBJ[G.obj][0], prize: OBJ[G.obj][2] });
@@ -596,7 +645,8 @@ function ownedCount(G) {
  */
 export function nodeCost(G, tree, id) {
   const n = (tree === 'perm' ? PERKS : SKILLS)[id], c = n.cost;
-  if (typeof c === 'object' && c.adn != null) return { cur: 'adn', n: Math.max(1, Math.round(c.adn * (BAL.perkK ?? 1))) };
+  // linaje: lo barato sigue barato (el arranque fluye) y lo caro se encarece más (perkP > 1)
+  if (typeof c === 'object' && c.adn != null) return { cur: 'adn', n: Math.max(1, Math.round(Math.pow(c.adn, BAL.perkP ?? 1) * (BAL.perkK ?? 1))) };
   const cc = treeCache(G), ctx = cc.cost || (cc.cost = { k: ownedCount(G), disc: treeFx(PERKS, G.perm).discount || 0 }), k = ctx.k, disc = ctx.disc;
   if (typeof c === 'object') return { cur: 'bio', n: Math.max(1, Math.round(c.bio * (BAL.bioK ?? 1) * Math.pow(BAL.bioOwnG, k.bio))) };
   const knee = (BAL.skillKnee ?? 12) - 1, over = Math.max(0, c - 1 - knee);
@@ -684,7 +734,8 @@ export function hit(G, D) {
   const f = G.foes;
   if (!f || f.arrive > 0) return 0;
   if (f.count <= 0 && immuneBoss(G, D.night)) return 0; // a los humanos no les hacen nada los toques sin la última forma
-  const a = Math.max(1, D.dmg * 2 * D.tapFoe) * comboTap(G, D);
+  const cm = comboTap(G, D), taps = tapClicks(G, D), a = Math.max(1, D.dmg * 2 * D.tapFoe) * cm * taps;
+  life(G).clicks += taps;
   if (f.count > 0) f.cur -= Math.min(a, f.cur - 0.01);
   else f.boss = Math.max(0.01, f.boss - a);
   return a;
@@ -744,7 +795,7 @@ export function prestige(G) {
   const dead = G.phase === 'dead', l = legacy(G);
   if (!dead && !l.ready) return null;
   const gain = dead ? 0 : l.gain; // si murió, el ADN ya se cobró en queenDies
-  return newGame({ evo: G.evo || 0, adnTotal: (G.adnTotal || 0) + gain, adn: G.adn + gain, perm: G.perm, gen: G.gen + 1, mute: G.mute, audio: G.audio, obj: G.obj, best: Math.max(G.best, G.level - 1), won: G.won, total: G.total,
+  return newGame({ evo: G.evo || 0, adnTotal: (G.adnTotal || 0) + gain, adn: G.adn + gain, perm: G.perm, life: G.life, feats: G.feats, gen: G.gen + 1, mute: G.mute, audio: G.audio, obj: G.obj, best: Math.max(G.best, G.level - 1), won: G.won, total: G.total,
     inherit: G.jelly + (G.spent.jelly || 0), autoBuy: G.autoBuy, butler: G.butler, speed: G.speed, eggCut: G.eggCut }); // Herencia: parte de la jalea reunida
 }
 

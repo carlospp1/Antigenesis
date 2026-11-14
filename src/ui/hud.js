@@ -11,7 +11,7 @@ const $ = id => document.getElementById(id);
 const VERSION = '0.1.2';
 // speed: velocidad del jugador (×1, ×2, ×3 o ×5: botón junto al reloj) · devSpeed: la de depuración (×1–×20, manda si es > 1)
 export const ui = { sheet: null, holding: false, paused: false, speed: 1, devSpeed: 1, tab: 'colony', debug: false, devOpen: false };
-let lastDock = '', lastSheet = '';
+let lastDock = '', lastSheet = '', statsT = 0;
 const cache = {};
 const setText = (id, v) => { if (cache[id] !== v) { cache[id] = v; $(id).textContent = v; } };
 const setHTML = (el, v, key) => { if (cache[key] !== v) { cache[key] = v; el.innerHTML = v; } };
@@ -84,10 +84,9 @@ function dockColony(G, D) {
   const fc = Game.forecast(G, D), fill = Math.min(1, G.lay / D.eggCost), nx = D.next, st = Game.STAGES[G.stage];
   const nBuy = Game.buyable(G, 'skills');
   const cards = [
-    infoCard('crown', st.name, `<span class="fx">Huevo: ${fmt(Math.min(G.lay, D.eggCost), 0)} / ${fmt(D.eggCost, 0)} de comida</span><div class="meter"><i style="width:${fill * 100}%"></i></div>
-      <span class="fx">${tapLine(G, D)}</span>
-      ${D.tapCut ? `<span class="fx">Descuento guardado: −${fmt(G.eggCut || 0, 0)} por huevo (como mucho, el ${Math.round(D.cutMax * 100)}%)</span>` : ''}
-      ${nx ? `<span class="fx">Crece a ${nx.name}: ${fmt(Math.min(G.eaten, nx.at), 0)} / ${fmt(nx.at, 0)} con tus toques</span><div class="meter green"><i style="width:${Math.min(100, 100 * G.eaten / nx.at)}%"></i></div>` : ''}`),
+    // solo el huevo y lo que le falta para crecer: el resto (toques, racha, suerte…) está en Estadísticas
+    infoCard('crown', st.name, `<span class="fx">Huevo: ${fmt(Math.min(G.lay, D.eggCost), 0)} / ${fmt(D.eggCost, 0)}</span><div class="meter"><i style="width:${fill * 100}%"></i></div>
+      ${nx ? `<span class="fx">${nx.name}: ${fmt(Math.min(G.eaten, nx.at), 0)} / ${fmt(nx.at, 0)}</span><div class="meter green"><i style="width:${Math.min(100, 100 * G.eaten / nx.at)}%"></i></div>` : ''}`),
     infoCard('egg', 'Cría', `<span class="fx">Huevo ${fmt(Game.BAL.eggTime / D.brood, 1)} s · larva ${fmt(Game.BAL.larvaTime / D.brood, 1)} s</span>`),
     infoCard('shield', G.phase === 'night' ? 'Noche ' + G.level : 'Esta noche', `<span class="fx">${D.night.text}</span><span class="fx stats"><small>Tus hormigas: daño ${fmt(D.dmg, 1)} · vida ${fmt(D.hp, 0)}</small></span>`, '',
       // previsión como chip: se lee de un vistazo (el detalle, en la frase de al lado en pantallas grandes)
@@ -99,10 +98,65 @@ function dockColony(G, D) {
   return cards.join('');
 }
 
-/** Lo que da ahora un toque a la reina (con la racha que lleves) y, si hay, cuánto tocan las manos fantasma. */
-function tapLine(G, D) {
-  const m = Game.comboMult(G, D), each = (Game.BAL.tapFood * D.tapQ + D.tapRate * D.income) * m;
-  return `Tu toque: +${fmt(each, each < 10 ? 1 : 0)} de comida${m > 1 ? ' (racha ' + fmtMult(m) + ')' : ''}${D.tapCrit > 0 ? ` · suerte ${Math.round(D.tapCrit * 100)}% (×${D.critX})` : ''}${D.ghost > 0 ? ` · manos: ${fmt(D.ghost, 1)} toques/s` : ''}`;
+/**
+ * Hoja de estadísticas: los totales de ahora (árbol + linaje + evolución + Sangre antigua), por secciones.
+ * Solo enseña lo que ya tienes (una probabilidad a 0 o algo sin desbloquear no sale).
+ */
+function statsHTML(G) {
+  const D = Game.calc(G), pct = v => fmt(v * 100, v < 0.1 ? 1 : 0) + '%', s = v => fmt(v, 1) + ' s';
+  const m = Game.comboMult(G, D), taps = Game.tapClicks(G, D), tap = (Game.BAL.tapFood * D.tapQ + D.tapRate * D.income) * m * taps;
+  const sec = (title, rows) => {
+    const r = rows.filter(x => x && x[1] != null && x[1] !== false);
+    return r.length ? `<h3>${title}</h3><div class="settings stats">${r.map(([k, v]) => `<div class="line"><span>${k}</span><b>${v}</b></div>`).join('')}</div>` : '';
+  };
+  return '<h2>Estadísticas</h2>' + [
+    sec('Colonia', [
+      ['Hormigas', fmt(G.ants)],
+      ['Recolección', fmt(D.income, 1) + ' de comida/s'],
+      ['Comida por viaje', fmt(D.carry, 1)],
+      ['Velocidad', fmt(D.speed, 1)],
+      ['La reina produce', fmt(D.reserve, 1) + ' de comida/s'],
+      D.qJelly > 0 && ['La reina genera', fmt(D.qJelly, 1) + ' de jalea/s'],
+      D.farm > 0 && ['Granjas', fmt(D.farm * Game.nightPrize(G, D) / 60, 1) + ' de jalea/s'],
+      ['Premio de esta noche', fmt(Game.nightPrize(G, D), 0) + ' de jalea'],
+      D.luck > 0 && ['Entregas dobles', pct(D.luck)],
+      D.goldFood > 0 && ['Comida dorada (×5)', pct(D.goldFood)],
+      D.feast > 0 && ['Festín (×50)', pct(D.feast)]
+    ]),
+    sec('Cría', [
+      ['Coste del huevo', fmt(D.eggCost, 0) + ' de comida'],
+      D.tapCut && ['Descuento guardado', '−' + fmt(G.eggCut || 0, 0) + ' por huevo (máx. ' + pct(D.cutMax) + ')'],
+      ['Huevo / larva', s(Game.BAL.eggTime / D.brood) + ' · ' + s(Game.BAL.larvaTime / D.brood)],
+      D.twin > 0 && ['Gemelas', pct(D.twin)],
+      D.extraEgg > 0 && ['Huevo extra', pct(D.extraEgg)],
+      D.freeEgg > 0 && ['Huevo sin precio', pct(D.freeEgg)],
+      D.instaHatch > 0 && ['Eclosión precoz', pct(D.instaHatch)],
+      D.shinyP > 0 && ['Hormigas doradas', pct(D.shinyP)]
+    ]),
+    sec('Toques', [
+      taps > 1 && ['Cada toque vale', taps + ' clics' + (D.tapN > 1 ? ' (' + D.tapN + ' por hitos)' : '')],
+      ['Toque a la reina', '+' + fmt(tap, tap < 10 ? 1 : 0) + ' de comida' + (m > 1 ? ' (racha ' + fmtMult(m) + ')' : '')],
+      ['Toque a la cría', '+' + pct(Game.BAL.tapBrood * D.tapB)],
+      ['Toque a los enemigos', '×' + fmt(D.tapFoe, 2)],
+      D.tapCrit > 0 && ['Toques de suerte', pct(D.tapCrit) + ' (×' + D.critX + ')'],
+      D.ghost > 0 && ['Manos fantasma', fmt(D.ghost, 1) + ' toques/s'],
+      D.combo && ['Racha', 'hasta ' + fmt(D.comboCap) + ' toques · margen ' + s(D.comboGap)]
+    ]),
+    sec('Combate', [
+      ['Daño por hormiga', fmt(D.dmg, 1)],
+      ['Vida por hormiga', fmt(D.hp, 0)],
+      D.dodge > 0 && ['Esquivar un golpe mortal', pct(D.dodge)],
+      D.lives > 0 && ['Asaltos que resiste la reina', fmt(D.lives)],
+      ['Biomasa por enemigo', '×' + fmt(D.bioKill, 2)],
+      ['ADN por enemigo esta noche', fmt(Game.adnDrop(G.level), 2)],
+      (G.evo || 0) >= Game.EVOS.length - 1 && ['Pisotones que aguantan', fmt(D.stompHits)]
+    ]),
+    sec('Linaje', [
+      ['Evolución', Game.EVOS[G.evo || 0].name],
+      ['Sangre antigua', '×' + fmt(D.blood, 2) + ' (' + fmt(G.adnTotal || 0) + ' ADN ganado)'],
+      D.discount > 0 && ['Descuento del árbol', pct(D.discount)]
+    ])
+  ].join('');
 }
 
 /** La frase de la previsión de esta noche (la noche final habla de pisotones). */
@@ -159,16 +213,32 @@ export function placeLabels() {
   });
 }
 
+/* ---------- hitos (feats.js): de toda la partida, dan estadísticas para siempre ---------- */
+function featsHTML(G) {
+  const got = G.feats || {}, n = Game.FEATS.filter(f => got[f.id]).length;
+  return `<h3 class="sheet-sub">Hitos · ${n}/${Game.FEATS.length} <small>(para siempre, también al fundar)</small></h3><ul class="flist">` + Game.FEATS.map(f => {
+    const done = !!got[f.id], v = Math.min(f.at, Game.featValue(G, f)), [, unit] = Game.featStat(f);
+    const goal = f.stat === 'night' ? 'Supera la noche ' + f.at : f.stat === 'gen' ? 'Llega a la generación ' + f.at : fmt(f.at) + ' ' + unit;
+    return `<li class="${done ? 'done' : ''}">${icon(done ? 'check' : 'trophy')}<span>${f.name}</span><em>${done ? '✓' : fmt(Math.floor(v)) + ' / ' + fmt(f.at)}</em>`
+      + `<small>${goal} → ${f.prize}</small>${done ? '' : `<i class="bar"><u style="width:${(100 * v / f.at).toFixed(1)}%"></u></i>`}</li>`;
+  }).join('') + '</ul>';
+}
+
 /* ---------- hojas modales ---------- */
 function renderSheet(G) {
   if (ui.holding) return;
   let h = '';
   if (ui.sheet === 'guide') h = $('guideTpl').innerHTML;
+  else if (ui.sheet === 'stats') {
+    // las cifras cambian a cada momento: se repinta dos veces por segundo, no en cada fotograma
+    if (lastSheet && performance.now() - statsT < 500) return;
+    statsT = performance.now(); h = statsHTML(G);
+  }
   else if (ui.sheet === 'goals') {
     h = '<h2>Objetivos</h2><ul class="olist">' + Game.OBJ.map((o, i) => {
       const st = i < G.obj ? 'done' : i === G.obj ? 'cur' : '';
       return `<li class="${st}">${icon(i < G.obj ? 'check' : 'trophy')}<span>${o[0]}</span>${o[2] ? `<em>${icon('leaf')}${fmt(o[2])}</em>` : ''}</li>`;
-    }).join('') + '</ul>';
+    }).join('') + '</ul>' + featsHTML(G);
   } else if (ui.sheet === 'settings') {
     // cada fila: nombre a la izquierda, controles a la derecha (y una nota debajo si hace falta)
     const row = (name, ctl, note = '') => `<div class="line"><span>${name}</span><div class="ctl">${ctl}${note ? `<small>${note}</small>` : ''}</div></div>`;
@@ -188,6 +258,7 @@ function renderSheet(G) {
         ${row('Final', btn(false, 'ending', 'Ver cinemática'), 'la reina sale del nido y la colonia conquista el planeta')}
         ${row('Bot', btn(false, 'bot', 'Abrir panel'), 'tecla B · juega solo y registra cada acción')}
         ${row('Hormigas', btn(!code, 'antModel', 'Ilustradas', 'glb') + btn(code, 'antModel', 'En código', 'code'), 'se aplica al recargar')}
+        ${row('Festín', btn(false, 'feastNow', 'Ahora') + btn(false, 'feastNext', 'Próximo toque'), 'un toque a la reina que vale ×50, con su lluvia de comida')}
         ${row('Colisiones', btn(ui.debug, 'debug', ui.debug ? 'Visibles' : 'Ocultas'), 'tecla C')}
         ${row('Nido', btn(isLiveMap(), 'liveMap', isLiveMap() ? '3D en vivo' : 'Foto fija'), 'la foto es más ligera; el 3D sigue ahí si lo quieres')}
         ${row('Modo debug', btn(Game.debug.free, 'free', Game.debug.free ? 'Activado' : 'Apagado'), 'jalea, biomasa y ADN ∞ · compras gratis')}
@@ -220,13 +291,18 @@ export function toast(text, tone) {
 }
 
 /** Número que sube desde un punto de la imagen. */
-export function float(text, pos, cls) {
+export function float(text, pos, cls, scale = 1) {
   const p = toScreen(pos), f = document.createElement('div');
-  f.className = 'float ' + (cls || ''); f.textContent = text;
+  f.className = 'float ' + (cls || '');
+  const t = document.createElement('span'); t.textContent = text; f.appendChild(t);
+  if (scale !== 1) t.style.transform = 'scale(' + scale.toFixed(2) + ')';
   // en el teléfono el dedo tapa el sitio del toque: el número sale bastante más arriba para que se vea
   // la comida volando a la boca de la reina
-  const lift = matchMedia('(max-width: 720px), (pointer: coarse)').matches ? 72 : 0;
-  f.style.left = p.x + (Math.random() - 0.5) * 44 + 'px'; f.style.top = p.y - lift + (Math.random() - 0.5) * 22 + 'px';
+  // con ratón, el número del toque (clase «tap», sale en el cursor) va arriba a la derecha: se ve el número y,
+  // a la vez, la comida volando desde el cursor a la boca de la reina
+  const lift = matchMedia('(max-width: 720px), (pointer: coarse)').matches ? 72 : /\btap\b/.test(cls || '') ? 68 : 0;
+  const right = /\btap\b/.test(cls || '') ? 62 : 0;
+  f.style.left = p.x + right + (Math.random() - 0.5) * 44 + 'px'; f.style.top = p.y - lift + (Math.random() - 0.5) * 22 + 'px';
   $('floats').appendChild(f);
   setTimeout(() => f.remove(), 1800);
 }

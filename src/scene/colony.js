@@ -1,14 +1,14 @@
 // Todas las hormigas recolectan de día y salen a pelear de noche. Cualquiera puede morir.
 import * as THREE from 'three';
 import { ctx, rnd } from './context.js';
-import { FOOD, CAP, SIZE, PX, PXW, PANTRY, GUARD, SURF_BAND } from './layout.js';
-import { GEO, MAT } from './geometry.js';
+import { FOOD, CAP, SIZE, PX, PXW, PANTRY, GUARD } from './layout.js';
+import { GEO, MAT, clayAnt } from './geometry.js';
 import { setJaw } from './creature.js';
 import { ANT_LOOKS } from './antRig.js';
 import { createActor, placeActor, lookAt2D, ground } from './actor.js';
-import { randomIn, clampToWalkable, DOWN, UP } from './colliders.js';
+import { randomIn, clampToWalkable, route, DOWN, UP } from './colliders.js';
 import { NAV } from './layout.js';
-import { queen, mouth, head, slotPos, mouthWorld, queenEats } from './brood.js';
+import { queen, mouth, head, slotPos, mouthWorld, queenEats, queenPos } from './brood.js';
 import { puff, feedFly, feastRain } from './particles.js';
 import { pantryTop, pantryDrop, pantryPop } from './pantry.js';
 import { makeFoodSprite, setFoodSprite } from './foodArt.js';
@@ -33,13 +33,27 @@ const nearestOnRoot = a => { let bi = 0, bd = Infinity; DOWN.forEach((p, i) => {
 const toSurface = a => a.at === 'out' ? [] : lane(a.at === 'tun' ? DOWN.slice(0, nearestOnRoot(a) + 1).reverse() : UP, a, 'out');
 const toChamber = a => a.at === 'cham' ? [] : lane(a.at === 'tun' ? DOWN.slice(nearestOnRoot(a)) : DOWN, a, 'cham');
 
-/* la superficie está partida por el agujero: de un lado al otro se rodea por detrás */
-const sideOf = x => (x < NAV.hole[0] ? 'L' : 'R');
-const sidePoint = s => { const p = s === 'L' ? NAV.holeL : NAV.holeR; return { x: p[0] + rnd(-8, 8), y: p[1] + rnd(-3, 3) }; };
-/** Puntos de paso por la superficie de (x0) a (x1): si cambian de lado, por detrás del agujero. */
-function across(x0, x1) {
-  const a = sideOf(x0), b = sideOf(x1);
-  return a === b ? meander(x0, x1) : [sidePoint(a), sidePoint(b)];
+/* fuera de la raíz, siempre por las rutas fijas de cada zona (colliders.route): nunca en línea recta */
+const HOLE = () => ({ x: NAV.hole[0], y: NAV.hole[1] }), FLOOR = () => ({ x: NAV.floorIn[0], y: NAV.floorIn[1] });
+/** Puntos de paso de la ruta fija de `from` a `to` (sin `to`), con el carril de la hormiga (no van en fila india). */
+function walk(a, zone, from, to) {
+  const pts = route(zone, from, to);
+  pts.pop();
+  return pts.map(p => ({ x: p.x + a.lane * 5, y: p.y + a.lane * 2 }));
+}
+/** Hasta la boca del agujero, en la superficie (si está en la cueva, primero hasta el pie de la raíz). */
+function goOut(a) {
+  if (a.at === 'out') return { p: [], from: a };
+  const p = a.at === 'cham' ? walk(a, 'chamber', a, FLOOR()) : [];
+  p.push(...toSurface(a));
+  return { p, from: HOLE() };
+}
+/** Hasta el pie de la raíz, en la cueva (si está fuera, primero hasta el agujero). */
+function goIn(a) {
+  if (a.at === 'cham') return { p: [], from: a };
+  const p = a.at === 'out' ? walk(a, 'surface', a, HOLE()) : [];
+  p.push(...toChamber(a));
+  return { p, from: FLOOR() };
 }
 
 function tint(a) {
@@ -84,36 +98,27 @@ function setCarry(a, type) {
   if (type) setFoodSprite(a.carry, type);
 }
 
-/** Punto intermedio en la hierba entre dos x, para que no vayan todas por la misma línea. */
-function meander(x0, x1) {
-  const lo = Math.min(x0, x1), hi = Math.max(x0, x1);
-  if (hi - lo < 120) return [];
-  return [randomIn('surface', { x0: lo + (hi - lo) * 0.3, x1: lo + (hi - lo) * 0.7, y0: SURF_BAND.y0, y1: SURF_BAND.y1 })];
-}
-
 let turn = 0; // se alternan: una entrega a la reina, la siguiente guarda en la despensa (salvo «Todo para la reina»)
 
 function feedTask(a) {
-  // el festín va siempre a la boca: es el momento de la lluvia de comida
-  const toQueen = a.feast || ctx.D.noStore || turn++ % 2 === 0, path = a.at === 'out' ? [...meander(a.x, DOWN[0].x), sidePoint(sideOf(a.x))] : []; // hasta el lado del agujero en el que está
-  path.push(...toChamber(a));
-  const m = toQueen ? mouth() : pantryDrop();
-  path.push({ x: m.x + rnd(-30, 40) * (toQueen ? 1 : 0.4), y: m.y + rnd(-12, 22) * (toQueen ? 1 : 0.5), wait: 0.9, set: 'cham', faceQ: toQueen, faceP: !toQueen, fn: () => {
+  const toQueen = ctx.D.noStore || turn++ % 2 === 0, { p: path, from } = goIn(a);
+  const m = toQueen ? mouth() : pantryDrop(), goal = { x: m.x + rnd(-30, 40) * (toQueen ? 1 : 0.4), y: m.y + rnd(-12, 22) * (toQueen ? 1 : 0.5) };
+  path.push(...walk(a, 'chamber', from, goal));
+  path.push({ x: goal.x, y: goal.y, wait: 0.9, set: 'cham', faceQ: toQueen, faceP: !toQueen, fn: () => {
     const { G, D } = ctx, type = a.carryType || 'leaf';
     setCarry(a, null);
     // cada hormiga dibujada representa a varias reales
-    // las doradas traen el triple; con suerte, la entrega vale el doble; el festín, ×50
-    const lucky = !!a.lucky, gold = !!a.goldFood, feast = !!a.feast; a.lucky = a.goldFood = a.feast = false;
-    const amount = D.carry * G.ants / Math.max(1, by.ants.length) * (a.shiny ? D.shinyFood : 1) * (lucky ? 2 : 1) * (feast ? 50 : gold ? 5 : 1);
-    const snack = feast || gold ? 'gold' : type, big = feast ? 48 : gold ? 34 : 24;
+    // la comida dorada vale ×5; con suerte, la entrega vale el doble
+    const lucky = !!a.lucky, gold = !!a.goldFood; a.lucky = a.goldFood = false;
+    const amount = D.carry * G.ants / Math.max(1, by.ants.length) * (a.shiny ? D.shinyFood : 1) * (lucky ? 2 : 1) * (gold ? 5 : 1);
+    const snack = gold ? 'gold' : type, big = gold ? 34 : 24;
     const v = new THREE.Vector3();
     if (toQueen) {
-      queenEats(feast ? 2.6 : 1.2); // alarga las patas para recibir la comida
+      queenEats(1.2); // alarga las patas para recibir la comida
       feedFly(a.x, a.y - 22, () => mouthWorld(v), () => {
-        queen.gulp = 1; queenEats(feast ? 2.2 : 1.4);
-        emit('feed', { amount, lucky, gold, feast, dest: 'queen', pos: { x: v.x, y: -v.y - 50 } });
+        queen.gulp = 1; queenEats(1.4);
+        emit('feed', { amount, lucky, gold, dest: 'queen', pos: { x: v.x, y: -v.y - 50 } });
       }, snack, big);
-      if (feast) feastRain(a.x, a.y - 22, () => mouthWorld(v), () => { queen.gulp = 1; });
     } else {
       feedFly(a.x, a.y - 22, () => pantryTop(v), () => {
         pantryPop(); puff(v.x, -v.y, 'green', 5, 60);
@@ -124,30 +129,36 @@ function feedTask(a) {
   a.path = path; a.after = null;
 }
 
+/**
+ * «Festín» (un toque a la reina que vale ×50): estallido dorado encima de la reina y una lluvia de comida
+ * un par de segundos mientras ella traga sin parar. Solo es el efecto: la comida ya la ha sumado rules.click.
+ */
+export function feastShow() {
+  const r = new THREE.Vector3(), q = queenPos();
+  queenEats(3.6); // abre las patas todo el rato que dura la lluvia
+  puff(q.x, q.y - 90, 'gold', 36, 260, 100);
+  feastRain(q.x, q.y - 40, () => mouthWorld(r), () => { queen.gulp = 1; queenEats(1.2); });
+}
+
 function fightTask(a) {
-  const i = a.idx % 24, col = i % GUARD.cols, row = Math.floor(i / GUARD.cols), p = toSurface(a);
-  const gx = GUARD.x + col * GUARD.dx;
-  if (p.length) p.push(sidePoint(sideOf(gx))); // al salir del agujero, primero a su lado
-  else p.push(...across(a.x, gx));
-  p.push({
-    x: GUARD.x + col * GUARD.dx + (row % 2) * GUARD.dx * 0.4 + rnd(-3, 3),
-    y: GUARD.y - row * GUARD.dy + rnd(-2, 2), // filas de la guardia, a la derecha del agujero, de delante hacia el fondo
-    wait: 999, set: 'out', guard: true
-  });
+  const i = a.idx % 24, col = i % GUARD.cols, row = Math.floor(i / GUARD.cols), { p, from } = goOut(a);
+  // filas de la guardia, a la derecha del agujero, de delante hacia el fondo
+  const goal = { x: GUARD.x + col * GUARD.dx + (row % 2) * GUARD.dx * 0.4 + rnd(-3, 3), y: GUARD.y - row * GUARD.dy + rnd(-2, 2) };
+  p.push(...walk(a, 'surface', from, goal));
+  p.push({ x: goal.x, y: goal.y, wait: 999, set: 'out', guard: true });
   a.path = p; a.after = null;
 }
 
 function forageTask(a) {
-  const f = FOOD[Math.floor(Math.random() * FOOD.length)], p = toSurface(a);
-  if (p.length) p.push(sidePoint(sideOf(f.x)), ...meander(NAV.hole[0], f.x));
-  else p.push(...across(a.x, f.x));
-  p.push({ x: f.x + rnd(-f.r, f.r), y: f.y + rnd(-8, 10), wait: 0.8, set: 'out', fn: () => {
+  const f = FOOD[Math.floor(Math.random() * FOOD.length)], { p, from } = goOut(a);
+  const goal = { x: f.x + rnd(-f.r, f.r), y: f.y + rnd(-8, 10) };
+  p.push(...walk(a, 'surface', from, goal));
+  p.push({ x: goal.x, y: goal.y, wait: 0.8, set: 'out', fn: () => {
     // la suerte se decide al cosechar, para que el efecto salga en la comida
     const D = ctx.D;
-    a.feast = Math.random() < D.feast; a.goldFood = !a.feast && Math.random() < D.goldFood; a.lucky = Math.random() < D.luck;
-    setCarry(a, a.feast || a.goldFood ? 'gold' : f.type);
-    if (a.feast) { puff(a.x, a.y - 20, 'gold', 26, 180, 70); emit('harvestLuck', { x: a.x, y: a.y - 40, feast: true }); }
-    else if (a.lucky || a.goldFood) { puff(a.x, a.y - 20, 'gold', a.goldFood ? 18 : 10, a.goldFood ? 140 : 90, 40); emit('harvestLuck', { x: a.x, y: a.y - 40, lucky: a.lucky, gold: a.goldFood }); }
+    a.goldFood = Math.random() < D.goldFood; a.lucky = Math.random() < D.luck;
+    setCarry(a, a.goldFood ? 'gold' : f.type);
+    if (a.lucky || a.goldFood) { puff(a.x, a.y - 20, 'gold', a.goldFood ? 18 : 10, a.goldFood ? 140 : 90, 40); emit('harvestLuck', { x: a.x, y: a.y - 40, lucky: a.lucky, gold: a.goldFood }); }
   } });
   a.path = p; a.after = () => feedTask(a);
 }
@@ -164,6 +175,32 @@ function retarget(a) {
 function nextTask(a) {
   if (a.job === 'fight') fightTask(a);
   else forageTask(a);
+}
+
+/**
+ * Hormiga atascada (lleva un rato sin acercarse a su destino t). Cada vez, algo más fuerte:
+ *   1.ª: retrocede unos píxeles (hacia el último sitio por el que avanzaba, o alejándose del destino) para salir del borde
+ *   2.ª: un empujón hacia el destino
+ *   3.ª: se salta ese punto de la ruta
+ *   más: abandona la tarea, retrocede y elige otra
+ */
+function unstick(a, t) {
+  const n = a.stuckN = (a.stuckN || 0) + 1;
+  const back = (px) => {
+    let dx = a.x - t.x, dy = a.y - t.y;
+    if (a.lastOk && Math.hypot(a.lastOk.x - a.x, a.lastOk.y - a.y) > 4) { dx = a.lastOk.x - a.x; dy = a.lastOk.y - a.y; }
+    const l = Math.hypot(dx, dy) || 1;
+    a.x += dx / l * px + rnd(-6, 6); a.y += dy / l * px + rnd(-4, 4);
+    clampToWalkable(a, a.tun);
+  };
+  if (n === 1) back(16);
+  else if (n === 2) { a.x += (t.x - a.x) * 0.4; a.y += (t.y - a.y) * 0.4; clampToWalkable(a, a.tun); }
+  else if (n === 3 && a.path.length > 1) { const s = a.path.shift(); if (s.set) a.at = s.set; }
+  else {
+    back(24); a.path = []; a.after = null; a.wait = 0.2; a.stuckN = 0;
+    if (a.job === 'food' && a.carryType) feedTask(a); // si llevaba comida (o un festín), vuelve a llevarla
+    else a.job = null; // retarget le da una tarea nueva
+  }
 }
 
 function updateAgent(a, dt) {
@@ -197,19 +234,18 @@ function updateAgent(a, dt) {
   // imagen hacia arriba son mucho camino hacia el fondo. Las patas siguen la distancia recorrida de verdad.
   ground(a.x, a.y, _p, _n, a.tun); ground(t.x, t.y, _q, _n, a.tun);
   const dist = _p.distanceTo(_q);
-  // red de seguridad: si no avanza, empuja hacia el destino (sin teletransporte, que se veía como un «pop»)
-  if (dist < a.best - 0.002) { a.best = dist; a.stuck = 0; }
-  else if ((a.stuck += dt) > 1.2) {
-    const f = Math.min(0.55, 0.25 + dt * 2);
-    a.x += (t.x - a.x) * f; a.y += (t.y - a.y) * f;
-    clampToWalkable(a, a.tun); a.stuck = 0.35; a.best = Infinity;
+  // red de seguridad: si no avanza, se desatasca (ver unstick); mientras avanza, recuerda el último sitio bueno
+  if (dist < a.best - 0.002) {
+    a.best = dist; a.stuck = 0;
+    if ((a.okT = (a.okT || 0) + dt) > 0.25) { a.okT = 0; (a.lastOk ||= { x: 0, y: 0 }); a.lastOk.x = a.x; a.lastOk.y = a.y; }
   }
+  else if ((a.stuck += dt) > 0.9) { unstick(a, t); a.stuck = 0.3; a.best = Infinity; }
   const sp = D.speed * PX * PXW * (a.job === 'fight' ? 1.7 : 1) * (a.shiny ? D.shinySpeed : 1) * (a.tun ? 0.75 : 1) * dt;
   let moved = sp;
   if (dist > 1e-6) (a.wdir ||= new THREE.Vector3()).subVectors(_q, _p).normalize(); // hacia dónde va, en el mundo
   if (dist <= sp) {
     moved = dist;
-    a.x = t.x; a.y = t.y; clampToWalkable(a, a.tun); a.path.shift();
+    a.x = t.x; a.y = t.y; clampToWalkable(a, a.tun); a.path.shift(); a.stuckN = 0;
     if (t.set) a.at = t.set;
     if (t.fn) t.fn();
     if (t.wait) { a.wait = t.wait; a.faceQ = !!t.faceQ; a.faceP = !!t.faceP; a.wdir = null; }

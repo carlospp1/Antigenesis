@@ -16,6 +16,7 @@
 //   efectos: los valores que se aplican de verdad. Las claves que terminan en X multiplican; el resto suman (calc en rules.js)
 //   extra: { key: 1 } nodo clave (rombo) · { reqPerk } necesita algo del linaje · { own } lo deja tuyo en el árbol
 import { LAYOUT } from './treeLayout.js';
+import { BAL } from './data.js'; // solo se lee en funciones (data.js también importa este archivo)
 
 /* ---------------- árbol de la colonia: contenido ---------------- */
 const SN = {
@@ -72,7 +73,7 @@ const SN = {
   f3b: ['coin', 'Botín nocturno II', null, 10, { prize: 0.3 }],
   f3c: ['coin', 'Botín nocturno III', null, 11, { prize: 0.35 }],
   f3d: ['coin', 'Tesoro de guerra', null, { bio: 50 }, { prize: 0.9 }, { key: 1 }],
-  fs1: ['goldleaf', 'Festín', 'En un festín llueve comida en la boca de la reina', 9, { feast: 0.002 }],
+  fs1: ['goldleaf', 'Festín', 'A veces un toque a la reina es un festín: vale ×50 y le llueve comida en la boca', 9, { feast: 0.002 }],
   fs2: ['goldleaf', 'Festín II', null, 12, { feast: 0.004 }],
   fsK: ['goldleaf', 'Festín real', null, { bio: 50 }, { feast: 0.006 }, { key: 1 }],
   // ---- Guerra
@@ -160,11 +161,16 @@ const SN = {
   tnK: ['leaf', 'Mano que alimenta', null, { bio: 40 }, { tapRate: 0.002 }, { key: 1 }],
   taK1: ['hand', 'Manos de reina', null, { bio: 4 }, { clickX: 1.5 }, { key: 1 }],
   t9: ['hand', 'Mano de la reina', null, { bio: 140 }, { clickX: 1.5, tapCrit: 0.03 }, { key: 1 }],
-  ghK: ['ghost', 'Mano fantasma', 'Una mano invisible toca a la reina sola. Mientras tengas racha, sus toques también la suben', { bio: 5 }, { ghost: 0.125 }, { key: 1 }],
+  ghK: ['ghost', 'Mano fantasma', 'Una mano invisible toca a la reina sola', { bio: 5 }, { ghost: 0.125 }, { key: 1 }],
+  // que las manos suban la racha: con biomasa en cada colonia, o para siempre con «Manos al compás» del linaje
+  ghCb: ['bolt', 'Mano rítmica', 'Mientras tengas racha, los toques de las manos fantasma también la suben y cobran su multiplicador', { bio: 25 }, { ghostCombo: 1 }, { key: 1, reqPerk: 'ptp' }],
   mh2: ['ghost', 'Segunda mano', 'Otra mano fantasma', { bio: 8 }, { ghost: 0.125 }, { key: 1, reqPerk: 'pgh4' }],
   mh3: ['ghost', 'Tercera mano', 'Otra mano fantasma', { bio: 16 }, { ghost: 0.125 }, { key: 1, reqPerk: 'pgh5' }],
   mh4: ['ghost', 'Cuarta mano', 'Otra mano fantasma', { bio: 28 }, { ghost: 0.125 }, { key: 1, reqPerk: 'pgh6' }],
   mh5: ['ghost', 'Quinta mano', 'Otra mano fantasma', { bio: 40 }, { ghost: 0.125 }, { key: 1, reqPerk: 'pgh7' }],
+  mh6: ['ghost', 'Sexta mano', 'Otra mano fantasma', { bio: 55 }, { ghost: 0.125 }, { key: 1, reqPerk: 'pgh8' }],
+  mh7: ['ghost', 'Séptima mano', 'Otra mano fantasma', { bio: 70 }, { ghost: 0.125 }, { key: 1, reqPerk: 'pgh9' }],
+  mh8: ['ghost', 'Octava mano', 'Otra mano fantasma', { bio: 90 }, { ghost: 0.125 }, { key: 1, reqPerk: 'pgh10' }],
   gh2: ['ghost', 'Mano veloz', null, 6, { ghostX: 1.15 }],
   gh3: ['ghost', 'Mano experta', null, 8, { ghostX: 1.1 }],
   t1a: ['ghost', 'Mano veloz II', null, 9, { ghostX: 1.1 }],
@@ -255,11 +261,11 @@ const SG = {
     w7a<wa9 w7b<w7a w8a<waK2,wa12 w8b<w8a w1a<wa11 w1b<w1a w1c<w1b w1d<w1c w6a<wa12 w6b<w6a w6c<w6b w6d<w6c
     w2a<mx3 w2b<w2a w2c<w2b waK4<waK3 w4a<waK4 w4b<w4a w4c<w4b w5a<wa14 w5b<w5a w5c<w5b w9<w1d,w4c`,
   tap: `ta1<root ta2<root ta3<ta1 ta4<ta1 lk1<ta2 ta5<ta2 taK1<ta4,lk1 ta6<ta3 ta7<ta4 lk2<lk1 ta8<ta5 tn1<taK1
-    ghK<taK1 lkK<lk2 tb1<ta6 ta9<ta7 ta11<ta8 gh2<ghK mh2<ghK tn2<tn1 taK2<tn1,ghK lk3<lkK gh3<gh2 mh3<mh2 mh4<mh3
-    mh5<mh4 t8a<tb1 t6a<ta9 t3a<ta11 t1a<gh3 tn3<tn2 t7a<tn2 cb1<taK2 t5a<lk3 tb2<t8a t6b<t6a t2a<t1a cb2<cb1
+    ghK<taK1 lkK<lk2 tb1<ta6 ta9<ta7 ta11<ta8 gh2<ghK mh2<ghK ghCb<ghK tn2<tn1 taK2<tn1,ghK lk3<lkK gh3<gh2 mh3<mh2 mh4<mh3
+    mh5<mh4 mh6<mh5 mh7<mh6 mh8<mh7 t8a<tb1 t6a<ta9 t3a<ta11 t1a<gh3 tn3<tn2 t7a<tn2 cb1<taK2 t5a<lk3 tb2<t8a t6b<t6a t2a<t1a cb2<cb1
     cb3<cb1 t8b<tb2 t3b<t3a t1b<t2a t7b<t7a tnK<tn3 cb5<cb2 cb4<cb3 t6c<t6b t5b<t5a t2b<t1b cb6<cb5,cb4 t7c<t7b
     t8c<t8b t3c<t3b t6d<t6c t5c<t5b t1c<t2b cbK2<cb6 cbK<cbK2 t9<t6d,t7c`,
-  brood: `br1<root br2<root br5<br1 br3<br1 br4<br2 brK1<br5 mx1<br3 br6<br5 br7<br4 br9<br6 br10<mx1
+  brood: `br2<root br1<br2 br5<br1 br3<br1 br4<br2 brK1<br5 mx1<br3 br6<br5 br7<br4 br9<br6 br10<mx1
     brK2<brK1,br6 ta10<brK1 br8<br9 br11<br7 sh1<brK2 b5a<brK2 br12<br8 br13<br8 b3b<br11 b1a<br10 t4a<ta10
     b6a<ta10 sh2<sh1 b2a<br12 brK3<br12 b7a<br13 brK5<br13 b3c<b3b b1b<b1a t4b<t4a b6b<b6a b5b<b5a shK<sh2
     b4a<sh2 b2b<b2a brK4<brK3 b7b<b7a b8a<brK5 b3d<b3c b1c<b1b t4c<t4b b6c<b6b b5d<b5b sh3<shK b4b<b4a b2c<b2b
@@ -318,6 +324,9 @@ const PN = {
   pkp: ['coin', 'Herencia', null, { adn: 10 }, { keepJelly: 0.05 }],
   pns: ['crown', 'Todo para la reina', 'Cuando en el árbol de la colonia ya no queda nada que comprar con jalea, las obreras dejan de guardar en la despensa y le llevan toda la comida a la reina', { adn: 12 }, { noStore: 1 }],
   ptp: ['bolt', 'Racha', 'Desbloquea la racha: cada toque seguido rinde más', { adn: 4 }, { combo: 1, clickX: 1.1 }],
+  // la racha mejora los clics: justo detrás de «Racha» y «Ritmo heredado», pero cara (~20 ADN)
+  pcc: ['hand', 'Toques en cadena', 'Con la racha, cada toque vale más clics: ×2 en 200, ×3 en 500, ×4 en 1.000, ×5 en 5.000 y ×6 en 10.000', { adn: 40 }, { comboClicks: 1 }],
+  pcm: ['bolt', 'Marcas de la racha', 'Cada marca de la racha (200, 300, 500, 750, 1.000…) suma un +5% o +10% al extra que ya da', { adn: 22 }, { comboMarks: 1 }],
   pcb1: ['bolt', 'Ritmo heredado', null, { adn: 6 }, { comboStep: 0.008 }],
   pcb2: ['bolt', 'Racha ancestral', null, { adn: 10 }, { comboCap: 10 }],
   pcb3: ['hand', 'Pulso de la estirpe', null, { adn: 14 }, { comboGap: 0.4 }],
@@ -333,14 +342,23 @@ const PN = {
   pgh5: ['ghost', 'Tercera mano', 'Otra mano fantasma en todas las colonias', { adn: 44 }, {}, { own: ['mh3'] }],
   pgh6: ['ghost', 'Cuarta mano', 'Otra mano fantasma en todas las colonias', { adn: 80 }, {}, { own: ['mh4'] }],
   pgh7: ['ghost', 'Quinta mano', 'Otra mano fantasma en todas las colonias', { adn: 140 }, {}, { own: ['mh5'] }],
+  pgh8: ['ghost', 'Sexta mano', 'Otra mano fantasma en todas las colonias', { adn: 200 }, {}, { own: ['mh6'] }],
+  pgh9: ['ghost', 'Séptima mano', 'Otra mano fantasma en todas las colonias', { adn: 280 }, {}, { own: ['mh7'] }],
+  pgh10: ['ghost', 'Octava mano', 'Otra mano fantasma en todas las colonias', { adn: 380 }, {}, { own: ['mh8'] }],
+  // las cuatro juntas: las manos tocan el doble de rápido (1,19⁴ ≈ 2)
+  pgv1: ['ghost', 'Mano ágil I', null, { adn: 60 }, { ghostX: 1.19 }],
+  pgv2: ['ghost', 'Mano ágil II', null, { adn: 100 }, { ghostX: 1.19 }],
+  pgv3: ['ghost', 'Mano ágil III', null, { adn: 160 }, { ghostX: 1.19 }],
+  pgv4: ['ghost', 'Mano ágil IV', null, { adn: 240 }, { ghostX: 1.19 }],
+  pghc: ['bolt', 'Manos al compás', 'En todas las colonias, mientras tengas racha, los toques de las manos fantasma también la suben y cobran su multiplicador', { adn: 44 }, {}, { own: ['ghCb'] }],
   pds: ['arrows', 'Saber heredado', null, { adn: 6 }, { discount: 0.25 }],
   prt: ['arrows', 'Borrón y cuenta nueva', 'Desbloquea el botón de reiniciar el Árbol: devuelve toda la jalea y la biomasa gastadas. ¿Quién querría deshacer su propio árbol? Ni idea. Tú, por lo visto.', { adn: 80 }, { resetTree: 1 }],
   pab1: ['arrows', 'Mayordomo del nido', 'Desbloquea un interruptor en el Árbol. Encendido, compra solo las mejoras de la colonia cuando hay jalea o biomasa', { adn: 90 }, { autoBuy: 1 }],
   plt1: ['hand', 'Manos heredadas', null, { adn: 20 }, { click: 0.15 }, { own: ['taK1'] }],
-  plt2: ['hand', 'Caricia del linaje', null, { adn: 36 }, { click: 0.2 }],
+  plt2: ['hand', 'Caricia del linaje', null, { adn: 5 }, { click: 0.2 }],
   plt4: ['coin', 'Dedos de oro', null, { adn: 48 }, { click: 0.1 }, { own: ['taK2'] }],
   ptn1: ['leaf', 'Hambre heredada', null, { adn: 60 }, { tapRate: 0.002 }],
-  plt3: ['hand', 'Toque ancestral', null, { adn: 64 }, { clickX: 1.25 }],
+  plt3: ['hand', 'Toque ancestral', null, { adn: 40 }, { clickX: 1.25 }],
   ptn2: ['leaf', 'Hambre heredada II', null, { adn: 140 }, { tapRate: 0.002 }],
   psk: ['moon', 'Saltar el día', 'Un botón junto al reloj hace que caiga la noche ya. Esas noches dan la mitad de ADN', { adn: 60 }, { skipDay: 1 }],
   ptc: ['hand', 'Toque menguante', 'Tus toques a la reina juntan un descuento que se guarda para siempre, en todas las colonias, y se resta de cada huevo (como mucho, el 25% de su precio). Si el descuento ya cubre ese máximo, el toque alimenta a la reina', { adn: 80 }, { tapCut: 1 }],
@@ -393,9 +411,9 @@ const PN = {
 const PG = {
   brood: `pe1<root pg1<root prs<pe1 pdx1<pe1 ptw<pg1 plb1<pg1 pcv<prs,pdx1 pfe1<pdx1 pdx2<pdx1 psh<ptw pqk<pfe1
     pe2<pcv pfe2<pfe1 plb2<pe2 plb3<plb1 psh2<psh psh3<psh2 pls1<psh2 plb4<ptw plb5<pfe2 pls2<pls1,psh3`,
-  tap: `ptp<root pl1<ptp pgh1<ptp pcb1<ptp pl2<pl1 pgh2<pgh1 pcb2<pcb1 plt1<pl1,pgh1 pgh3<pgh2 pcb3<pcb2 plt2<plt1
+  tap: `ptp<root pl1<ptp pgh1<ptp pcb1<ptp pcc<pcb1 pl2<pl1 pgh2<pgh1 pcb2<pcb1 pcm<pcb2 plt1<pl1,pgh1 pgh3<pgh2 pcb3<pcb2 plt2<plt1
     pgh4<pgh3 plt5<pl2 plt4<plt2 pck<pcb3 pgh5<pgh4 ptn1<plt4 plt3<plt2 pce<pck pgh6<pgh5 ptn2<ptn1 pgh7<pgh6
-    ptc<plt3,pck ptc2<ptc ptc3<ptc2`,
+    ptc<ytManoheredada1,pck ptc2<ptc ptc3<ptc2 pgh8<pgh7 pgh9<pgh8 pgh10<pgh9 pgv1<pgh4 pgv2<pgv1 pgv3<pgv2 pgv4<pgv3 pghc<pgh4`,
   food: `pf1<root pf2<pf1 psp<pf1 ppz<pf1 pf3<pf2 pgf<psp,pf2 pqj1<ppz pns<pf3 pf4<pf3 pgf2<pgf plf1<pf3 pqj2<pqj1
     plf2<plf1 pfs1<pgf2,pf4 plf3<plf2 pqj3<pqj2 plf4<plf3 pfs2<pfs1 pfs3<pfs2`,
   war: `pd1<root ph1<root pd2<pd1 ph2<ph1 pbk<pd1 pdg<ph2 pwj<pd2,ph2 pd3<pd2 ph3<ph2 pbk2<pbk pdg2<pdg plv<pdg
@@ -427,7 +445,7 @@ const TEXT = {
   tapFoe: v => `tocar enemigos hace +${pc(v)} de daño`,
   tapCrit: v => `+${pc(v)} de probabilidad de toque de suerte`, luck: v => `+${pc(v)} de probabilidad de entrega ×2`,
   shiny: v => `+${pc(v)} de hormigas doradas`, goldFood: v => `+${pc(v)} de comida dorada (×5)`,
-  feast: v => `+${pc(v)} de probabilidad de festín (entrega ×50)`,
+  feast: v => `+${pc(v)} de probabilidad de festín (un toque a la reina ×50)`,
   ghost: v => `la mano fantasma da +${dec(v * 60)} toques por minuto`, ghostX: v => `la mano fantasma toca un ${pc(v - 1)} más rápido`,
   twin: v => `+${pc(v)} de huevos con gemelas`, extraEgg: v => `+${pc(v)} de probabilidad de un huevo extra gratis`,
   freeEgg: v => `+${pc(v)} de huevos que no encarecen el siguiente`, instaHatch: v => `+${pc(v)} de huevos que se saltan la fase de larva`,
@@ -489,7 +507,7 @@ const KEYS = { brood: ['Nido ancestral', 'flame', 'growthX', 1.2], food: ['Sende
   war: ['Legión', 'fist', 'dmgX', 1.2], tap: ['Manos rápidas', 'ghost', 'ghostX', 1.08] };
 
 /**
- * Series del anillo: [rama, nodo del que sale, tramos [familia, desde, hasta], cierra con clave?].
+ * Series del anillo: [rama, nodo(s) del que sale («a,b»: hacen falta todos; el precio sale solo del primero), tramos [familia, desde, hasta], cierra con clave?].
  * Salen del borde de su rama y se alargan hacia fuera.
  */
 const RING = {
@@ -508,7 +526,7 @@ const RING = {
   ],
   perm: [
     ['brood', 'plb3', [['Linaje fértil', 1, 5]]], ['brood', 'pcv', [['Reserva ancestral', 1, 4]]],
-    ['tap', 'plt3', [['Toque heredado', 1, 4]]], ['tap', 'pgh3', [['Mano heredada', 1, 3]]], ['tap', 'pcb3', [['Ritmo ancestral', 1, 3]]],
+    ['tap', 'plt3', [['Toque heredado', 1, 4]]], ['tap', 'pgh3,plt3', [['Mano heredada', 1, 3]]], ['tap', 'pcb3', [['Ritmo ancestral', 1, 3]]],
     ['food', 'pf4', [['Memoria', 1, 5]]], ['food', 'plf2', [['Memoria', 6, 9]]], ['food', 'psp', [['Senda', 1, 2], ['Rebaño de pulgones', 1, 3]]],
     ['food', 'pns', [['Hongo ancestral', 1, 6]]],
     ['war', 'pd4', [['Furia', 1, 6]]], ['war', 'ph4', [['Coraza', 1, 6]]],
@@ -552,9 +570,9 @@ function maxBefore(C, E, id, memo = {}) {
 function addRing(tree, C, E) {
   const pre = tree === 'perm' ? 'y' : 'x', fam = FAM[tree], keyN = {};
   for (const [cat, from, segs, key] of RING[tree]) {
-    const before = maxBefore(C, E, from), own = C[from][3];
+    const froms = from.split(','), before = maxBefore(C, E, froms[0]), own = C[froms[0]][3];
     const top = { ...before, [curOf(own)]: Math.max(before[curOf(own)], amountOf(own)) };
-    let prev = from, k = 0;
+    let prev = froms, k = 0;
     for (const [name, a, b] of segs) {
       const [icon, eff, v0, extra] = fam[name];
       for (let n = a; n <= b; n++, k++) {
@@ -562,14 +580,14 @@ function addRing(tree, C, E) {
         const cost = tree === 'perm' ? { adn: Math.max(14, top.adn) + 3 * (k + 1) } : Math.min(18, Math.max(9, top.jelly) + Math.floor(k / 2));
         const v = tree === 'skills' && SCALE.has(eff) ? Math.round(v0 * (1 + 0.15 * (cost - 9)) * 100) / 100 : v0;
         C[id] = [icon, name + ' ' + toRoman(n), null, cost, { [eff]: v }, extra];
-        E[id] = { cat, parents: [prev] };
+        E[id] = { cat, parents: [].concat(prev) };
         prev = id;
       }
     }
     if (key) {
       const i = (keyN[cat] = (keyN[cat] || 0) + 1), [name, icon, eff, v] = KEYS[cat], id = pre + cat[0] + 'K' + i;
       C[id] = [icon, name + ' ' + toRoman(i), null, { bio: Math.max(50 + 10 * (i - 1), top.bio + 10) }, { [eff]: v }, { key: 1 }];
-      E[id] = { cat, parents: [prev] };
+      E[id] = { cat, parents: [].concat(prev) };
     }
   }
 }
@@ -593,7 +611,9 @@ function build(tree, root, C, E) {
     const c = C[id];
     if (!c) throw new Error('Nodo sin contenido: ' + id);
     const [icon, name, text, cost, fx, extra = {}] = c, p = pos[id];
-    N[id] = { id, x: p ? p[0] : 0, y: p ? p[1] : 0, unplaced: !p, cat: E[id].cat, icon, name, desc: [text, describe(fx)].filter(Boolean).join('. '), cost, fx,
+    N[id] = { id, x: p ? p[0] : 0, y: p ? p[1] : 0, unplaced: !p, cat: E[id].cat, icon, name, cost, fx,
+      // el texto se escribe con la fuerza del árbol de ahora (BAL.skillFxK / permFxK): dice lo que da de verdad
+      get desc() { return [text, describe(scaleFx(fx, fxK(tree)))].filter(Boolean).join('. '); },
       links: E[id].parents, key: !!extra.key, adj: new Set(E[id].parents), reqPerk: extra.reqPerk || null, own: extra.own || null };
   }
   for (const id in C) if (!N[id]) throw new Error('Nodo sin sitio en el árbol: ' + id);
@@ -613,13 +633,31 @@ export const GRAPHS = { skills: SE, perm: PE };
 export const SKILLS = build('skills', ['crown', 'La reina', 'El corazón de la colonia. Todo crece desde aquí.'], SN, SE);
 export const PERKS = build('perm', ['dna', 'Linaje', 'Lo que aprende cada reina pasa a sus hijas.'], PN, PE);
 
+/**
+ * Fuerza de cada árbol: BAL.skillFxK (colonia) y BAL.permFxK (linaje) escalan las estadísticas de sus nodos
+ * (lo que suma, ×k; lo que multiplica, su parte por encima o por debajo de 1). Las probabilidades, los topes y
+ * lo que se tiene o no se tiene (vidas, pisotones, hormigas al empezar…) no cambian.
+ */
+const STAT = new Set(['food', 'foodX', 'speed', 'dmg', 'dmgX', 'hp', 'hpX', 'growth', 'growthX', 'reserve', 'prize', 'farm',
+  'click', 'clickX', 'tapQ', 'tapB', 'tapFoe', 'qJelly', 'qJellyP', 'bioKill']);
+const fxK = tree => (tree === 'perm' ? BAL.permFxK : BAL.skillFxK) ?? 1;
+const scaleFx = (fx, f) => {
+  if (f === 1) return fx;
+  const out = {};
+  for (const k in fx) out[k] = !STAT.has(k) ? fx[k] : k.endsWith('X') ? +(1 + (fx[k] - 1) * f).toFixed(4) : +(fx[k] * f).toFixed(4);
+  return out;
+};
+
 /** Suma los efectos de los nodos comprados: X multiplica, el resto suma. */
 export function treeFx(nodes, owned) {
-  const out = {};
+  const out = {}, f = fxK(nodes === PERKS ? 'perm' : 'skills');
   for (const id in owned) {
     const n = nodes[id];
     if (!owned[id] || !n) continue;
-    for (const k in n.fx) out[k] = k.endsWith('X') ? (out[k] ?? 1) * n.fx[k] : (out[k] || 0) + n.fx[k];
+    for (const k in n.fx) {
+      const v = n.fx[k], s = f === 1 || !STAT.has(k) ? v : k.endsWith('X') ? 1 + (v - 1) * f : v * f;
+      out[k] = k.endsWith('X') ? (out[k] ?? 1) * s : (out[k] || 0) + s;
+    }
   }
   return out;
 }

@@ -14,7 +14,7 @@ import { buildPantry, updatePantry, pantryAnchor } from './pantry.js';
 import { buildBrood, updateBrood, refreshQueen, resetQueenPose, queen, brood, slotPos, queenPos, mouthWorld, broodBars, queenEats } from './brood.js';
 export { broodBars };
 /** Para depurar desde la consola (__ax.Scene.agents): las hormigas que se dibujan. */
-export { agents } from './colony.js';
+export { agents, feastShow } from './colony.js';
 import { syncAgents, updateAgents, onBorn, onDeath, onMassDeath, refreshMutation, clearAgents } from './colony.js';
 import { buildEnemies, updateEnemies, resetEnemies, retreat, aliveFoes, enemyHit, enemyPos } from './enemies.js';
 import { createCamera, fitCamera, updateCamera, zoomBy, panBy, resetView, focus, screenToImage, imageToScreen } from './camera.js';

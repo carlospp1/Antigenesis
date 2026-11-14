@@ -197,6 +197,47 @@ function splitSolidLegs(scene) {
  */
 const EYES = { queen: { pts: [[-0.17, 0.075], [0.14, 0.085]], r: 0.082, skin: '#d2475d' } };
 const EYE_PARTS = /^(white|iris|pupil)$/;
+
+/** Lee colores de la textura de color del modelo (uv del glTF: origen arriba a la izquierda). null si no se puede. */
+function texSampler(scene) {
+  let map = null;
+  scene.traverse(o => { if (!map && o.isMesh && o.material && o.material.map && o.material.map.image) map = o.material.map; });
+  if (!map) return null;
+  try {
+    const img = map.image, w = img.width, h = img.height, cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    const g = cv.getContext('2d', { willReadFrequently: true });
+    g.drawImage(img, 0, 0);
+    const px = g.getImageData(0, 0, w, h).data;
+    return uv => {
+      const u = ((uv.x % 1) + 1) % 1, v = ((uv.y % 1) + 1) % 1, i = (Math.min(h - 1, Math.floor(v * h)) * w + Math.min(w - 1, Math.floor(u * w))) * 4;
+      return [px[i], px[i + 1], px[i + 2]];
+    };
+  } catch (e) { return null; }
+}
+
+/**
+ * Color de la piel alrededor de los ojos: se lanzan rayos en un anillo alrededor de cada ojo y se queda el color
+ * que más se repite (la textura es un mosaico: la media mezclaría parches de colores distintos).
+ */
+function skinAround(scene, rc, def) {
+  const sample = texSampler(scene);
+  if (!sample) return null;
+  const cols = [];
+  for (const [x, y] of def.pts) for (let k = 0; k < 12; k++) {
+    const a = (k / 12) * Math.PI * 2, d = def.r * 1.55;
+    rc.set(new THREE.Vector3(x + Math.cos(a) * d, y + Math.sin(a) * d, 5), new THREE.Vector3(0, 0, -1));
+    const h = rc.intersectObject(scene, true)[0];
+    if (h && h.uv) cols.push(sample(h.uv));
+  }
+  if (!cols.length) return null;
+  const near = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) < 45;
+  let best = cols[0], bn = 0;
+  for (const c of cols) { const n = cols.filter(o => near(c, o)).length; if (n > bn) { bn = n; best = c; } }
+  const grp = cols.filter(o => near(best, o)), avg = [0, 1, 2].map(i => grp.reduce((s, c) => s + c[i], 0) / grp.length / 255);
+  return new THREE.Color().setRGB(avg[0], avg[1], avg[2], THREE.SRGBColorSpace);
+}
+
 function findEyes(scene, kind) {
   scene.updateMatrixWorld(true);
   const def = EYES[kind];
@@ -210,7 +251,8 @@ function findEyes(scene, kind) {
       if (n.z < 0.2) n.set(0, 0, 1);
       out.push({ p: h.point.clone(), n, r: def.r });
     }
-    return out.length ? { list: out, skin: def.skin } : null;
+    // el párpado, del color de la piel de esta reina (leído de su textura); si no se puede, el de la tabla
+    return out.length ? { list: out, skin: skinAround(scene, rc, def) || def.skin } : null;
   }
   // por piezas: cada lado (x < 0, x > 0) con sus piezas blanco / iris / pupila
   const sides = { L: new THREE.Box3(), R: new THREE.Box3() };
@@ -229,20 +271,34 @@ function findEyes(scene, kind) {
   }
   return list.length ? { list, skin: skin || '#b4405a' } : null;
 }
+/**
+ * Párpados (del color de la piel) y una X encima de cada ojo. La cara es curva y un disco plano se hundía en ella
+ * por los bordes (asomaban los ojos de la textura): mientras el ojo mira a la cámara, párpado y X se dibujan por
+ * encima de todo (sin prueba de profundidad); de espaldas, con ella, para que la cabeza los tape.
+ */
+const _ew = new THREE.Vector3(), _ec = new THREE.Vector3(), _en = new THREE.Vector3();
 function buildDeadEyes(model, eyes) {
   if (!eyes) return null;
   const g = new THREE.Group();
   const lid = new THREE.MeshStandardMaterial({ color: eyes.skin, roughness: 0.8 });
   const ink = new THREE.MeshBasicMaterial({ color: '#2a0d12' });
+  const mats = [lid, ink];
   for (const e of eyes.list) {
     const s = new THREE.Group();
     s.position.copy(e.p).addScaledVector(e.n, 0.006);
     s.lookAt(e.p.clone().addScaledVector(e.n, 1));
-    const patch = new THREE.Mesh(new THREE.CircleGeometry(e.r, 28), lid);
+    const patch = new THREE.Mesh(new THREE.CircleGeometry(e.r * 1.22, 32), lid);
+    patch.renderOrder = 20;
+    // ¿mira a la cámara? (el +Z del grupo es la normal de la cara)
+    patch.onBeforeRender = (r, sc, cam) => {
+      s.getWorldPosition(_ew); s.getWorldDirection(_en);
+      const front = _en.dot(_ec.copy(cam.position).sub(_ew).normalize()) > 0.15;
+      for (const m of mats) m.depthTest = !front;
+    };
     s.add(patch);
     for (const a of [Math.PI / 4, -Math.PI / 4]) {
       const bar = new THREE.Mesh(new THREE.PlaneGeometry(e.r * 1.75, e.r * 0.34), ink);
-      bar.rotation.z = a; bar.position.z = 0.003;
+      bar.rotation.z = a; bar.position.z = 0.003; bar.renderOrder = 21;
       s.add(bar);
     }
     g.add(s);

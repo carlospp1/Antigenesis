@@ -14,7 +14,7 @@ let pi = 0;
 
 /** Trozos de comida en sprite 2D (vuelo a la boca). */
 function buildSnacks() {
-  for (let i = 0; i < 32; i++) {
+  for (let i = 0; i < 48; i++) {
     const m = makeFoodSprite('leaf', true);
     ctx.scene.add(m);
     snacks.push({ m, t: 1, a: new THREE.Vector3(), c: new THREE.Vector3(), b: null, size: 1, k: 1, spin: 0, done: null });
@@ -54,12 +54,19 @@ export function foodShower(x, y, target, onBite, n = 24) {
   }, i * 45);
 }
 
-/** «Festín»: una lluvia de comida, desde arriba, que cae en la boca durante un par de segundos. */
-export function feastRain(x, y, target, onBite) {
-  const types = ['gold', 'berry', 'leaf', 'seed'];
-  for (let i = 0; i < 12; i++) setTimeout(() => {
-    feedFly(x + rnd(-120, 120), y + rnd(-170, -24), target, () => { if (onBite) onBite(); }, types[i % types.length], rnd(36, 58));
-  }, i * 90);
+/**
+ * «Festín»: un estallido dorado sobre la reina y una lluvia larga de comida (casi toda dorada) que cae desde
+ * muy arriba en su boca durante unos 2 s. (x, y) es el punto de la imagen sobre el que llueve (la reina).
+ */
+export function feastRain(x, y, target, onBite, n = 30) {
+  const types = ['gold', 'gold', 'berry', 'gold', 'leaf', 'seed'];
+  puff(x, y - 140, 'gold', 40, 280, 140);
+  for (let i = 0; i < n; i++) setTimeout(() => {
+    feedFly(x + rnd(-300, 300), y + rnd(-520, -200), target, () => { if (onBite) onBite(); }, types[i % types.length], rnd(42, 72));
+    if (i % 3 === 0) puff(x + rnd(-260, 260), y + rnd(-380, -160), 'gold', 5, 120, 50);
+  }, 150 + i * 65 + rnd(0, 40));
+  // segundo estallido al final, cuando cae lo último
+  setTimeout(() => puff(x, y - 60, 'gold', 30, 220, 110), 150 + n * 65 + 500);
 }
 
 function updateSnacks(dt) {

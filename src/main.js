@@ -4,7 +4,7 @@ import * as Game from './game/index.js';
 import * as Scene from './scene/index.js';
 import * as Audio from './audio/audio.js';
 import { on } from './core/events.js';
-import { fmt, fmtTime, streakTag } from './core/format.js';
+import { fmt, fmtTime } from './core/format.js';
 import { ui, render, openSheet, toast, float, setTab, placeLabels, evoUnlocked } from './ui/hud.js';
 import { wireStageInput } from './ui/input.js';
 import { hydrateIcons } from './ui/icons.js';
@@ -44,6 +44,8 @@ function act(a, id, btn) {
   }
   else if (a === 'free') { Game.debug.free = !Game.debug.free; toast(Game.debug.free ? 'Debug: jalea, biomasa y ADN infinitos. Maxea árbol/linaje con los botones.' : 'Debug apagado.'); sfx = 'click'; }
   else if (a === 'debugSkills') { Game.debugMaxTree(G, 'skills'); toast('Árbol de la colonia al máximo.', 'good'); if (tv.open) renderTree(G, true); sfx = 'skill'; }
+  else if (a === 'feastNow') { openSheet(G, null); Game.forceFeast(); clickScene({ kind: 'queen', click: Scene.entityPos('queen') }); sfx = 'click'; }
+  else if (a === 'feastNext') { Game.forceFeast(); toast('El próximo toque a la reina será un festín.', 'good'); sfx = 'click'; }
   else if (a === 'debugPerm') { Game.debugMaxTree(G, 'perm'); toast('Linaje al máximo.', 'good'); if (tv.open) renderTree(G, true); sfx = 'skill'; }
   else if (a === 'reset') {
     if (Date.now() - resetArmed < 4000) {
@@ -102,6 +104,20 @@ const bot = createBot({
   }
 });
 
+const mouse = matchMedia('(hover: hover) and (pointer: fine)').matches;
+/** Escalón de la racha según lo que multiplica el toque (racha × toques por clic): cada uno con su color y tamaño. */
+const tierOf = v => (v >= 5 ? 's4' : v >= 2.5 ? 's3' : v >= 1.5 ? 's2' : v > 1.001 ? 's1' : '');
+/**
+ * Aspecto del número de un toque. Cada tipo tiene su identidad (color, tamaño y animación propios, ver .float.tf en
+ * style.css) y el número va solo, sin «×N» escrito al lado:
+ *   normal · racha s1–s4 (verde → amarillo → naranja → rosa) · chain (varios clics por toque: eco azul)
+ *   luck (toque de suerte ×2: dorado) · jackpot (×5) · feast (festín ×50) · cut (rebaja el huevo) · egg (pone un huevo)
+ */
+function tapLook(r) {
+  const kind = r.feast ? 'feast' : r.crit >= 5 ? 'jackpot' : r.crit ? 'luck' : tierOf((r.mult || 1) * (r.taps || 1));
+  return ['tf', kind, (r.taps || 1) > 1 && !r.feast ? 'chain' : '', r.laid ? 'egg' : r.cut ? 'cut' : ''].join(' ');
+}
+
 function clickScene(hit) {
   // árbol abierto: el tiempo (G.total) no avanza → sin esto la racha no caduca por comboGap
   if (G.phase === 'dead' || ui.paused || tv.open || endingRunning()) return;
@@ -111,25 +127,37 @@ function clickScene(hit) {
     const d = Game.hit(G, D), m = Game.comboMult(G, D);
     if (d > 0) {
       Scene.enemyHit(hit.pos || hit.click);
-      const streak = streakTag(m);
-      float(streak + '−' + fmt(d, 0), hit.pos, m >= 2 ? 'lucky' : 'hit');
+      float('−' + fmt(d, 0), hit.pos, 'hit ' + tierOf(m));
       Audio.play('hit');
-      Juice.tap(G.combo, m, D.comboCap + 1, { prev, early });
+      Juice.tap(G.combo, m, D.comboCap + 1, { prev, early, base: D.tapN, marks: D.comboMarks, clicksOn: D.comboClicks });
     }
     return;
   }
   const r = Game.click(G, hit.kind, hit.id);
   Scene.bump(hit);
   Audio.play('click');
-  Juice.tap(r.combo, r.mult, D.comboCap + 1, { prev, early }); // racha de toques seguidos (rinden más)
-  const streak = streakTag(r.mult);
-  if (hit.kind === 'queen') { // la comida vuela hasta su boca y el número sale al tragarla
+  Juice.tap(r.combo, r.mult, D.comboCap + 1, { prev, early, base: D.tapN, marks: D.comboMarks, clicksOn: D.comboClicks }); // racha de toques seguidos (rinden más)
+  // destello en el sitio del clic: más grande con la racha y con suerte
+  Juice.clickPop(Scene.toScreen(hit.click), r.crit ? 3 : r.mult >= 4 ? 2 : r.mult > 1 ? 1 : 0);
+  if (hit.kind === 'queen') {
     if (r.crit) luckyTap(r.crit, hit.click, 'Toque de suerte', true);
-    Scene.feedQueen(hit.click, at => { float(r.laid ? '+huevo' : streak + (r.cut ? '−' : '+') + fmt(r.food), at, r.laid ? 'good' : r.crit || r.mult >= 2 ? 'lucky' : 'crit'); Audio.play('deposit'); });
+    if (r.feast) feastTap(r, hit.click);
+    const label = r.laid ? '+huevo' : (r.cut ? '−' : '+') + fmt(r.food), cls = tapLook(r);
+    // con ratón el número sale al momento en el cursor (el dedo no lo tapa); en el móvil, al tragar la comida, más arriba
+    if (mouse) float(label, hit.click, cls + ' tap');
+    Scene.feedQueen(hit.click, at => { if (!mouse) float(label, at, cls); Audio.play('deposit'); });
     return;
   }
-  float(streak + (r.crit ? '¡×' + r.crit + '! ' : '') + '+' + r.pct + '%', Scene.entityPos(hit.kind, hit.slot), r.crit || r.mult >= 2 ? 'lucky' : '');
+  float('+' + r.pct + '%', Scene.entityPos(hit.kind, hit.slot), tapLook(r));
   if (r.crit) luckyTap(r.crit, Scene.entityPos(hit.kind, hit.slot), 'Cría acelerada');
+}
+
+/** «Festín»: el toque vale ×50 y a la reina le llueve comida encima (la comida ya está sumada). */
+function feastTap(r, at) {
+  Scene.feastShow();
+  burst('×' + Game.BAL.feastX, '¡Festín!', 'gold', Scene.toScreen(at));
+  Juice.celebrate('¡Festín!', '+' + fmt(r.food) + ' de comida · toque ×' + Game.BAL.feastX, 'feast');
+  Audio.play('win');
 }
 
 /**
@@ -139,8 +167,9 @@ function clickScene(hit) {
  */
 let lastRain = 0;
 function luckyTap(crit, at, what, queen) {
-  if (crit < 5) { float('¡×' + crit + '!', at, 'lucky'); burst('×' + crit, what, 'x2', Scene.toScreen(at)); Audio.play('skill'); return; }
-  float('¡×' + crit + '!', at, 'jackpot');
+  // el número del toque ya lleva el aspecto de la suerte (tapLook): aquí solo el estallido y el sonido
+  if (crit < 5) { burst('×' + crit, what, 'x2', Scene.toScreen(at)); Audio.play('skill'); return; }
+  burst('×' + crit, what, 'x5', Scene.toScreen(at));
   const now = performance.now();
   if (!queen || now - lastRain < 1500) { Audio.play('skill'); return; }
   lastRain = now;
@@ -202,6 +231,7 @@ function wireButtons() {
   $('bBook').onclick = () => { try { localStorage.setItem('antigenesis.guideSeen', '1'); } catch (e) { /* nada */ } $('bookBadge').hidden = true; toggle('guide')(); };
   $('bGear').onclick = toggle('settings');
   $('bTrophy').onclick = toggle('goals');
+  $('bStats').onclick = toggle('stats');
   try { $('bookBadge').hidden = !!localStorage.getItem('antigenesis.guideSeen'); } catch (e) { /* nada */ }
 
   $('start').onclick = () => {
@@ -244,15 +274,14 @@ function wireGameEvents() {
   on('feed', d => {
     Game.feed(G, d.amount, d.dest);
     const n = fmt(d.amount);
-    const pre = d.feast ? '¡Festín! ×50 ' : d.gold ? '✦ ' : d.lucky ? '¡×2! ' : '';
+    const pre = d.gold ? '✦ ' : d.lucky ? '¡×2! ' : '';
     if (d.dest === 'store') {
       float(pre + '+' + n, d.pos, d.lucky ? 'lucky' : 'good'); Audio.play('deposit');
       // lo guardado sube a la jalea: un icono vuela al contador (como mucho unos pocos por segundo)
       const now = performance.now();
       if (now - lastFly > 350) { lastFly = now; const sp = Scene.toScreen(d.pos); Juice.reward(sp.x, sp.y, d.gold ? 6 : d.lucky ? 3 : 1); }
     }
-    else { float(pre + '+' + n, d.pos, d.feast || d.lucky ? 'lucky' : 'crit'); Audio.play('deposit'); Audio.play('hatch'); }
-    if (d.feast) Juice.celebrate('¡Festín!', '+' + n + ' de comida · ×50', 'feast');
+    else { float(pre + '+' + n, d.pos, d.lucky ? 'lucky' : 'crit'); Audio.play('deposit'); Audio.play('hatch'); }
   });
   on('lay', () => Audio.play('lay'));
   on('hatch', () => Audio.play('pupate'));
@@ -270,6 +299,8 @@ function wireGameEvents() {
   on('massDeath', d => { Audio.play('death'); float('−' + fmt(d.n), Scene.entityPos('front'), 'hit'); });
   on('comboEnd', () => Juice.comboEnd());
   on('foeDeath', () => Audio.play('poof'));
+  // los enemigos sueltan ADN (más cuanto más lejos): se ve salir del frente
+  on('adnDrop', d => float('+' + d.n + ' ADN', Scene.entityPos('front'), 'lucky'));
   on('goal', d => {
     Audio.play('objective');
     Juice.celebrate('¡Objetivo cumplido!', d.prize ? '+' + fmt(d.prize) + ' de jalea' : d.text, 'goal');
@@ -302,18 +333,23 @@ function wireGameEvents() {
     if ((r.n || 1) > 1) ghostHand(sp.x + 28, sp.y - 18);
     if (r.crit) burst('×' + r.crit, 'Mano fantasma', r.crit >= 5 ? 'x5' : 'x2', sp);
     // con la racha viva, la mano también la sube: el contador lo enseña (sin sonar)
-    if (r.combo > r.comboBefore) Juice.tap(r.combo, r.mult, D.comboCap + 1, { prev: r.comboBefore, quiet: true, early: D.comboEarly });
-    const streak = streakTag(r.mult);
-    const label = r.laid ? '+huevo' : streak + (r.cut ? '−' : '+') + fmt(r.food);
-    setTimeout(() => Scene.feedQueen(from, at => float(label, at, r.laid ? 'good' : r.crit || r.mult >= 2 ? 'lucky' : 'crit')), 250);
+    if (r.combo > r.comboBefore) Juice.tap(r.combo, r.mult, D.comboCap + 1, { prev: r.comboBefore, quiet: true, early: D.comboEarly, marks: D.comboMarks, clicksOn: D.comboClicks });
+    const label = r.laid ? '+huevo' : (r.cut ? '−' : '+') + fmt(r.food);
+    setTimeout(() => Scene.feedQueen(from, at => float(label, at, tapLook(r) + ' ghostn')), 250);
   });
   on('harvestLuck', d => {
     const at = Scene.toScreen(d);
-    if (d.feast) { burst('×50', '¡Festín!', 'gold', at); Audio.play('win'); }
-    else if (d.gold) { burst('×5', 'Comida dorada', 'gold', at); Audio.play('win'); }
+    if (d.gold) { burst('×5', 'Comida dorada', 'gold', at); Audio.play('win'); }
     else { burst('×2', 'Cosecha doble', 'harvest', at); Audio.play('skill'); }
   });
   on('lay', d => { if (d.twin) { burst('×2', 'Gemelas', 'x2', Scene.toScreen(Scene.entityPos('egg', d.e.slot))); Audio.play('skill'); } });
+  // hitos: estadística para siempre (feats.js)
+  on('feat', f => {
+    Juice.celebrate('¡Hito: ' + f.name + '!', f.prize + ' · para siempre', 'feat');
+    Juice.reward(innerWidth / 2, innerHeight * 0.3, 12);
+    Audio.play('win'); Juice.buzz([30, 40, 30]);
+    toast('Hito conseguido: ' + f.name + ' (' + f.prize + '). Míralos en el trofeo.', 'good');
+  });
   on('evolve', d => { Juice.celebrate('¡Evolución!', d.name, 'evolve'); Audio.play('win'); });
   on('raid', () => { toast('¡Han caído todas! Van a por la reina.', 'warn'); Audio.play('alarm'); });
   on('queenSurvives', () => toast('El nido resiste: la reina sobrevive.', 'good'));
@@ -402,6 +438,8 @@ window.__ax = {
   get free() { return Game.debug.free; }, set free(v) { Game.debug.free = !!v; },
   maxSkills: () => Game.debugMaxTree(G, 'skills'),
   maxPerm: () => Game.debugMaxTree(G, 'perm'),
+  /** Festín ya (__ax.feast()) o en el próximo toque a la reina (__ax.feast(true)) */
+  feast: next => { Game.forceFeast(); if (!next) clickScene({ kind: 'queen', click: Scene.entityPos('queen') }); },
   /** Nido 3D en vivo (true) o foto fija (false). El GLB sigue cargado. */
   get liveMap() { return Scene.isLiveMap(); }, set liveMap(v) { Scene.setLiveMap(!!v); },
   /** Tope de hormigas dibujadas y FPS estimado: __ax.perf */

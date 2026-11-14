@@ -28,10 +28,10 @@ import { PROFILES, MILESTONES } from './bot.mjs';
  *   wallH      máximo de horas entre dos hitos seguidos (paredes de progreso)
  */
 const TARGETS = {
-  // la idea: unas 4 horas jugando para una persona media (algo menos si juega mucho y bien)
-  promedio: { winRate: 1, activeH: [3.7, 4.3], first: [3, 5], colonies: [10, 20], maxGapMin: 5, wallH: 1.3 },
-  activo: { winRate: 1, activeH: [3.2, 4.2], first: [3, 5], colonies: [9, 20], maxGapMin: 5, wallH: 1.3 },
-  normal: { winRate: 1, activeH: [3.6, 4.6], days: [2, 5], first: [3, 5], maxGapMin: 6, wallH: 1.5 },
+  // la idea: unas 3–4 horas jugando para una persona media (algo menos si juega mucho y bien)
+  promedio: { winRate: 1, activeH: [3, 4], first: [3, 5], colonies: [10, 20], maxGapMin: 5, wallH: 1.3 },
+  activo: { winRate: 1, activeH: [2.7, 3.7], first: [3, 5], colonies: [9, 20], maxGapMin: 5, wallH: 1.3 },
+  normal: { winRate: 1, activeH: [3.2, 4.4], days: [2, 5], first: [3, 5], maxGapMin: 6, wallH: 1.5 },
   casual: { winRate: 0.8, days: [5, 14], first: [2, 5] },
   idle: {}
 };
@@ -117,7 +117,7 @@ function printProfile(name, rs, s) {
   for (const c of check(s, T)) console.log(`   ${c.ok ? '✔' : '✘'} ${c.text}`);
   if (args.v) for (const r of rs) {
     console.log(`\n   semilla ${r.seed}: ${r.won ? 'GANADA' : 'sin ganar'} en ${r.activeH.toFixed(2)} h jugando, ${r.days.toFixed(1)} días`);
-    for (const c of r.colonies) console.log(`     gen ${String(c.gen).padStart(2)}  noche ${String(c.night).padStart(2)}  ${String(c.min).padStart(5)} min  ${c.cause.padEnd(6)} +${c.adn} ADN  árbol ${c.skills}  linaje ${c.perms}  evo ${c.evo}`);
+    for (const c of r.colonies) console.log(`     gen ${String(c.gen).padStart(2)}  noche ${String(c.night).padStart(2)}  ${String(c.min).padStart(5)} min  ${c.cause.padEnd(6)} +${c.adn} ADN (+${c.drop || 0} enemigos)  árbol ${c.skills}  linaje ${c.perms}  evo ${c.evo}`);
     if (r.trace) for (const t of r.trace) console.log(`       g${t.gen} N${String(t.night).padStart(2)} ${String(t.min).padStart(5)}m  hormigas ${String(t.ants).padStart(3)}  daño ${t.dmg}  vida ${t.hp}  enemigo ${t.foeHp} hp / ${t.foeDps} dps  jalea ${t.jelly}  bio ${t.bio}  árbol ${t.skills}  ${t.win ? 'gana' : 'PIERDE'}`);
   }
 }

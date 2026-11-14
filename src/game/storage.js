@@ -16,6 +16,8 @@ export function load() {
     migrateTrees(G);
     // la racha de antes contaba con otro reloj: empieza de cero (si no, el primer toque heredaría ×4)
     if (o.clock == null) { G.combo = 0; G.comboLive = false; }
+    // partida de antes de los hitos: los contadores de por vida empiezan en lo que lleva esta colonia
+    if (!o.life) Object.assign(G.life, { clicks: G.stats.clicks || 0, born: G.stats.born || 0 });
     for (const e of G.eggs.concat(G.larvae)) bumpUid(e.id);
     return G;
   } catch (e) { return null; }

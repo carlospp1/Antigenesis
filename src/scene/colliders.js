@@ -223,6 +223,133 @@ export function clampToWalkable(p, tun = false) {
 export const DOWN = [];
 export const UP = [];
 
+/* ---------- rutas fijas por dentro de cada zona ----------
+ * Las hormigas no van en línea recta (cortaría rocas, hierbas o el agujero y se quedarían pegadas al borde):
+ * van por rutas calculadas con A* en una rejilla de la zona que evita los bordes (MARGIN) y prefiere el centro
+ * de los pasos. Cada ruta se calcula una vez y se guarda (desde/hasta redondeados), así que todas siguen el mismo
+ * flujo fijo, sin puntos aleatorios. Se ven con la tecla C.
+ */
+const RC = 4;      // píxeles de imagen por celda de las rutas
+const MARGIN = 3;  // celdas hasta el borde de la zona que se prefiere dejar (≈12 px); en los pasos estrechos se acercan más
+const grids = {}, routes = new Map();
+
+function routeGrid(zone) {
+  if (grids[zone]) return grids[zone];
+  const w = Math.ceil(IMG.w / RC), h = Math.ceil(IMG.h / RC), N = w * h;
+  const clr = new Uint8Array(N), q = new Int32Array(N);
+  let qh = 0, qt = 0;
+  for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
+    const i = r * w + c;
+    // el borde de la imagen también es pared
+    if (r === 0 || c === 0 || r === h - 1 || c === w - 1 || !inMask(zone, c * RC + RC / 2, r * RC + RC / 2)) { clr[i] = 0; q[qt++] = i; }
+    else clr[i] = 255;
+  }
+  // distancia (en celdas) a la pared más cercana
+  while (qh < qt) {
+    const i = q[qh++], r = (i / w) | 0, c = i % w, d = clr[i] + 1;
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+      const rr = r + dr, cc = c + dc;
+      if (rr < 0 || cc < 0 || rr >= h || cc >= w) continue;
+      const n = rr * w + cc;
+      if (clr[n] > d) { clr[n] = d; q[qt++] = n; }
+    }
+  }
+  return (grids[zone] = { w, h, clr });
+}
+
+/** Celda caminable más cercana a (x, y), o -1. */
+function snapCell(g, x, y) {
+  const c0 = Math.min(g.w - 1, Math.max(0, Math.floor(x / RC))), r0 = Math.min(g.h - 1, Math.max(0, Math.floor(y / RC)));
+  if (g.clr[r0 * g.w + c0] >= 1) return r0 * g.w + c0;
+  for (let d = 1; d < 40; d++) {
+    let best = -1, bd = Infinity;
+    for (let dr = -d; dr <= d; dr++) for (let dc = -d; dc <= d; dc++) {
+      if (Math.max(Math.abs(dr), Math.abs(dc)) !== d) continue;
+      const r = r0 + dr, c = c0 + dc;
+      if (r < 0 || c < 0 || r >= g.h || c >= g.w || g.clr[r * g.w + c] < 1) continue;
+      if (dr * dr + dc * dc < bd) { bd = dr * dr + dc * dc; best = r * g.w + c; }
+    }
+    if (best >= 0) return best;
+  }
+  return -1;
+}
+
+/** A* por las celdas caminables; cuesta mucho más pasar cerca del borde (así van por el centro de los pasos). */
+function astar(g, s, t) {
+  const { w, clr } = g, N = clr.length;
+  const cost = new Float32Array(N).fill(Infinity), from = new Int32Array(N).fill(-1), done = new Uint8Array(N);
+  const heap = [], hk = [];
+  const push = (i, k) => { heap.push(i); hk.push(k); let j = heap.length - 1; while (j > 0) { const p = (j - 1) >> 1; if (hk[p] <= hk[j]) break; [heap[p], heap[j]] = [heap[j], heap[p]]; [hk[p], hk[j]] = [hk[j], hk[p]]; j = p; } };
+  const pop = () => {
+    const top = heap[0], li = heap.pop(), lk = hk.pop();
+    if (heap.length) { heap[0] = li; hk[0] = lk; let j = 0; for (;;) { const l = 2 * j + 1, r = l + 1; let m = j; if (l < heap.length && hk[l] < hk[m]) m = l; if (r < heap.length && hk[r] < hk[m]) m = r; if (m === j) break; [heap[m], heap[j]] = [heap[j], heap[m]]; [hk[m], hk[j]] = [hk[j], hk[m]]; j = m; } }
+    return top;
+  };
+  const tr = (t / w) | 0, tc = t % w;
+  const hdist = i => { const dr = Math.abs(((i / w) | 0) - tr), dc = Math.abs(i % w - tc); return Math.max(dr, dc) + 0.414 * Math.min(dr, dc); };
+  cost[s] = 0; push(s, hdist(s));
+  while (heap.length) {
+    const i = pop();
+    if (i === t) break;
+    if (done[i]) continue;
+    done[i] = 1;
+    const r = (i / w) | 0, c = i % w;
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+      if (!dr && !dc) continue;
+      const n = (r + dr) * w + c + dc;
+      if (n < 0 || n >= N || done[n] || clr[n] < 1) continue;
+      const k = cost[i] + (dr && dc ? 1.414 : 1) * (1 + 3 / clr[n] + (clr[n] < MARGIN ? 12 / clr[n] : 0));
+      if (k < cost[n]) { cost[n] = k; from[n] = i; push(n, k + hdist(n)); }
+    }
+  }
+  if (from[t] < 0 && s !== t) return null;
+  const out = [];
+  for (let i = t; i !== -1; i = from[i]) out.push(i);
+  return out.reverse();
+}
+
+/** ¿Se puede ir en línea recta de a a b sin acercarse al borde más de `min` celdas? */
+function clearLine(g, ax, ay, bx, by, min) {
+  const n = Math.ceil(Math.hypot(bx - ax, by - ay) / (RC / 2));
+  for (let k = 1; k < n; k++) {
+    const x = ax + (bx - ax) * k / n, y = ay + (by - ay) * k / n;
+    const c = Math.floor(x / RC), r = Math.floor(y / RC);
+    if (g.clr[r * g.w + c] < min) return false;
+  }
+  return true;
+}
+
+/**
+ * Puntos de paso por la zona desde `from` hasta `to` (sin `from`; el último es `to` tal cual).
+ * Siempre la misma ruta para los mismos extremos (redondeados a 16 px).
+ */
+export function route(zone, from, to) {
+  if (!masks[zone]) return [{ x: to.x, y: to.y }];
+  const key = zone + '|' + Math.round(from.x / 16) + ',' + Math.round(from.y / 16) + '|' + Math.round(to.x / 16) + ',' + Math.round(to.y / 16);
+  let pts = routes.get(key);
+  if (!pts) {
+    const g = routeGrid(zone), s = snapCell(g, from.x, from.y), t = snapCell(g, to.x, to.y);
+    const cells = s >= 0 && t >= 0 ? astar(g, s, t) : null;
+    pts = [];
+    if (cells) {
+      const P = cells.map(i => ({ x: (i % g.w) * RC + RC / 2, y: ((i / g.w) | 0) * RC + RC / 2 })), cl = cells.map(i => g.clr[i]);
+      // se tensa la ruta: de cada punto, al más lejano que se ve en línea recta sin pasar más cerca del borde
+      // que el propio tramo de la ruta (en los pasos estrechos, tan cerca como haga falta, pero no más)
+      let i = 0;
+      while (i < P.length - 1) {
+        let j = P.length - 1;
+        const minTo = k => { let m = MARGIN; for (let q = i; q <= k; q++) m = Math.min(m, cl[q]); return m; };
+        while (j > i + 1 && !clearLine(g, P[i].x, P[i].y, P[j].x, P[j].y, minTo(j))) j--;
+        pts.push(P[j]); i = j;
+      }
+      if (!pts.length && P.length) pts.push(P[0]);
+    }
+    if (routes.size > 400) routes.clear();
+    routes.set(key, pts);
+  }
+  return [...pts.map(p => ({ x: p.x, y: p.y })), { x: to.x, y: to.y }];
+}
+
 /* ---------- depuración ---------- */
 let debugGroup = null;
 export function toggleDebug(force) {
@@ -248,6 +375,14 @@ export function toggleDebug(force) {
     dot(GUARD.x, GUARD.y, '#7ab8ff'); dot(FOE_LINE.x, FOE_LINE.y, '#ff8a3a'); dot(BOSS_POS.x, BOSS_POS.y, '#ff3a3a');
     debugGroup.traverse(o => { o.renderOrder = 999; });
     ctx.scene.add(debugGroup);
+  }
+  // las rutas fijas que ya se han usado (se rehacen cada vez que se abre la vista)
+  if (on) {
+    if (debugGroup.routes) { debugGroup.remove(debugGroup.routes); debugGroup.routes.traverse(o => o.geometry && o.geometry.dispose()); }
+    const rg = debugGroup.routes = new THREE.Group(), mat = new THREE.LineBasicMaterial({ color: '#5ad8ff', depthTest: false }), v = new THREE.Vector3();
+    for (const pts of routes.values()) if (pts.length > 1) rg.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts.map(p => W(p.x, p.y, v).clone().setY(v.y + 0.004))), mat));
+    rg.traverse(o => { o.renderOrder = 999; });
+    debugGroup.add(rg);
   }
   debugGroup.visible = on;
   return on;

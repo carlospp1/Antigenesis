@@ -80,7 +80,7 @@ export function renderTree(game, force) {
     const n = nodes[id], s = st[id];
     if (s === 'hidden') continue;
     const c = id === 'root' ? null : Game.nodeCost(G, tv.tree, id), afford = c && G[c.cur] >= c.n;
-    const cls = ['node', n.cat, s, n.key ? 'key' : '', id === 'root' ? 'root' : '', s === 'open' && afford ? 'can' : '', tv.sel === id ? 'sel' : ''].join(' ');
+    const cls = ['node', n.cat, s, n.key ? 'key' : '', id === 'root' ? 'root' : '', s === 'open' && afford ? 'can' : '', tv.sel === id ? 'sel' : '', HOT.has(id) && s !== 'owned' ? 'hot' : ''].join(' ');
     const inner = s === 'fog' ? '<b class="q">?</b>' : icon(n.icon);
     html += `<button class="${cls}" data-node="${id}" style="left:${n.x * CELL}px;top:${n.y * CELL}px" aria-label="${s === 'fog' ? 'Desconocido' : n.name}"><span class="face">${inner}</span>${s === 'open' ? costHTML(c, G[c.cur]) : ''}</button>`;
   }
@@ -89,6 +89,10 @@ export function renderTree(game, force) {
   world.innerHTML = html;
   renderTip(st);
 }
+
+/** Nodos que laten (crecen y encogen) hasta que se compran, para que se vean. Para activarlo: HOT_ON = true. */
+const HOT_ON = false;
+const HOT = new Set(HOT_ON ? ['pcc', 'pcm'] : []);
 
 /** En modo debug se ve el árbol entero, aunque no esté desbloqueado (sin niebla). */
 function shown(st) {
@@ -226,7 +230,7 @@ const STAT = {
   stompHits: ['Pisotones que aguantan', D => fmt(D.stompHits)],
   tapRate: ['Toque a la reina', D => fmt(Game.BAL.tapFood * D.tapQ + D.tapRate * D.income, 1) + ' de comida (' + pct(D.tapRate) + ' de la recolección)'],
   tapSplash: ['El resto de la cría se lleva', D => pct(D.tapSplash) + ' de cada toque'],
-  comboEarly: ['Marcas de la racha', D => pct(D.comboEarly) + ' antes'],
+  comboEarly: ['Marcas tempranas', D => pct(D.comboEarly) + ' antes'],
   comboKeep: ['Al perder la racha conservas', D => pct(D.comboKeep)],
   startAnts: ['Hormigas al empezar', D => fmt(D.P.startAnts || 0)], startJelly: ['Jalea al empezar', D => fmt(D.P.startJelly || 0)],
   startBio: ['Biomasa al empezar', D => fmt(D.P.startBio || 0)], startEggs: ['Huevos al empezar', D => fmt(D.P.startEggs || 0)],
