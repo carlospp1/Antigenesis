@@ -244,7 +244,8 @@ const SN = {
 // 'hijo<padre1,padre2': para comprar una mejora hay que tener TODOS sus padres. Las ramas se abren (un nodo puede
 // tener varios hijos) y los nodos clave suelen unir dos ramas. Dónde se dibuja cada uno: treeLayout.js.
 const SG = {
-  food: `fo1<root fo2<root fo3<fo1 fo11<fo1 fo4<fo2 lc1<fo2 fo5<fo3 foK1<fo3,fo4 qj1<fo11 fo12<fo11 fo7<fo4 lc2<lc1
+  // jalea real: sale de la reina (hueco junto a la raíz) y crece fo11 aparte
+  food: `fo1<root fo2<root qj1<root fo3<fo1 fo11<fo1 fo4<fo2 lc1<fo2 fo5<fo3 foK1<fo3,fo4 fo12<fo11 fo7<fo4 lc2<lc1
     fo6<fo5 qj2<qj1 foK2<foK1 fo9<fo7 gf1<lc2 f7a<lc2 fo8<fo6 qj3<qj2 qjK<qj3 f2a<fo12 f3a<fo12 fo10<fo8
     foK4<foK2,fo8 foK3<fo9,foK2 f8a<fo9 gf2<gf1 f4a<gf1 f7b<f7a f2b<f2a f2c<f2b f3b<f3a f3c<f3b f3d<f3c
     f1a<fo10 f1b<f1a f1c<f1b f1d<f1c fo13<foK3 f6a<fo13 f6b<f6a f8b<f8a f8c<f8b f6c<f6b,f8c f5a<gf2 f5b<f5a

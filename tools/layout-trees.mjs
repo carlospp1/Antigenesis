@@ -118,6 +118,51 @@ function layout(tree, seed) {
     let a = Math.atan2(Y[i], X[i]) - center[i]; a = Math.abs(Math.atan2(Math.sin(a), Math.cos(a)));
     if (a > half + 0.02) out++;
   }
+  // reparación: ningún hijo a más de 2 casillas (Chebyshev) de cada padre
+  for (let pass = 0; pass < 40; pass++) {
+    let moved = false;
+    for (let i = 1; i < n; i++) {
+      const far = par[i].filter(p => Math.max(Math.abs(X[i] - X[p]), Math.abs(Y[i] - Y[p])) > 2);
+      if (!far.length) continue;
+      const cx = Math.round(par[i].reduce((s, p) => s + X[p], 0) / par[i].length);
+      const cy = Math.round(par[i].reduce((s, p) => s + Y[p], 0) / par[i].length);
+      let best = null, bc = Infinity;
+      for (let R = 1; R <= 8; R++) {
+        for (let dx = -R; dx <= R; dx++) for (let dy = -R; dy <= R; dy++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== R) continue;
+          const x = cx + dx, y = cy + dy, k = key(x, y), who = occ.get(k);
+          if (who != null && who !== i) continue;
+          let c = 0, ok = true;
+          for (const p of par[i]) {
+            const d = Math.max(Math.abs(x - X[p]), Math.abs(y - Y[p]));
+            if (d > 2) ok = false;
+            c += d;
+          }
+          if (!ok) continue;
+          if (c < bc) { bc = c; best = [x, y]; }
+        }
+        if (best) break;
+      }
+      if (!best) continue;
+      occ.delete(key(X[i], Y[i]));
+      X[i] = best[0]; Y[i] = best[1];
+      occ.set(key(X[i], Y[i]), i);
+      moved = true;
+    }
+    if (!moved) break;
+  }
+  long = 0; cross = 0; out = 0; inward = 0;
+  for (let i = 1; i < n; i++) {
+    for (const p of par[i]) {
+      const d = Math.max(Math.abs(X[i] - X[p]), Math.abs(Y[i] - Y[p]));
+      if (d > 1) long++;
+      if (Math.hypot(X[i], Y[i]) < Math.hypot(X[p], Y[p])) inward++;
+      if (d === 1 && X[i] !== X[p] && Y[i] !== Y[p]) { const a = occ.get(key(X[i], Y[p])), b = occ.get(key(X[p], Y[i])); if (a != null && b != null && linked.has(a * 4096 + b)) cross++; }
+    }
+    let a = Math.atan2(Y[i], X[i]) - center[i]; a = Math.abs(Math.atan2(Math.sin(a), Math.cos(a)));
+    if (a > half + 0.02) out++;
+  }
+
   const res = {};
   for (let i = 0; i < n; i++) res[ids[i]] = [X[i], Y[i]];
   return { res, score: long * 10 + cross * 10 + out + inward, text: `${n} nodos · enlaces que no se tocan: ${long} · cruces: ${cross / 2} · fuera de su lado: ${out} · hacia dentro: ${inward}` };
