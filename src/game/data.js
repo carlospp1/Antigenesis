@@ -180,8 +180,11 @@ export const BAL = {
     bossDps: 3, // jefe de cada era (cuarta noche), en múltiplos de un enemigo normal
     // la noche final: el humano no pega poco a poco, pisa (rules.tickHuman)
     humanHp: 20, // vida del humano, en múltiplos de un enemigo de esa noche
-    stompFirst: 3, // segundos desde que llega hasta el primer pisotón
+    stompFirst: 0.4, // segundos desde que llega hasta el primer pisotón (antes 3: ahora pisa nada más aparecer)
     stompEvery: 2, // segundos entre pisotones (antes 8: lentísimo). El primero aplasta a la mitad de las hormigas
+    stompMin: 0.8, // las noches de humanos de después de la final pisan cada vez más rápido, pero no por debajo de esto
+    humanFaster: 0.85, // cada 4 noches de humanos (tras la final), el pisotón llega ×0,85 antes: 2 → 1,7 → 1,45 → 1,23 s…
+    humanHpG: 1.3, // y en las noches de en medio, ×1,3 de vida cada noche (la que pisa más rápido no sube la vida)
     stompHits: 4, // pisotones que aguantan después las hormigas titán (el linaje suma más); en ese, caen todas
     prize0: 15,
     prizeG: 1.4,

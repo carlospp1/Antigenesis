@@ -259,6 +259,7 @@ function renderSheet(G) {
         ${row('Velocidad (debug)', [1, 2, 4, 6, 10, 20, 40, 60].map(v => btn(ui.devSpeed === v, 'devSpeed', '×' + v, v)).join(''), 'manda sobre el botón ×1–×3 del juego')}
         ${row('Final', btn(false, 'ending', 'Ver cinemática'), 'la reina sale del nido y la colonia conquista el planeta')}
         ${row('Bot', btn(false, 'bot', 'Abrir panel'), 'tecla B · juega solo y registra cada acción')}
+        ${row('Saltar', btn(false, 'jumpNight', 'Al día ' + Game.FINAL_NIGHT), 'esta noche llegan los humanos · sin la Hormiga titán son inmunes (con el modo debug, evoluciona gratis)')}
         ${row('Hormigas', btn(!code, 'antModel', 'Ilustradas', 'glb') + btn(code, 'antModel', 'En código', 'code'), 'se aplica al recargar')}
         ${row('Festín', btn(false, 'feastNow', 'Ahora') + btn(false, 'feastNext', 'Próximo toque'), 'un toque a la reina que vale ×50, con su lluvia de comida')}
         ${row('Colisiones', btn(ui.debug, 'debug', ui.debug ? 'Visibles' : 'Ocultas'), 'tecla C')}

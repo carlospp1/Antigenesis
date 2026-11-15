@@ -14,7 +14,7 @@ import { DOWN } from './colliders.js';
 import { puff } from './particles.js';
 import { emit, on } from '../core/events.js';
 import { RAID, BAL } from '../game/data.js';
-import { nudge } from './camera.js';
+import { nudge, shake } from './camera.js';
 
 const MAX_MINIONS = 12;
 /** Rebote de cámara (píxeles de imagen) del pisotón humano y de cada golpe del zapato pequeño: muy sutiles. */
@@ -185,10 +185,10 @@ function setupNight(f, def) {
 /**
  * El pie sigue el reloj de las reglas (tau: segundos hasta el próximo pisotón): flota alto apuntando a la
  * línea de combate (o al nido si no quedan hormigas), se cierne, cae de golpe justo en el pisotón, se queda
- * apoyado un momento y vuelve a subir. Los tiempos se encogen con BAL.stompEvery (con 2 s, todo va rápido).
+ * apoyado un momento y vuelve a subir. Los tiempos se encogen con el intervalo de esa noche (D.night.stompEvery).
  */
 function updateShoe(dt) {
-  const s = shoe, f = ctx.G.foes, E = BAL.stompEvery, tau = f.stompT ?? BAL.stompFirst, since = E - tau;
+  const s = shoe, f = ctx.G.foes, E = (ctx.D && ctx.D.night.stompEvery) || BAL.stompEvery, tau = f.stompT ?? BAL.stompFirst, since = E - tau;
   const rest = Math.min(0.5, E * 0.15), rise = Math.min(0.8, E * 0.3), fall = Math.min(0.25, E * 0.1);
   const high = 520 + 380 * Math.min(1, Math.max(0, tau - 1.2) / 2); // con mucho tiempo por delante, sube más
   let h; // altura sobre el suelo, en píxeles de imagen

@@ -46,6 +46,7 @@ function act(a, id, btn) {
   else if (a === 'debugSkills') { Game.debugMaxTree(G, 'skills'); toast('Árbol de la colonia al máximo.', 'good'); if (tv.open) renderTree(G, true); sfx = 'skill'; }
   else if (a === 'feastNow') { openSheet(G, null); Game.forceFeast(); clickScene({ kind: 'queen', click: Scene.entityPos('queen') }); sfx = 'click'; }
   else if (a === 'feastNext') { Game.forceFeast(); toast('El próximo toque a la reina será un festín.', 'good'); sfx = 'click'; }
+  else if (a === 'jumpNight') { ok = Game.debugJumpNight(G); openSheet(G, null); toast(ok ? 'Día ' + Game.FINAL_NIGHT + ': esta noche llegan los humanos.' : 'Con la reina muerta no se puede saltar.', ok ? 'good' : 'warn'); sfx = 'click'; }
   else if (a === 'debugPerm') { Game.debugMaxTree(G, 'perm'); toast('Linaje al máximo.', 'good'); if (tv.open) renderTree(G, true); sfx = 'skill'; }
   else if (a === 'reset') {
     if (Date.now() - resetArmed < 4000) {

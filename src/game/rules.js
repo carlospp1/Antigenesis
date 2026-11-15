@@ -132,8 +132,13 @@ export function nightDef(n) {
   const hard = Math.pow(BAL.eraHard, Math.floor((Math.min(n, FINAL_NIGHT) - 1) / 4));
   const d = { n, era, count: final ? 0 : BAL.foeCount0 + Math.ceil(n * BAL.foeCountK), hpEach: BAL.foeHp0 * Math.pow(BAL.foeHpG, n - 1) * hard, dpsEach: BAL.foeDps0 * Math.pow(BAL.foeDpsG, n - 1) * hard, boss: null };
   d.time = final ? NIGHT_FINAL : NIGHT;
-  // los humanos no hacen daño poco a poco: pisan (ver tickHuman)
-  if (final) d.boss = { type: era.boss, name: era.bossName, hp: d.hpEach * BAL.humanHp, dps: 0, final: true };
+  // los humanos no hacen daño poco a poco: pisan (ver tickHuman). Tras la noche final se puede seguir jugando y
+  // vuelven cada noche: cada 4 noches pisan más rápido (humanFaster) y en las de en medio tienen más vida (humanHpG)
+  if (final) {
+    const k = n - FINAL_NIGHT, faster = Math.floor(k / 4), base = BAL.foeHp0 * Math.pow(BAL.foeHpG, FINAL_NIGHT - 1) * hard;
+    d.stompEvery = Math.max(BAL.stompMin, BAL.stompEvery * Math.pow(BAL.humanFaster, faster));
+    d.boss = { type: era.boss, name: era.bossName, hp: base * BAL.humanHp * Math.pow(BAL.humanHpG, k - faster), dps: 0, final: true };
+  }
   else if (n % 4 === 0) d.boss = { type: era.boss, name: era.bossName, hp: d.hpEach * BAL.bossHp, dps: d.dpsEach * BAL.bossDps };
   d.totalHp = d.count * d.hpEach + (d.boss ? d.boss.hp : 0);
   d.totalDps = d.count * d.dpsEach + (d.boss ? d.boss.dps : 0);
@@ -147,7 +152,7 @@ export const immuneBoss = (G, d) => !!(d.boss && d.boss.final && (G.evo || 0) < 
 export const nightPrize = (G, D) => BAL.prize0 * Math.pow(BAL.prizeG, G.level - 1) * D.prize;
 /** Segundos que aguantan las hormigas titán ante los humanos: hasta el pisotón que las mata. */
 /** Segundos hasta el pisotón que aplasta a todas (el de la mitad, y luego los que aguantan) si no nacen más. */
-export const humanWindow = D => BAL.stompFirst + D.stompHits * BAL.stompEvery;
+export const humanWindow = D => BAL.stompFirst + D.stompHits * (D.night.stompEvery || BAL.stompEvery);
 
 /** Predicción del combate de esta noche con las hormigas actuales. */
 export function forecast(G, D) {
@@ -467,7 +472,7 @@ function queenFalls(G, D) {
 }
 
 /**
- * Noche final: los humanos pisan cada BAL.stompEvery segundos (el primero, a los BAL.stompFirst).
+ * Noche final: los humanos pisan cada D.night.stompEvery segundos (el primero, a los BAL.stompFirst).
  *   Sin la última evolución: el primer pisotón mata a todas y el siguiente, a la reina.
  *   Con ella: el primer pisotón aplasta a la mitad; las que quedan aguantan D.stompHits pisotones y en ese caen todas
  *   (salvo las que esquivan). Las que nazcan después empiezan otra vuelta (mitad y luego los que aguantan): para
@@ -483,7 +488,7 @@ function tickHuman(G, D, dt) {
   if (f.stompT == null) { f.stompT = BAL.stompFirst; f.stomps = 0; f.wiped = false; } // partida guardada a mitad de la noche final
   f.stompT -= dt;
   if (f.stompT > 0) return;
-  f.stompT += BAL.stompEvery;
+  f.stompT += D.night.stompEvery || BAL.stompEvery;
   if (G.ants <= 0 || (f.wiped && immune)) { emit('stomp', { queen: true }); queenFalls(G, D); return; }
   if (immune) { const killed = wipe(G, 0); f.wiped = true; f.stomps = 0; emit('stomp', { wipe: true, killed }); return; }
   if (!f.halved) { const killed = wipe(G, D.dodge, Math.ceil(G.ants / 2)); f.halved = true; f.stomps = 0; emit('stomp', { half: true, killed, left: D.stompHits }); return; }
@@ -686,6 +691,14 @@ export function states(G, tree) {
 }
 
 /** Debug: compra de golpe todo el árbol de la colonia o todo el linaje (sin gastar). */
+/** Depuración: salta al día de la noche n (por defecto, la de los humanos) con la colonia tal cual está. */
+export function debugJumpNight(G, n = FINAL_NIGHT) {
+  if (G.phase === 'dead') return false;
+  G.level = n; G.best = Math.max(G.best || 0, n - 1);
+  dawn(G);
+  return true;
+}
+
 export function debugMaxTree(G, tree) {
   const nodes = tree === 'perm' ? PERKS : SKILLS;
   const bag = tree === 'perm' ? G.perm : G.skills;
