@@ -9,7 +9,7 @@ import { icon } from './icons.js';
 const $ = id => document.getElementById(id);
 /** Versión del juego (se ve en Ajustes). */
 const VERSION = '0.1.2';
-// speed: velocidad del jugador (×1, ×2, ×3 o ×5: botón junto al reloj) · devSpeed: la de depuración (×1–×20, manda si es > 1)
+// speed: velocidad del jugador (×1, ×2, ×3 o ×5: botón junto al reloj) · devSpeed: la de depuración (×1–×60, manda si es > 1)
 export const ui = { sheet: null, holding: false, paused: false, speed: 1, devSpeed: 1, tab: 'colony', debug: false, devOpen: false };
 let lastDock = '', lastSheet = '', statsT = 0;
 const cache = {};
@@ -54,7 +54,9 @@ function renderTop(G, D) {
     // los humanos pisan: se cuenta cuántos pisotones aguantan todavía
     const who = !human ? f.count + ' ' + (f.count === 1 ? D.night.era.one : D.night.era.many) + (f.boss > 0 ? ' y ' + D.night.boss.name : '')
       : Game.immuneBoss(G, D.night) ? 'Los humanos · un pisotón las mata a todas: hace falta la Hormiga titán'
-      : G.ants > 0 ? `Los humanos · aguantan ${Math.max(0, D.stompHits - (f.stomps || 0) - 1)} pisotones más` : 'Los humanos · el pie va a por el nido';
+      : G.ants <= 0 ? 'Los humanos · el pie va a por el nido'
+      : !f.halved ? 'Los humanos · el próximo pisotón aplasta a la mitad'
+      : `Los humanos · aguantan ${Math.max(0, D.stompHits - (f.stomps || 0) - 1)} pisotones más`;
     setHTML(al, `<b>${G.ants > 0 ? '¡Nos atacan!' : '¡No queda nadie en la entrada!'}</b><div class="meter"><i style="width:${Math.max(0, 100 * left / tot)}%"></i></div><span>${who}. Bajas: ${fmt(f.lost)}</span>`, 'alarm');
   }
   Audio.setTension(!!f);
@@ -164,7 +166,7 @@ function whyText(G, D, fc) {
   const human = D.night.boss && D.night.boss.final;
   if (!G.ants) return human ? 'El primer pisotón irá directo a la reina.' : 'Si llega la noche así, matarán a la reina.';
   if (fc.immune) return 'Un pisotón las mata a todas y el siguiente, a la reina. Solo la Hormiga titán puede herir a los humanos.';
-  if (human) return fc.win ? `Caen antes del ${D.stompHits}.º pisotón.` : `No les da tiempo: al ${D.stompHits}.º pisotón caen todas.`;
+  if (human) return (fc.win ? `Caen antes del ${D.stompHits + 1}.º pisotón` : `No les da tiempo: al ${D.stompHits + 1}.º pisotón caen todas`) + '. El primero aplasta a la mitad: sigue sacando hormigas.';
   return fc.win ? 'Unas ' + fc.losses + ' bajas.' : 'Cría más o mejora en el Árbol.';
 }
 
@@ -254,7 +256,7 @@ function renderSheet(G) {
       ${row('Versión', `<b>${VERSION}</b>`)}
       <button class="dev-head${ui.devOpen ? ' open' : ''}" data-act="dev" aria-expanded="${!!ui.devOpen}">Pruebas y depuración</button>
       ${ui.devOpen ? `<div class="dev">
-        ${row('Velocidad (debug)', [1, 2, 4, 6, 10, 20].map(v => btn(ui.devSpeed === v, 'devSpeed', '×' + v, v)).join(''), 'manda sobre el botón ×1–×3 del juego')}
+        ${row('Velocidad (debug)', [1, 2, 4, 6, 10, 20, 40, 60].map(v => btn(ui.devSpeed === v, 'devSpeed', '×' + v, v)).join(''), 'manda sobre el botón ×1–×3 del juego')}
         ${row('Final', btn(false, 'ending', 'Ver cinemática'), 'la reina sale del nido y la colonia conquista el planeta')}
         ${row('Bot', btn(false, 'bot', 'Abrir panel'), 'tecla B · juega solo y registra cada acción')}
         ${row('Hormigas', btn(!code, 'antModel', 'Ilustradas', 'glb') + btn(code, 'antModel', 'En código', 'code'), 'se aplica al recargar')}

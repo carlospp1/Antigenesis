@@ -52,12 +52,13 @@ export function calc(G) {
   // los huevos «sin precio» no cuentan para encarecer el siguiente
   const raw = BAL.eggBase * Math.pow(BAL.eggCurve - add('curve'), Math.max(0, D.pop + brood - (G.free || 0))) * mul('eggCostX');
   // «Toque menguante»: tus toques juntan un descuento fijo de comida (G.eggCut) que se guarda para siempre (pasa de
-  // colonia en colonia) y se resta de cada huevo. El porcentaje es el suelo: un huevo no baja de ahí, y mientras el
-  // descuento ya lo cubra, el toque vuelve a alimentar a la reina. Huevo de 7M con 1M guardado: 6M; huevo de 5000: −25%.
+  // colonia en colonia) y se resta de cada huevo. El porcentaje es el suelo: un huevo no baja de ahí. Cuando el
+  // descuento ya cubre el máximo de este huevo Y del siguiente (que es más caro), el toque vuelve a alimentar a la
+  // reina; así, al poner el huevo, el siguiente ya sale con todo el descuento. Huevo de 7M con 1M guardado: 6M; de 5000: −25%.
   D.cutMax = Math.min(0.5, BAL.cutMax + add('cutMax'));
-  const floor = raw * (1 - D.cutMax);
+  const floor = raw * (1 - D.cutMax), rawNext = raw * (BAL.eggCurve - add('curve'));
   D.eggCost = Math.max(floor, raw - (G.eggCut || 0));
-  D.cutRoom = P.tapCut ? Math.max(0, D.eggCost - floor) : 0;
+  D.cutRoom = P.tapCut ? Math.max(0, rawNext * D.cutMax - (G.eggCut || 0)) : 0;
   D.tapCut = !!P.tapCut;
   D.skipDay = !!P.skipDay;
   D.extraEgg = Math.min(0.5, add('extraEgg'));   // probabilidad de un huevo extra gratis
@@ -102,11 +103,13 @@ export function calc(G) {
   D.feast = feastAdd > 0 ? Math.min(0.03, BAL.feast + feastAdd) : 0;
   D.ghost = Math.min(BAL.ghostMax, add('ghost') * mul('ghostX')); // toques por segundo de las manos fantasma
   D.ghostCombo = add('ghostCombo') > 0; // «Mano rítmica» / «Manos al compás»: sus toques suben la racha
+  D.ghostTaps = add('ghostTaps') > 0;   // «Manos gemelas»: cada toque de mano vale tantos clics como uno tuyo (×2, ×3…)
   D.lives = P.lives || 0;
   D.farm = add('farm');        // granjas: jalea sola, en fracción del premio de una noche por minuto
   D.combo = !!P.combo;         // la racha se desbloquea en el linaje («Racha»)
   D.comboMarks = !!P.comboMarks;   // «Marcas de la racha»: cada marca suma unos puntos al %
-  D.comboClicks = !!P.comboClicks; // «Toques en cadena»: en las marcas, cada toque cuenta como más clics
+  // «Toques en cadena» (bit 1: marcas hasta 1.000) y «… II» (bit 2: las de 5.000 en adelante): en las marcas, cada toque cuenta como más clics
+  D.comboClicks = (P.comboClicks ? 1 : 0) | (P.comboClicks2 ? 2 : 0);
   // mayordomo: el linaje lo desbloquea y el jugador lo enciende con el interruptor del Árbol (G.butler).
   // G.autoBuy lo usa solo el simulador (tools/bot.mjs).
   D.butler = !!P.autoBuy;
@@ -143,7 +146,8 @@ export const immuneBoss = (G, d) => !!(d.boss && d.boss.final && (G.evo || 0) < 
 /** Jalea que da ganar la noche de ahora (también mide las granjas). */
 export const nightPrize = (G, D) => BAL.prize0 * Math.pow(BAL.prizeG, G.level - 1) * D.prize;
 /** Segundos que aguantan las hormigas titán ante los humanos: hasta el pisotón que las mata. */
-export const humanWindow = D => BAL.stompFirst + (D.stompHits - 1) * BAL.stompEvery;
+/** Segundos hasta el pisotón que aplasta a todas (el de la mitad, y luego los que aguantan) si no nacen más. */
+export const humanWindow = D => BAL.stompFirst + D.stompHits * BAL.stompEvery;
 
 /** Predicción del combate de esta noche con las hormigas actuales. */
 export function forecast(G, D) {
@@ -151,8 +155,10 @@ export function forecast(G, D) {
   if (immuneBoss(G, d)) return { win: false, losses: G.ants, immune: true };
   if (dps <= 0) return { win: false, losses: 0 };
   if (d.boss && d.boss.final) {
-    // los humanos: hay que tumbarlos antes del pisotón que mata a todas
-    const T = d.totalHp / dps, win = T < humanWindow(D);
+    // los humanos: hay que tumbarlos antes del pisotón que mata a todas; tras el primero solo queda la mitad
+    // (sin contar las que nazcan durante la pelea: la previsión es prudente)
+    const first = BAL.stompFirst, T = d.totalHp <= dps * first ? d.totalHp / dps : first + (d.totalHp - dps * first) / (dps / 2);
+    const win = T < humanWindow(D);
     return { win, losses: win ? 0 : G.ants, time: T };
   }
   const T = d.totalHp / dps;
@@ -228,6 +234,9 @@ export function comboMarks(early = 0) {
   return c;
 }
 
+/** Las marcas de clic que tienes abiertas (mask = D.comboClicks: bit 1 las primeras comboClickTier1, bit 2 el resto). */
+export const chainClicks = (early, mask) => comboMarks(early).clicks.filter((_, i) => mask & (i < BAL.comboClickTier1 ? 1 : 2));
+
 /**
  * Marca de racha: { bonus (puntos que suman las marcas al % de la racha), clicks por toque }.
  * Las marcas solo dan algo con sus mejoras del linaje: «Marcas de la racha» (bonus) y «Toques en cadena» (clics).
@@ -236,7 +245,7 @@ export function comboInfo(n, D) {
   const M = comboMarks(D ? D.comboEarly : 0);
   let bonus = 0, clicks = D ? D.tapN || 1 : 1;
   if (D && D.comboMarks) for (const [at, b] of M.marks) if (n >= at) bonus += b;
-  if (D && D.comboClicks) for (const at of M.clicks) if (n >= at) clicks++;
+  if (D && D.comboClicks) for (const at of chainClicks(D.comboEarly, D.comboClicks)) if (n >= at) clicks++;
   return { bonus, clicks };
 }
 
@@ -251,14 +260,22 @@ function comboAdd(G, D, step) {
 }
 
 /**
- * Cuenta atrás oculta: si pasa más de comboGap (reloj real) desde tu último toque, la racha se pierde
- * (con «Racha blindada»/«Racha tenaz» se conserva una parte de la cuenta). La mano fantasma no la reinicia.
+ * Cuenta atrás oculta: si pasa más de comboGap (reloj real) desde el último toque, la racha se pierde
+ * (con «Racha blindada»/«Racha tenaz» se conserva una parte de la cuenta). Solo la reinician tus clics: las manos
+ * fantasma la suben, pero no la mantienen viva.
  */
 function comboCheck(G, D) {
   if (!G.comboLive || (G.clock || 0) - (G.comboT || 0) <= D.comboGap) return;
   G.combo = Math.floor((G.combo || 0) * D.comboKeep);
   G.comboLive = false;
   emit('comboEnd', { kept: G.combo });
+}
+
+/** Se acabó la racha ya (el bot se va al árbol, deja de tocar…): queda lo que guarde «Racha tenaz» / «Racha blindada». */
+export function comboDrop(G, D = calc(G)) {
+  if (!G.comboLive) return;
+  G.comboT = -Infinity;
+  comboCheck(G, D);
 }
 
 /** Toque tuyo: cuenta para la racha y devuelve el multiplicador de valor. */
@@ -339,22 +356,26 @@ export function click(G, kind, id) {
 /**
  * Varios toques de la mano fantasma de golpe: un solo digest y un solo evento.
  * Tiene todo lo de tus toques. Con «Mano rítmica» (colonia, biomasa) o «Manos al compás» (linaje) y la racha viva,
- * cada toque suyo la sube en uno y cobra su × (pero no reinicia la cuenta atrás: eso solo lo hacen tus toques);
- * si no, ni la sube ni cobra su ×.
+ * cada toque suyo la sube como uno tuyo y cobra su × (pero no la mantiene: eso solo lo hacen tus clics); si no, nada.
  */
 function ghostBatch(G, D, n) {
   if (n < 1 || G.phase === 'dead') return null;
-  let food = 0, cutTot = 0, eaten = 0, crit = 0, room = D.cutRoom, m = 1;
+  let food = 0, cutTot = 0, eaten = 0, crit = 0, room = D.cutRoom, m = 1, taps = 1;
+  comboCheck(G, D); // si ya pasó el margen desde tu último clic, la racha se ha acabado: las manos no la alargan
   const before = G.stats.laid, comboBefore = G.combo || 0, live = D.combo && D.ghostCombo && G.comboLive; // sin «Mano rítmica», ni la suben ni cobran su ×
   for (let i = 0; i < n; i++) {
-    if (live) { comboAdd(G, D, 1); m = comboMult(G, D); }
-    const r = queenTap(G, D, m, room);
+    // con la racha viva, cada toque de mano la sube como uno tuyo (con «Manos gemelas», ×2, ×3… según la racha; si no, en
+    // uno) y cobra su ×; pero no la empieza ni la mantiene: el contador para perderla solo lo reinician tus clics
+    if (live) { comboAdd(G, D, D.ghostTaps ? null : 1); m = comboMult(G, D); }
+    if (D.ghostTaps) taps = tapClicks(G, D); // con «Manos gemelas», los clics por toque (hitos, «Toques en cadena»…) también
+    life(G).clicks += taps; // cuentan para los hitos de toques, como los tuyos
+    const r = queenTap(G, D, m * taps, room);
     room -= r.cut; cutTot += r.cut; eaten += r.f;
     if (r.feed > 0) food += r.feed;
     if (r.crit) crit = r.crit;
   }
   digest(G);
-  return { n, laid: G.stats.laid > before, food: food > 0 ? food : eaten, cut: food <= 0 && cutTot > 0, crit, combo: G.combo || 0, comboBefore, mult: m };
+  return { n, laid: G.stats.laid > before, food: food > 0 ? food : eaten, cut: food <= 0 && cutTot > 0, crit, combo: G.combo || 0, comboBefore, mult: m, taps };
 }
 
 /** Las doradas rinden más (ver shinyFood, shinyDmg y shinySpeed en calc). */
@@ -376,11 +397,13 @@ function kill(G, D) {
  * Pisotón humano: mueren todas de golpe salvo las que esquivan (dodge). Un solo evento ('massDeath'),
  * no uno por hormiga. Devuelve cuántas murieron.
  */
-function wipe(G, dodge) {
+function wipe(G, dodge, hit = G.ants) {
   const n0 = G.ants;
-  if (n0 <= 0) return 0;
-  let keep = 0;
-  if (dodge > 0) { if (n0 <= 2000) { for (let i = 0; i < n0; i++) if (Math.random() < dodge) keep++; } else keep = Math.round(n0 * dodge); }
+  if (n0 <= 0 || hit <= 0) return 0;
+  // hit: cuántas reciben el golpe (todas, o la mitad en el primer pisotón); las que esquivan se salvan
+  let keep = n0 - hit, saved = 0;
+  if (dodge > 0) { if (hit <= 2000) { for (let i = 0; i < hit; i++) if (Math.random() < dodge) saved++; } else saved = Math.round(hit * dodge); }
+  keep += saved;
   const n = n0 - keep;
   if (n <= 0) return 0;
   G.shiny = Math.round((G.shiny || 0) * keep / n0);
@@ -446,8 +469,9 @@ function queenFalls(G, D) {
 /**
  * Noche final: los humanos pisan cada BAL.stompEvery segundos (el primero, a los BAL.stompFirst).
  *   Sin la última evolución: el primer pisotón mata a todas y el siguiente, a la reina.
- *   Con ella: aguantan D.stompHits pisotones; en ese, caen todas (salvo las que esquivan).
- *   Sin hormigas, el pisotón va al nido.
+ *   Con ella: el primer pisotón aplasta a la mitad; las que quedan aguantan D.stompHits pisotones y en ese caen todas
+ *   (salvo las que esquivan). Las que nazcan después empiezan otra vuelta (mitad y luego los que aguantan): para
+ *   ganar hay que seguir sacando hormigas. Sin hormigas, el pisotón va al nido.
  * Las hormigas titán hieren al humano todo el rato; si cae, se gana la noche (y el juego).
  */
 function tickHuman(G, D, dt) {
@@ -462,8 +486,9 @@ function tickHuman(G, D, dt) {
   f.stompT += BAL.stompEvery;
   if (G.ants <= 0 || (f.wiped && immune)) { emit('stomp', { queen: true }); queenFalls(G, D); return; }
   if (immune) { const killed = wipe(G, 0); f.wiped = true; f.stomps = 0; emit('stomp', { wipe: true, killed }); return; }
+  if (!f.halved) { const killed = wipe(G, D.dodge, Math.ceil(G.ants / 2)); f.halved = true; f.stomps = 0; emit('stomp', { half: true, killed, left: D.stompHits }); return; }
   f.stomps++;
-  if (f.stomps >= D.stompHits) { const killed = wipe(G, D.dodge); f.stomps = 0; f.wiped = true; emit('stomp', { wipe: true, killed }); return; }
+  if (f.stomps >= D.stompHits) { const killed = wipe(G, D.dodge); f.stomps = 0; f.halved = false; f.wiped = true; emit('stomp', { wipe: true, killed }); return; }
   emit('stomp', { left: D.stompHits - f.stomps });
 }
 
@@ -576,7 +601,7 @@ export function tick(G, dt, realDt = dt) {
     if (G.t <= 0) {
       const d = D.night;
       G.phase = 'night'; G.t = d.time;
-      G.foes = { count: d.count, cur: d.hpEach, boss: d.boss ? d.boss.hp : 0, arrive: 5, lost: 0, raid: 0, stompT: BAL.stompFirst, stomps: 0, wiped: false };
+      G.foes = { count: d.count, cur: d.hpEach, boss: d.boss ? d.boss.hp : 0, arrive: 5, lost: 0, raid: 0, stompT: BAL.stompFirst, stomps: 0, halved: false, wiped: false };
       G.guard = D.hp;
       emit('night', { def: d });
     }

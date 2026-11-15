@@ -18,7 +18,7 @@ import { nudge } from './camera.js';
 
 const MAX_MINIONS = 12;
 /** Rebote de cámara (píxeles de imagen) del pisotón humano y de cada golpe del zapato pequeño: muy sutiles. */
-const NUDGE_STOMP = 2.5, NUDGE_TAP = 0.5;
+const NUDGE_STOMP = 6, NUDGE_TAP = 0.5;
 
 /** Cómo se dibuja cada tipo: modelo y tamaño en píxeles por unidad de modelo. */
 const KINDS = {
@@ -145,7 +145,7 @@ function landTap(p) {
 on('stomp', () => {
   if (!shoe || !shoe.g.visible) return;
   puff(shoe.x, shoe.y, 'dust', 26, 260, 60);
-  nudge(NUDGE_STOMP);
+  shake(NUDGE_STOMP); // el escenario tiembla un poco
   shoe.off = rnd(-40, 160); // a dónde apunta el siguiente
 });
 
@@ -185,16 +185,18 @@ function setupNight(f, def) {
 /**
  * El pie sigue el reloj de las reglas (tau: segundos hasta el próximo pisotón): flota alto apuntando a la
  * línea de combate (o al nido si no quedan hormigas), se cierne, cae de golpe justo en el pisotón, se queda
- * apoyado medio segundo y vuelve a subir.
+ * apoyado un momento y vuelve a subir. Los tiempos se encogen con BAL.stompEvery (con 2 s, todo va rápido).
  */
 function updateShoe(dt) {
-  const s = shoe, f = ctx.G.foes, tau = f.stompT ?? BAL.stompFirst, since = BAL.stompEvery - tau;
+  const s = shoe, f = ctx.G.foes, E = BAL.stompEvery, tau = f.stompT ?? BAL.stompFirst, since = E - tau;
+  const rest = Math.min(0.5, E * 0.15), rise = Math.min(0.8, E * 0.3), fall = Math.min(0.25, E * 0.1);
+  const high = 520 + 380 * Math.min(1, Math.max(0, tau - 1.2) / 2); // con mucho tiempo por delante, sube más
   let h; // altura sobre el suelo, en píxeles de imagen
-  if (since < 0.5) h = 0;
-  else if (since < 1.3) h = (since - 0.5) / 0.8 * 900;
-  else if (tau > 1.2) h = 520 + 380 * Math.min(1, (tau - 1.2) / 2);
-  else if (tau > 0.25) h = 520;
-  else h = 520 * tau / 0.25;
+  if (since < 0) h = high;                                 // antes del primer pisotón
+  else if (since < rest) h = 0;                            // apoyado tras pisar
+  else if (since < rest + rise) h = (since - rest) / rise * high;
+  else if (tau > fall) h = high;
+  else h = high * tau / fall;
   if (h >= 520) { // en el aire: apunta al siguiente sitio
     const out = ctx.G.ants > 0, tx = out ? FOE_LINE.x - 60 + s.off : DOWN[0].x + 60, ty = out ? FOE_LINE.y + 10 : DOWN[0].y;
     s.x += (tx - s.x) * Math.min(1, dt * 3); s.y += (ty - s.y) * Math.min(1, dt * 3);

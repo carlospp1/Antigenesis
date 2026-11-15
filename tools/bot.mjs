@@ -14,7 +14,7 @@
 import * as R from '../src/game/rules.js';
 import { FINAL_NIGHT } from '../src/game/data.js';
 import { on } from '../src/core/events.js';
-import { cpsFor, pickSmart, pickCheapest, shouldFound, saveForEvo, warWeight, makeTapper } from '../src/game/brain.js';
+import { cpsFor, pickSmart, pickCheapest, shouldFound, saveForEvo, warWeight, makeTapper, pickRoom, BOT_TIME, travelTime, CLICK_PROFILES, ROOM_PROFILES, profileCps, profileStreak } from '../src/game/brain.js';
 
 export const PROFILES = {
   promedio: { desc: 'Persona media del tirón: 2–3 toques/s que van bajando, compra con cabeza (igual que el bot del navegador)', cps: 'curva', foe: 0.4, buyEvery: 3, smart: true, found: 'smart', session: null },
@@ -45,30 +45,46 @@ on('night', d => {
     foeHp: Math.round(d.def.totalHp), foeDps: +d.def.totalDps.toFixed(1), jelly: Math.round(G.jelly), bio: G.bio, skills: Object.keys(G.skills).length, win: fc.win });
 });
 
+/** Compra lo que pueda en un árbol; devuelve cuántas compras hizo. */
 function buyLoop(G, tree, P, cps) {
-  for (let n = 0; n < 40; n++) {
+  let bought = 0;
+  for (let n = 0; n < 40; n++, bought++) {
     let id;
-    if (P.smart) {
+    if (P.room) { // perfil de estrategia del bot del navegador (brain.ROOM_PROFILES)
+      const D = R.calc(G), pick = pickRoom(G, tree, P.room, { cps, streak: P.streak(cps), income: tree === 'perm' ? 0 : R.forageRate(G, D) / 2 });
+      id = pick && pick.id;
+    } else if (P.smart) {
       const D = R.calc(G), pick = pickSmart(G, tree, { cps, warW: tree === 'perm' ? 1 : warWeight(G), income: tree === 'perm' ? 0 : R.forageRate(G, D) / 2 });
       id = pick && pick.id;
     } else id = pickCheapest(G, tree);
-    if (!id || !R.buyNode(G, tree, id)) return;
+    if (!id || !R.buyNode(G, tree, id)) return bought;
   }
+  return bought;
 }
 
-/** Juega desde cero hasta ganar (o hasta el tope). opts: { dt, capH, capDays, trace, cps, late }. */
+/**
+ * Juega desde cero hasta ganar (o hasta el tope). opts: { dt, capH, capDays, trace, cps, late, clicks, room }.
+ *   clicks / room: perfiles de toques y de estrategia del bot del navegador (brain.CLICK_PROFILES / ROOM_PROFILES);
+ *   cambian cómo toca y qué compra el perfil base (sus sesiones y su forma de fundar se mantienen).
+ */
 export function playGame(profileName, seed, opts = {}) {
   const P0 = PROFILES[profileName];
   if (!P0) throw new Error('Perfil desconocido: ' + profileName + ' (hay: ' + Object.keys(PROFILES).join(', ') + ')');
   const P = { ...P0 };
   if (opts.cps != null || opts.late != null) P.cps = [opts.cps ?? (Array.isArray(P0.cps) ? P0.cps[0] : 2.5), opts.late ?? (Array.isArray(P0.cps) ? P0.cps[1] : 0.9)];
+  const CP = opts.clicks ? CLICK_PROFILES[opts.clicks] : null;
+  if (opts.clicks && !CP) throw new Error('Perfil de toques desconocido: ' + opts.clicks + ' (hay: ' + Object.keys(CLICK_PROFILES).join(', ') + ')');
+  if (opts.room && !ROOM_PROFILES[opts.room]) throw new Error('Perfil de estrategia desconocido: ' + opts.room + ' (hay: ' + Object.keys(ROOM_PROFILES).join(', ') + ')');
+  if (CP) Object.assign(P, { foe: CP.foe, buyEvery: CP.buyEvery });
+  if (opts.room) { P.room = opts.room; P.auto = false; P.found = 'smart'; }
+  P.streak = c => (CP ? profileStreak(CP, c) : 4);
   const dt = opts.dt || 0.5, capA = (opts.capH || 12) * 3600, capC = (opts.capDays || 45) * 86400;
   Math.random = mulberry32(seed * 9973 + 17);
 
   let G = R.newGame();
   if (P.auto) G.autoBuy = true;
   S = { G, active: 0, cal: 0, colT: 0, lastBuy: 0, maxGap: 0, colonies: [], milestones: {}, evos: [], drop: 0, nightsWon: 0, nightsLost: 0, trace: opts.trace ? [] : null, clicks: 0 };
-  let sessT = 0, buyT = 0, cps = 2.5, cpsT = 0, aim = 'queen';
+  let sessT = 0, buyT = 0, cps = 2.5, cpsT = 0, aim = 'queen', busy = 0; // busy: s sin tocar (en el Árbol o moviendo el dedo)
   const tapper = makeTapper();
   const closeColony = cause => S.colonies.push({ gen: G.gen, night: G.level, min: +(S.colT / 60).toFixed(1), cause, adn: G.pendingAdn || 0, drop: S.drop,
     skills: Object.keys(G.skills).length, perms: Object.keys(G.perm).length, evo: G.evo || 0, ants: G.ants });
@@ -82,7 +98,7 @@ export function playGame(profileName, seed, opts = {}) {
     if (G.phase === 'dead') {
       closeColony(G.leaving ? 'fundó' : 'murió');
       while (R.canEvolve(G)) R.evolve(G);
-      if (!(P.smart && saveForEvo(G))) buyLoop(G, 'perm', P, cps);
+      if (!((P.smart || P.room) && saveForEvo(G))) buyLoop(G, 'perm', P, cps);
       G = R.prestige(G); S.G = G; S.colT = 0; S.drop = 0;
       continue;
     }
@@ -90,10 +106,20 @@ export function playGame(profileName, seed, opts = {}) {
     const D = R.calc(G);
     if (G.phase === 'day') R.feed(G, R.forageRate(G, D) * dt);
 
-    if ((cpsT -= dt) <= 0) { cpsT = 5; cps = P.cps === 'curva' ? cpsFor(G, S.colT) : (S.colT < 300 ? P.cps[0] : P.cps[1]); }
+    if ((cpsT -= dt) <= 0) { cpsT = 5; cps = CP ? profileCps(CP, G, S.colT) : P.cps === 'curva' ? cpsFor(G, S.colT) : (S.colT < 300 ? P.cps[0] : P.cps[1]); }
     // como una persona: ráfagas cortas sobre una misma cosa y pausas (brain.makeTapper)
-    const taps = tapper.step(dt, cps);
-    if (tapper.fresh) aim = G.foes && G.foes.arrive <= 0 && Math.random() < P.foe ? 'enemy' : (G.larvae[0] || G.eggs[0]) && Math.random() < 0.5 ? 'brood' : 'queen';
+    // en el Árbol o cambiando de objetivo no se toca (como en el bot del navegador: brain.BOT_TIME)
+    let taps = 0;
+    if (busy > 0) busy -= dt;
+    else {
+      taps = tapper.step(dt, cps, !!CP && CP.cps !== 'curva');
+      if (tapper.fresh) {
+        const prev = aim;
+        aim = G.foes && G.foes.arrive <= 0 && Math.random() < P.foe ? 'enemy' : (G.larvae[0] || G.eggs[0]) && Math.random() < 0.5 ? 'brood' : 'queen';
+        busy = travelTime(prev, aim);
+        if (busy > 0) taps = 0;
+      }
+    }
     for (let i = 0; i < taps; i++) {
       S.clicks++;
       if (aim === 'enemy' && G.foes && G.foes.arrive <= 0) { R.hit(G, R.calc(G)); continue; }
@@ -107,7 +133,15 @@ export function playGame(profileName, seed, opts = {}) {
 
     if (buyT >= P.buyEvery && G.phase !== 'dead') {
       buyT = 0;
-      if (P.auto) R.autoBuy(G, 5); else buyLoop(G, 'skills', P, cps);
+      if (P.auto) R.autoBuy(G, 5); // el mayordomo compra sin entrar en el Árbol
+      else {
+        // entrar en el Árbol corta la racha; medio segundo dentro y un momento por cada compra más
+        const n = buyLoop(G, 'skills', P, cps);
+        if (n > 0) {
+          R.comboDrop(G);
+          busy = BOT_TIME.tree + BOT_TIME.perBuy * (n - 1) + travelTime('tree', aim);
+        }
+      }
       if (P.found === 'smart' && shouldFound(G)) R.abandon(G);
     }
 

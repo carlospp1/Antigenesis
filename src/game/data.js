@@ -162,12 +162,12 @@ export const BAL = {
     larvaTime: 18,
     dmg: 1,
     hp: 9, // de cada hormiga
-    tapFood: 1, // comida que da a mano un toque a la reina (sube con las mejoras de toques)
+    tapFood: 0.5, // comida que da un toque a la reina (sube con las mejoras de toques). Antes 1 y 0,7: los toques daban demasiado (las manos fantasma se compensan con «Manos gemelas»)
     tapBrood: 0.12, // un toque adelanta un 12% un huevo o una larva
-    tapRateK: 1, // «Toque nutritivo»: dial del % de la recolección por segundo que suma cada toque
+    tapRateK: 0.5, // «Toque nutritivo»: dial del % de la recolección por segundo que suma cada toque (antes 1 y 0,7, mismo recorte que tapFood)
     tapRateMax: 0.01, // …y su tope: un 1% de la recolección por segundo en cada toque
     tapCritMax: 0.5, // probabilidad máxima de toque de suerte
-    ghostMax: 9, // toques por segundo que dan, como mucho, todas las manos fantasma juntas (8 manos con todo: ≈8,6)
+    ghostMax: 20, // toques por segundo que dan, como mucho, todas las manos fantasma juntas (20 manos con todo: ≈17)
     // enemigos de la noche n: cantidad, vida y daño crecen cada noche
     foeCount0: 1,
     foeCountK: 0.6,
@@ -181,8 +181,8 @@ export const BAL = {
     // la noche final: el humano no pega poco a poco, pisa (rules.tickHuman)
     humanHp: 20, // vida del humano, en múltiplos de un enemigo de esa noche
     stompFirst: 3, // segundos desde que llega hasta el primer pisotón
-    stompEvery: 8, // segundos entre pisotones
-    stompHits: 4, // pisotones que aguantan las hormigas titán (el linaje suma más)
+    stompEvery: 2, // segundos entre pisotones (antes 8: lentísimo). El primero aplasta a la mitad de las hormigas
+    stompHits: 4, // pisotones que aguantan después las hormigas titán (el linaje suma más); en ese, caen todas
     prize0: 15,
     prizeG: 1.4,
     skill0: 18,
@@ -208,8 +208,10 @@ export const BAL = {
     // racha: cada toque seguido (≤ comboGap s) suma comboStep al ×, hasta comboCap (rampa suave).
     // comboMarks: [toques, +extra] — con «Marcas de la racha» (linaje), cada marca suma unos puntos al % de la racha
     //   (sutil: +5%/+10%, acumulado ~+75% en 10.000). Sin esa mejora, las marcas no dan nada.
-    // comboClickAt: con «Toques en cadena» (linaje), en estas marcas cada toque vale un clic más: ×2 en 200, ×3 en 500,
-    //   ×4 en 1.000, ×5 en 5.000, ×6 en 10.000 (vale ese tanto y suma ese tanto a la racha). El resto de marcas solo sube el %.
+    // comboClickAt: en estas marcas cada toque vale un clic más (vale ese tanto y suma ese tanto a la racha). Va en dos
+    //   mejoras del linaje: «Toques en cadena» abre las comboClickTier1 primeras (+1 en 200, 500 y 1.000) y
+    //   «Toques en cadena II» el resto (+1 en 5.000, 10.000, 25.000 y 50.000); cada una funciona por su cuenta.
+    //   Con los dos hitos de +1 toque por clic, hasta ×10. El resto de marcas solo sube el %.
     comboGap: 0.8,
     comboStep: 0.012, // antes 0,025: con el árbol a tope la rampa se iba a ×4–5
     comboCap: 20,
@@ -228,7 +230,8 @@ export const BAL = {
       [7500, 0.05],
       [10000, 0.1],
     ],
-    comboClickAt: [200, 500, 1000, 5000, 10000],
+    comboClickAt: [200, 500, 1000, 5000, 10000, 25000, 50000],
+    comboClickTier1: 3, // cuántas marcas de clic abre «Toques en cadena» (hasta 1.000); el resto, «Toques en cadena II»
     evoAll: 1.45, // cada evolución: comida, daño y vida ×evoAll (y +5% de velocidad)
     blood: 0.015, // «Sangre antigua»: +1,5% de comida, daño y vida por cada ADN ganado en total
 }

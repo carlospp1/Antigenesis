@@ -421,6 +421,11 @@ body.ending #quest, body.ending #alarm, body.ending #toasts, body.ending #combo 
 #botPanel .bp-row { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0; }
 #botPanel .btn-plain.sm { padding: 3px 7px; font-size: 12px; }
 #botPanel .bp-stats { color: var(--ink); font-weight: 600; line-height: 1.45; }
+#botPanel .bp-label { margin-top: 8px; color: var(--honey); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+#botPanel .bp-label + .bp-row { margin-top: 3px; }
+#botPanel .bp-desc { color: var(--dim); font-size: 12px; line-height: 1.35; margin: 4px 0 6px; }
+#botPanel .bp-desc.bp-warn { color: #ff8a6a; font-weight: 700; }
+#botPanel .bp-games { color: var(--dim); font-size: 12px; line-height: 1.4; margin: 4px 0 6px; }
 #botPanel table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 12px; color: var(--dim); }
 #botPanel th, #botPanel td { text-align: left; padding: 1px 4px; } #botPanel th { color: var(--honey); font-weight: 700; }
 

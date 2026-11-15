@@ -8,7 +8,7 @@
 import { icon } from './icons.js';
 import * as Audio from '../audio/audio.js';
 import { BAL } from '../game/data.js';
-import { comboMarks } from '../game/rules.js';
+import { comboMarks, chainClicks } from '../game/rules.js';
 
 const $ = id => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -37,11 +37,12 @@ export function tap(n, mult, cap = 21, { prev, quiet, early = 0, base = 1, marks
   const tier = n >= cap ? 3 : n >= 14 ? 2 : n >= 8 ? 1 : 0;
   const pctx = '+' + Math.round((mult - 1) * 100) + '%';
   let clicks = base; // los hitos dan toques extra por clic
-  if (clicksOn) for (const at of M.clicks) if (n >= at) clicks++;
+  const CL = chainClicks(early, +clicksOn); // las marcas de clic abiertas («Toques en cadena» I y II)
+  for (const at of CL) if (n >= at) clicks++;
   // marcas cruzadas desde la cuenta anterior (un lote de la mano puede cruzar varias: cuenta la última)
   const before = prev ?? n - 1;
   const markRow = marks ? M.marks.filter(([at]) => before < at && n >= at).pop() : null;
-  const clickHit = clicksOn ? M.clicks.filter(at => before < at && n >= at).pop() : null;
+  const clickHit = CL.filter(at => before < at && n >= at).pop() ?? null;
   comboEl.className = 'combo' + (reached ? ' mk' : ' t' + tier) + (n >= 1000 ? ' long' : '');
   comboEl.style.setProperty('--mk', reached);
   comboEl.style.setProperty('--hot', markColor(reached));

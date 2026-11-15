@@ -9,6 +9,8 @@
 //   node tools/sim.mjs --tune=foeHpG,adnK,skillG --profile=activo --runs=10
 //   node tools/sim.mjs --out=informe.json      → guarda todos los resultados
 //
+//   node tools/sim.mjs --profile=promedio --clicks=c9 --room=inteligente → perfiles del bot del navegador
+//
 // Otras opciones: --cps / --late (toques por segundo), --dt (paso de simulación), --capH (horas jugando máx.),
 // --capDays, --threads, --seed (primera semilla), --iters (vueltas de --tune).
 import os from 'node:os';
@@ -43,6 +45,8 @@ const RUNS = +(args.runs || (args.tune ? 8 : 6)), SEED0 = +(args.seed || 1);
 const opts = { dt: +(args.dt || 0.5), capH: +(args.capH || args.cap || 12), capDays: +(args.capDays || 45), trace: !!args.trace };
 if (args.cps) opts.cps = +args.cps;
 if (args.late) opts.late = +args.late;
+if (args.clicks) opts.clicks = String(args.clicks); // perfil de toques del bot del navegador: humano, casual, c5, c7, c9
+if (args.room) opts.room = String(args.room);       // perfil de estrategia: toques, hormigas, reina, dano, equilibrado, inteligente
 const balOver = {};
 for (const k in args) if (k in BAL) balOver[k] = +args[k];
 

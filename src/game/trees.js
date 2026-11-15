@@ -171,6 +171,18 @@ const SN = {
   mh6: ['ghost', 'Sexta mano', 'Otra mano fantasma', { bio: 55 }, { ghost: 0.125 }, { key: 1, reqPerk: 'pgh8' }],
   mh7: ['ghost', 'Séptima mano', 'Otra mano fantasma', { bio: 70 }, { ghost: 0.125 }, { key: 1, reqPerk: 'pgh9' }],
   mh8: ['ghost', 'Octava mano', 'Otra mano fantasma', { bio: 90 }, { ghost: 0.125 }, { key: 1, reqPerk: 'pgh10' }],
+  // de la décima a la vigésima (la novena es «Mil manos»): con biomasa en cada colonia, o para siempre con «Legión de manos»
+  mh10: ['ghost', 'Décima mano', 'Otra mano fantasma', { bio: 110 }, { ghost: 0.125 }, { key: 1 }],
+  mh11: ['ghost', 'Undécima mano', 'Otra mano fantasma', { bio: 130 }, { ghost: 0.125 }, { key: 1 }],
+  mh12: ['ghost', 'Duodécima mano', 'Otra mano fantasma', { bio: 150 }, { ghost: 0.125 }, { key: 1 }],
+  mh13: ['ghost', 'Decimotercera mano', 'Otra mano fantasma', { bio: 175 }, { ghost: 0.125 }, { key: 1 }],
+  mh14: ['ghost', 'Decimocuarta mano', 'Otra mano fantasma', { bio: 200 }, { ghost: 0.125 }, { key: 1 }],
+  mh15: ['ghost', 'Decimoquinta mano', 'Otra mano fantasma', { bio: 230 }, { ghost: 0.125 }, { key: 1 }],
+  mh16: ['ghost', 'Decimosexta mano', 'Otra mano fantasma', { bio: 260 }, { ghost: 0.125 }, { key: 1 }],
+  mh17: ['ghost', 'Decimoséptima mano', 'Otra mano fantasma', { bio: 300 }, { ghost: 0.125 }, { key: 1 }],
+  mh18: ['ghost', 'Decimoctava mano', 'Otra mano fantasma', { bio: 340 }, { ghost: 0.125 }, { key: 1 }],
+  mh19: ['ghost', 'Decimonovena mano', 'Otra mano fantasma', { bio: 390 }, { ghost: 0.125 }, { key: 1 }],
+  mh20: ['ghost', 'Vigésima mano', 'Otra mano fantasma', { bio: 450 }, { ghost: 0.125 }, { key: 1 }],
   gh2: ['ghost', 'Mano veloz', null, 6, { ghostX: 1.15 }],
   gh3: ['ghost', 'Mano experta', null, 8, { ghostX: 1.1 }],
   t1a: ['ghost', 'Mano veloz II', null, 9, { ghostX: 1.1 }],
@@ -262,7 +274,7 @@ const SG = {
     w2a<mx3 w2b<w2a w2c<w2b waK4<waK3 w4a<waK4 w4b<w4a w4c<w4b w5a<wa14 w5b<w5a w5c<w5b w9<w1d,w4c`,
   tap: `ta1<root ta2<root ta3<ta1 ta4<ta1 lk1<ta2 ta5<ta2 taK1<ta4,lk1 ta6<ta3 ta7<ta4 lk2<lk1 ta8<ta5 tn1<taK1
     ghK<taK1 lkK<lk2 tb1<ta6 ta9<ta7 ta11<ta8 gh2<ghK mh2<ghK ghCb<ghK tn2<tn1 taK2<tn1,ghK lk3<lkK gh3<gh2 mh3<mh2 mh4<mh3
-    mh5<mh4 mh6<mh5 mh7<mh6 mh8<mh7 t8a<tb1 t6a<ta9 t3a<ta11 t1a<gh3 tn3<tn2 t7a<tn2 cb1<taK2 t5a<lk3 tb2<t8a t6b<t6a t2a<t1a cb2<cb1
+    mh5<mh4 mh6<mh5 mh7<mh6 mh8<mh7 mh10<mh8 mh11<mh10 mh12<mh11 mh13<mh12 mh14<mh13 mh15<mh14 mh16<mh15 mh17<mh16 mh18<mh17 mh19<mh18 mh20<mh19 t8a<tb1 t6a<ta9 t3a<ta11 t1a<gh3 tn3<tn2 t7a<tn2 cb1<taK2 t5a<lk3 tb2<t8a t6b<t6a t2a<t1a cb2<cb1
     cb3<cb1 t8b<tb2 t3b<t3a t1b<t2a t7b<t7a tnK<tn3 cb5<cb2 cb4<cb3 t6c<t6b t5b<t5a t2b<t1b cb6<cb5,cb4 t7c<t7b
     t8c<t8b t3c<t3b t6d<t6c t5c<t5b t1c<t2b cbK2<cb6 cbK<cbK2 t9<t6d,t7c`,
   brood: `br2<root br1<br2 br5<br1 br3<br1 br4<br2 brK1<br5 mx1<br3 br6<br5 br7<br4 br9<br6 br10<mx1
@@ -325,7 +337,10 @@ const PN = {
   pns: ['crown', 'Todo para la reina', 'Cuando en el árbol de la colonia ya no queda nada que comprar con jalea, las obreras dejan de guardar en la despensa y le llevan toda la comida a la reina', { adn: 12 }, { noStore: 1 }],
   ptp: ['bolt', 'Racha', 'Desbloquea la racha: cada toque seguido rinde más', { adn: 4 }, { combo: 1, clickX: 1.1 }],
   // la racha mejora los clics: justo detrás de «Racha» y «Ritmo heredado», pero cara (~20 ADN)
-  pcc: ['hand', 'Toques en cadena', 'Con la racha, cada toque vale más clics: ×2 en 200, ×3 en 500, ×4 en 1.000, ×5 en 5.000 y ×6 en 10.000', { adn: 40 }, { comboClicks: 1 }],
+  pcc: ['hand', 'Toques en cadena', 'Con la racha, cada toque vale más clics: ×2 en 200, ×3 en 500 y ×4 en 1.000', { adn: 40 }, { comboClicks: 1 }],
+  // la segunda mitad, aparte y bastante más cara (las rachas larguísimas daban demasiado); cuelga de «Racha tenaz»,
+  // la de las rachas largas, y funciona por su cuenta: abre sus marcas tengas o no la primera parte
+  pcc2: ['hand', 'Toques en cadena II', 'En las rachas largas, cada toque vale un clic más en 5.000, 10.000, 25.000 y 50.000 (con «Toques en cadena», de ×5 a ×8)', { adn: 160 }, { comboClicks2: 1 }],
   pcm: ['bolt', 'Marcas de la racha', 'Cada marca de la racha (200, 300, 500, 750, 1.000…) suma un +5% o +10% al extra que ya da', { adn: 22 }, { comboMarks: 1 }],
   pcb1: ['bolt', 'Ritmo heredado', null, { adn: 6 }, { comboStep: 0.008 }],
   pcb2: ['bolt', 'Racha ancestral', null, { adn: 10 }, { comboCap: 10 }],
@@ -345,11 +360,15 @@ const PN = {
   pgh8: ['ghost', 'Sexta mano', 'Otra mano fantasma en todas las colonias', { adn: 200 }, {}, { own: ['mh6'] }],
   pgh9: ['ghost', 'Séptima mano', 'Otra mano fantasma en todas las colonias', { adn: 280 }, {}, { own: ['mh7'] }],
   pgh10: ['ghost', 'Octava mano', 'Otra mano fantasma en todas las colonias', { adn: 380 }, {}, { own: ['mh8'] }],
+  pgl1: ['ghost', 'Legión de manos I', 'De la décima a la decimotercera mano fantasma, en todas las colonias', { adn: 460 }, {}, { own: ['mh10', 'mh11', 'mh12', 'mh13'] }],
+  pgl2: ['ghost', 'Legión de manos II', 'De la decimocuarta a la decimoséptima mano fantasma, en todas las colonias', { adn: 600 }, {}, { own: ['mh14', 'mh15', 'mh16', 'mh17'] }],
+  pgl3: ['ghost', 'Legión de manos III', 'De la decimoctava a la vigésima mano fantasma, en todas las colonias', { adn: 800 }, {}, { own: ['mh18', 'mh19', 'mh20'] }],
   // las cuatro juntas: las manos tocan el doble de rápido (1,19⁴ ≈ 2)
   pgv1: ['ghost', 'Mano ágil I', null, { adn: 60 }, { ghostX: 1.19 }],
   pgv2: ['ghost', 'Mano ágil II', null, { adn: 100 }, { ghostX: 1.19 }],
   pgv3: ['ghost', 'Mano ágil III', null, { adn: 160 }, { ghostX: 1.19 }],
   pgv4: ['ghost', 'Mano ágil IV', null, { adn: 240 }, { ghostX: 1.19 }],
+  pght: ['ghost', 'Manos gemelas', 'Los toques de las manos fantasma valen tantos clics como los tuyos: lo que te dé ×2, ×3… toques por clic (hitos, «Toques en cadena»), también se lo da a ellas', { adn: 60 }, { ghostTaps: 1 }],
   pghc: ['bolt', 'Manos al compás', 'En todas las colonias, mientras tengas racha, los toques de las manos fantasma también la suben y cobran su multiplicador', { adn: 44 }, {}, { own: ['ghCb'] }],
   pds: ['arrows', 'Saber heredado', null, { adn: 6 }, { discount: 0.25 }],
   prt: ['arrows', 'Borrón y cuenta nueva', 'Desbloquea el botón de reiniciar el Árbol: devuelve toda la jalea y la biomasa gastadas. ¿Quién querría deshacer su propio árbol? Ni idea. Tú, por lo visto.', { adn: 80 }, { resetTree: 1 }],
@@ -361,7 +380,7 @@ const PN = {
   plt3: ['hand', 'Toque ancestral', null, { adn: 40 }, { clickX: 1.25 }],
   ptn2: ['leaf', 'Hambre heredada II', null, { adn: 140 }, { tapRate: 0.002 }],
   psk: ['moon', 'Saltar el día', 'Un botón junto al reloj hace que caiga la noche ya. Esas noches dan la mitad de ADN', { adn: 60 }, { skipDay: 1 }],
-  ptc: ['hand', 'Toque menguante', 'Tus toques a la reina juntan un descuento que se guarda para siempre, en todas las colonias, y se resta de cada huevo (como mucho, el 25% de su precio). Si el descuento ya cubre ese máximo, el toque alimenta a la reina', { adn: 80 }, { tapCut: 1 }],
+  ptc: ['hand', 'Toque menguante', 'Tus toques a la reina juntan un descuento que se guarda para siempre, en todas las colonias, y se resta de cada huevo (como mucho, el 25% de su precio). Cuando el descuento ya cubre ese máximo en este huevo y en el siguiente, el toque vuelve a alimentar a la reina', { adn: 80 }, { tapCut: 1 }],
   ptc2: ['hand', 'Toque menguante II', null, { adn: 120 }, { cutMax: 0.1 }],
   ptc3: ['hand', 'Toque menguante III', null, { adn: 200 }, { cutMax: 0.15 }],
   // ---- Cría
@@ -412,8 +431,8 @@ const PG = {
   brood: `pe1<root pg1<root prs<pe1 pdx1<pe1 ptw<pg1 plb1<pg1 pcv<prs,pdx1 pfe1<pdx1 pdx2<pdx1 psh<ptw pqk<pfe1
     pe2<pcv pfe2<pfe1 plb2<pe2 plb3<plb1 psh2<psh psh3<psh2 pls1<psh2 plb4<ptw plb5<pfe2 pls2<pls1,psh3`,
   tap: `ptp<root pl1<ptp pgh1<ptp pcb1<ptp pcc<pcb1 pl2<pl1 pgh2<pgh1 pcb2<pcb1 pcm<pcb2 plt1<pl1,pgh1 pgh3<pgh2 pcb3<pcb2 plt2<plt1
-    pgh4<pgh3 plt5<pl2 plt4<plt2 pck<pcb3 pgh5<pgh4 ptn1<plt4 plt3<plt2 pce<pck pgh6<pgh5 ptn2<ptn1 pgh7<pgh6
-    ptc<ytManoheredada1,pck ptc2<ptc ptc3<ptc2 pgh8<pgh7 pgh9<pgh8 pgh10<pgh9 pgv1<pgh4 pgv2<pgv1 pgv3<pgv2 pgv4<pgv3 pghc<pgh4`,
+    pgh4<pgh3 plt5<pl2 plt4<plt2 pck<pcb3 pgh5<pgh4 ptn1<plt4 plt3<plt2 pce<pck pcc2<pck pgh6<pgh5 ptn2<ptn1 pgh7<pgh6
+    ptc<ytManoheredada1,pck ptc2<ptc ptc3<ptc2 pgh8<pgh7 pgh9<pgh8 pgh10<pgh9 pgl1<pgh10 pgl2<pgl1 pgl3<pgl2 pgv1<pgh4 pgv2<pgv1 pgv3<pgv2 pgv4<pgv3 pghc<pgh4 pght<pghc`,
   food: `pf1<root pf2<pf1 psp<pf1 ppz<pf1 pf3<pf2 pgf<psp,pf2 pqj1<ppz pns<pf3 pf4<pf3 pgf2<pgf plf1<pf3 pqj2<pqj1
     plf2<plf1 pfs1<pgf2,pf4 plf3<plf2 pqj3<pqj2 plf4<plf3 pfs2<pfs1 pfs3<pfs2`,
   war: `pd1<root ph1<root pd2<pd1 ph2<ph1 pbk<pd1 pdg<ph2 pwj<pd2,ph2 pd3<pd2 ph3<ph2 pbk2<pbk pdg2<pdg plv<pdg

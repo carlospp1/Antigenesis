@@ -138,7 +138,8 @@ function clickScene(hit) {
   Audio.play('click');
   Juice.tap(r.combo, r.mult, D.comboCap + 1, { prev, early, base: D.tapN, marks: D.comboMarks, clicksOn: D.comboClicks }); // racha de toques seguidos (rinden más)
   // destello en el sitio del clic: más grande con la racha y con suerte
-  Juice.clickPop(Scene.toScreen(hit.click), r.crit ? 3 : r.mult >= 4 ? 2 : r.mult > 1 ? 1 : 0);
+  const at = hit.click || hit.pos || Scene.entityPos(hit.kind, hit.slot); // el bot no siempre pasa el sitio del clic
+  Juice.clickPop(Scene.toScreen(at), r.crit ? 3 : r.mult >= 4 ? 2 : r.mult > 1 ? 1 : 0);
   if (hit.kind === 'queen') {
     if (r.crit) luckyTap(r.crit, hit.click, 'Toque de suerte', true);
     if (r.feast) feastTap(r, hit.click);
@@ -294,6 +295,7 @@ function wireGameEvents() {
     Audio.play('stomp');
     if (d.queen) toast('¡El pie va a por el nido!', 'warn');
     else if (d.wipe) toast(Game.immuneBoss(G, D.night) ? 'Un solo pisotón y no queda ninguna. Hace falta la Hormiga titán.' : '¡El pisotón las aplasta a todas!', 'warn');
+    else if (d.half) toast('¡El pisotón aplasta a la mitad! Saca más hormigas.', 'warn');
     else if (d.left === 1) toast('Aguantan… pero el próximo pisotón será el último.', 'warn');
   });
   on('massDeath', d => { Audio.play('death'); float('−' + fmt(d.n), Scene.entityPos('front'), 'hit'); });
@@ -419,7 +421,12 @@ async function boot() {
   render(G, D);
   requestAnimationFrame(frame);
   const qs = new URLSearchParams(location.search); // ?bot=1&speed=6 arranca el bot solo
-  if (qs.has('bot')) { if (qs.get('profile')) bot.profile = qs.get('profile'); bot.start(qs.get('speed') || 1); } // &profile=promedio|activo|casual
+  if (qs.has('bot')) { // &clicks=humano|casual|c5|c7|c9 &room=toques|hormigas|reina|dano|equilibrado|inteligente
+    if (qs.get('profile')) bot.profile = qs.get('profile');
+    if (qs.get('clicks')) bot.clickProfile = qs.get('clicks');
+    if (qs.get('room')) bot.room = qs.get('room');
+    bot.start(qs.get('speed') || 1);
+  }
 }
 
 boot();
