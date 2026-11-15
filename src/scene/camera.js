@@ -30,7 +30,7 @@ let quake = null;
 /** Tiembla el escenario `px` píxeles de imagen durante unas décimas. */
 export function shake(px) {
   const a = still ? px * 0.5 : px;
-  if (!quake || a >= quake.a * Math.exp(-quake.t * 7)) quake = { a, t: 0 };
+  if (!quake || a >= quake.a * Math.exp(-quake.t * 11)) quake = { a, t: 0 };
 }
 
 export function createCamera() { return new THREE.PerspectiveCamera(REF.fov, 1, 0.01, 60); }
@@ -103,10 +103,10 @@ export function updateCamera(dt) {
   }
   if (quake) {
     quake.t += dt;
-    const k = quake.a * Math.exp(-quake.t * 7);
+    const k = quake.a * Math.exp(-quake.t * 11);
     if (k < 0.03) quake = null;
     else {
-      const ox = k * 0.6 * PXW * Math.sin(quake.t * 53), oy = k * PXW * Math.cos(quake.t * 41);
+      const ox = k * 0.4 * PXW * Math.sin(quake.t * 38), oy = k * PXW * Math.cos(quake.t * 30);
       camera.position.x += ox; _look.x += ox; camera.position.y -= oy; _look.y -= oy;
     }
   }

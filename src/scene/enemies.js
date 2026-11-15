@@ -18,7 +18,7 @@ import { nudge, shake } from './camera.js';
 
 const MAX_MINIONS = 12;
 /** Rebote de cámara (píxeles de imagen) del pisotón humano y de cada golpe del zapato pequeño: muy sutiles. */
-const NUDGE_STOMP = 6, NUDGE_TAP = 0.5;
+const NUDGE_STOMP = 1.5, NUDGE_TAP = 0.5; // pisotón: un temblor sutil del mapa
 
 /** Cómo se dibuja cada tipo: modelo y tamaño en píxeles por unidad de modelo. */
 const KINDS = {
