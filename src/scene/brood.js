@@ -57,14 +57,18 @@ export function buildBrood() {
   }
 
   queen = createActor('queen', QUEEN.size, { shadow: 1.1 });
-  Object.assign(queen, { x: QUEEN.x, y: QUEEN.y, dx: 1, dy: 0.35, yawBias: 0, squash: 0, gulp: 0, hover: 0, s: 1 });
+  Object.assign(queen, { x: QUEEN.x, y: QUEEN.y, dx: QUEEN_FACE.dx, dy: QUEEN_FACE.dy, yawBias: 0, squash: 0, gulp: 0, hover: 0, s: 1 });
   ctx.scene.add(queen.root);
 }
+
+/** Hacia dónde mira la reina: siempre a la entrada de la comida (las obreras se la dejan delante de la boca). */
+const QUEEN_FACE = { dx: 1, dy: 0.35 };
 
 /** Vuelve a su sitio y pone derecha la malla (muerte, final o colonia nueva). */
 export function resetQueenPose() {
   if (!queen) return;
   queen.dead = 0; queen.tun = false; queen.x = QUEEN.x; queen.y = QUEEN.y;
+  queen.dx = QUEEN_FACE.dx; queen.dy = QUEEN_FACE.dy; queen.wdir = null;
   if (queen.yawBias0 != null) { queen.yawBias = queen.yawBias0; delete queen.yawBias0; }
   queen.g.rotation.set(0, 0, 0); queen.g.position.set(0, 0, 0);
   if (queen.ant && queen.ant.setDeadEyes) queen.ant.setDeadEyes(false);
@@ -147,7 +151,8 @@ export function updateBrood(dt) {
   queen.s += (qGrow() - queen.s) * Math.min(1, dt * 1.5);
   queen.size = QUEEN.size * queen.s;
   // durante el final la mueve y la anima ending.js (si no, se animaría dos veces por fotograma)
-  if (!ctx.ending) { queen.phase += dt * 2.2; queen.step(false, 0.05, dt); }
+  // fuera del final, siempre en su sitio y mirando a la comida (el final la hace caminar y antes se quedaba mirando a otro lado)
+  if (!ctx.ending) { queen.x = QUEEN.x; queen.y = QUEEN.y; queen.dx = QUEEN_FACE.dx; queen.dy = QUEEN_FACE.dy; queen.tun = false; queen.phase += dt * 2.2; queen.step(false, 0.05, dt); }
   queen.squash = Math.max(0, queen.squash - dt * 3); queen.gulp = Math.max(0, queen.gulp - dt * 2.5); queen.hover = Math.max(0, queen.hover - dt * 4);
   if (!ctx.ending) placeActor(queen, dt);
   // la reina muerta: rueda de lado y se queda patas arriba, apoyada en el lomo (sin atravesar el suelo)

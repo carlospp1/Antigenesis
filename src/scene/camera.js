@@ -23,6 +23,16 @@ export function nudge(px) {
   if (!bump || px >= bump.a * Math.exp(-bump.t * 12)) bump = { a: px, t: 0 };
 }
 
+/* ---------- temblor del pisotón humano ---------- */
+// un temblor corto y amortiguado (de lado y de arriba abajo) que se nota sin marear. Con «reducir movimiento» del
+// sistema se queda a la mitad, pero se ve: el pisotón tiene que sentirse
+let quake = null;
+/** Tiembla el escenario `px` píxeles de imagen durante unas décimas. */
+export function shake(px) {
+  const a = still ? px * 0.5 : px;
+  if (!quake || a >= quake.a * Math.exp(-quake.t * 7)) quake = { a, t: 0 };
+}
+
 export function createCamera() { return new THREE.PerspectiveCamera(REF.fov, 1, 0.01, 60); }
 export function fitCamera(w, h) { view.w = w; view.h = h; }
 
@@ -90,6 +100,15 @@ export function updateCamera(dt) {
     const k = bump.a * Math.exp(-bump.t * 12);
     if (k < 0.02) bump = null;
     else { const off = k * PXW * Math.cos(bump.t * 40); camera.position.y -= off; _look.y -= off; } // se mueve todo, sin inclinar
+  }
+  if (quake) {
+    quake.t += dt;
+    const k = quake.a * Math.exp(-quake.t * 7);
+    if (k < 0.03) quake = null;
+    else {
+      const ox = k * 0.6 * PXW * Math.sin(quake.t * 53), oy = k * PXW * Math.cos(quake.t * 41);
+      camera.position.x += ox; _look.x += ox; camera.position.y -= oy; _look.y -= oy;
+    }
   }
   camera.up.set(0, 1, 0);
   camera.lookAt(_look);
